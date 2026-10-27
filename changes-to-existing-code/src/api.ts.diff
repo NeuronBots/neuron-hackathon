@@ -1,5 +1,5 @@
 diff --git a/src/api.ts b/src/api.ts
-index c214349..6d82751 100644
+index c214349..1e77c59 100644
 --- a/src/api.ts
 +++ b/src/api.ts
 @@ -56 +56 @@ export async function fetchAgents(): Promise<
@@ -33,5 +33,36 @@ index c214349..6d82751 100644
 @@ -426 +424 @@ export async function chatStream(
 -              agents?: Array<{ id: string; name: string; model: string; identity: string }>
 +              agents?: Array<{ id: string; name: string; identity: string }>
-@@ -932 +929,0 @@ export type SpecProposal = {
+@@ -784 +782 @@ export async function deleteInvite(projectId: string, email: string): Promise<vo
+-export type DirectMessage = { id: number; from: string; to: string; content: string; at: string | null; reactions?: Record<string, string>; reply_to?: number | null }
++export type DirectMessage = { id: number; from: string; to: string; content: string; at: string | null; reactions?: Record<string, string>; reply_to?: number | null; withheld?: string[]; share?: "" | "pending" | "sharing" | "shared" | "declined" | "drafted" | "draft" | "sent" | "dropped" | "proceed" | "running" | "done" | "cancelled" | "private"; action?: boolean }
+@@ -823,0 +822,27 @@ export async function sendDirect(personId: string, content: string, replyTo?: nu
++export async function shareDirect(personId: string, messageId: number, share: boolean): Promise<DirectMessage> {
++  const res = await apiFetch(`/direct/${encodeURIComponent(personId)}/${messageId}/share`, {
++    method: "POST",
++    headers: { "content-type": "application/json" },
++    body: JSON.stringify({ share }),
++  })
++  return handleResponse(res) as Promise<DirectMessage>
++}
++
++export async function draftDirect(personId: string, messageId: number, send: boolean): Promise<DirectMessage> {
++  const res = await apiFetch(`/direct/${encodeURIComponent(personId)}/${messageId}/draft`, {
++    method: "POST",
++    headers: { "content-type": "application/json" },
++    body: JSON.stringify({ send }),
++  })
++  return handleResponse(res) as Promise<DirectMessage>
++}
++
++export async function proceedDirect(personId: string, messageId: number, proceed: boolean): Promise<DirectMessage> {
++  const res = await apiFetch(`/direct/${encodeURIComponent(personId)}/${messageId}/proceed`, {
++    method: "POST",
++    headers: { "content-type": "application/json" },
++    body: JSON.stringify({ proceed }),
++  })
++  return handleResponse(res) as Promise<DirectMessage>
++}
++
+@@ -932 +956,0 @@ export type SpecProposal = {
 -  model: string

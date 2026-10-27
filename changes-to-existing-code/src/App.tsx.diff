@@ -1,5 +1,5 @@
 diff --git a/src/App.tsx b/src/App.tsx
-index 5d89efb..ae58aba 100644
+index 5d89efb..16c5949 100644
 --- a/src/App.tsx
 +++ b/src/App.tsx
 @@ -343 +343 @@ export function App() {
@@ -8,3 +8,9 @@ index 5d89efb..ae58aba 100644
 @@ -345 +345 @@ export function App() {
 -      const updated = await updateAgent(draft.id, { name: draft.name, system_prompt: draft.system_prompt, model: draft.model, field: draft.field, label: draft.label })
 +      const updated = await updateAgent(draft.id, { name: draft.name, system_prompt: draft.system_prompt, field: draft.field, label: draft.label })
+@@ -1262,0 +1263,2 @@ export function App() {
++        onOpenCalendar={handleOpenCalendar}
++        onOpenBoard={handleOpenBoard}
+@@ -1349,2 +1350,0 @@ export function App() {
+-          onOpenCalendar={handleOpenCalendar}
+-          onOpenBoard={handleOpenBoard}

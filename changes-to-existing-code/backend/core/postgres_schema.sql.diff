@@ -1,0 +1,8 @@
+diff --git a/backend/core/postgres_schema.sql b/backend/core/postgres_schema.sql
+index 7b081eb..4811bae 100644
+--- a/backend/core/postgres_schema.sql
++++ b/backend/core/postgres_schema.sql
+@@ -101,0 +102,3 @@ CREATE TABLE IF NOT EXISTS direct_messages (
++	withheld VARCHAR(60) DEFAULT '' NOT NULL, 
++	share VARCHAR(10) DEFAULT '' NOT NULL, 
++	action TEXT DEFAULT '' NOT NULL, 

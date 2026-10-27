@@ -1,0 +1,50 @@
+diff --git a/src/Sidebar.tsx b/src/Sidebar.tsx
+index c1bfb19..b7839ff 100644
+--- a/src/Sidebar.tsx
++++ b/src/Sidebar.tsx
+@@ -30,0 +31,2 @@ type Props = {
++  onOpenCalendar?: () => void
++  onOpenBoard?: () => void
+@@ -132,0 +135,2 @@ export function Sidebar({
++  onOpenCalendar,
++  onOpenBoard,
+@@ -155,0 +160,16 @@ export function Sidebar({
++  // The board button glows when a bot adds a task.
++  const [boardGlow, setBoardGlow] = useState(false)
++  useEffect(() => {
++    let timer = 0
++    const onAdded = () => {
++      setBoardGlow(false)
++      window.requestAnimationFrame(() => setBoardGlow(true))
++      window.clearTimeout(timer)
++      timer = window.setTimeout(() => setBoardGlow(false), 2800)
++    }
++    window.addEventListener("board-added", onAdded)
++    return () => {
++      window.removeEventListener("board-added", onAdded)
++      window.clearTimeout(timer)
++    }
++  }, [])
+@@ -514,4 +534,18 @@ export function Sidebar({
+-        {onOpenDocuments && (
+-          <button className="sidebar-board-btn sidebar-board-btn-full" onClick={onOpenDocuments} type="button">
+-            Documents
+-          </button>
++        {(onOpenDocuments || onOpenCalendar || onOpenBoard) && (
++          <div className="sidebar-quick">
++            {onOpenDocuments && (
++              <button className="sidebar-board-btn" onClick={onOpenDocuments} type="button">
++                Documents
++              </button>
++            )}
++            {onOpenCalendar && (
++              <button className="sidebar-circle-btn" onClick={onOpenCalendar} type="button" aria-label="Open calendar" title="Calendar">
++                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>
++              </button>
++            )}
++            {onOpenBoard && (
++              <button className={`sidebar-circle-btn${boardGlow ? " is-glow" : ""}`} onClick={onOpenBoard} type="button" aria-label="Open board" title="Board">
++                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M8 7v7M12 7v4M16 7v9" /></svg>
++              </button>
++            )}
++          </div>
