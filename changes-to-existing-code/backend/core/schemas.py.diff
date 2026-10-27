@@ -1,5 +1,5 @@
 diff --git a/backend/core/schemas.py b/backend/core/schemas.py
-index 35ff848..0b5aedc 100644
+index 35ff848..ec92a94 100644
 --- a/backend/core/schemas.py
 +++ b/backend/core/schemas.py
 @@ -9 +8,0 @@ class AgentCreate(BaseModel):
@@ -10,8 +10,3 @@ index 35ff848..0b5aedc 100644
 -    model: str
 @@ -60 +56,0 @@ class ChatRequest(BaseModel):
 -    model_override: Optional[str] = None
-@@ -93,0 +90,4 @@ class PromptProposalRead(BaseModel):
-+
-+
-+# Document store schemas (re-exported from routers.docs)
-+from routers.docs import Doc, DocCreate  # noqa: E402

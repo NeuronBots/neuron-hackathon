@@ -76,16 +76,8 @@ class Doc(BaseModel):
     @field_validator("tags", "shared_with", mode="before")
     @classmethod
     def coerce_json_lists(cls, v):
-        if v is None:
-            return []
-        if isinstance(v, str):
-            try:
-                parsed = json.loads(v)
-                if isinstance(parsed, list):
-                    return parsed
-            except Exception:
-                return [t.strip() for t in v.split(",") if t.strip()]
-        return v
+        from tools.documents import _as_list
+        return _as_list(v)
 
     @field_validator("created_at", "updated_at", mode="after")
     @classmethod
@@ -138,45 +130,22 @@ def get_caller_user_identities(request: Request, db: Session) -> tuple[Optional[
     return None, set()
 
 
-def user_can_see_doc(doc: DocModel, user_id: Optional[str], identifiers: set[str]) -> bool:
+def user_can_see_doc(doc: DocModel, user_id: Optional[str], identifiers: set[str], db: Optional[Session] = None) -> bool:
     """Return True if the user created the document or if it was shared with them."""
-    if user_id is None:
-        # Unauthenticated / guest: can only see unowned documents
-        return not doc.user_id and not doc.created_by
-
-    # Creator check
-    if (doc.user_id and doc.user_id in identifiers) or (doc.created_by and doc.created_by in identifiers):
-        return True
-
-    # Shared with check
-    shared = doc.shared_with or []
-    if isinstance(shared, str):
-        try:
-            shared = json.loads(shared)
-        except Exception:
-            shared = [s.strip() for s in shared.split(",") if s.strip()]
-    shared_lower = {str(s).lower() for s in shared}
-    if any(i.lower() in shared_lower for i in identifiers):
-        return True
-
-    return False
+    from tools.documents import can_read
+    return can_read(doc, user_id, identifiers, db=db)
 
 
 def sync_document_records_to_docs(db: Session):
     """Ensure bot-generated files (DocumentRecord) are unified into DocModel."""
     from core.models import DocumentRecord
-    from tools.documents import document_path
+    from tools.documents import _as_list, document_path
 
     try:
         recs = db.query(DocumentRecord).all()
         for rec in recs:
             existing = db.query(DocModel).filter((DocModel.id == rec.filename) | (DocModel.title == rec.title)).first()
-            shared_list = rec.shared_with or []
-            if isinstance(shared_list, str):
-                try:
-                    shared_list = json.loads(shared_list)
-                except Exception:
-                    shared_list = []
+            shared_list = _as_list(rec.shared_with)
 
             path = document_path(rec.filename)
             doc_content = ""
@@ -212,12 +181,7 @@ def sync_document_records_to_docs(db: Session):
                     existing.created_by = rec.created_by or rec.user_id or ""
                     existing.user_id = rec.user_id or rec.created_by or ""
                     dirty = True
-                existing_shared = list(existing.shared_with or [])
-                if isinstance(existing_shared, str):
-                    try:
-                        existing_shared = json.loads(existing_shared)
-                    except Exception:
-                        existing_shared = []
+                existing_shared = _as_list(existing.shared_with)
                 existing_lower = {str(s).lower() for s in existing_shared}
                 for s in shared_list:
                     if str(s).lower() not in existing_lower:
@@ -230,7 +194,7 @@ def sync_document_records_to_docs(db: Session):
         db.rollback()
 
 
-router = APIRouter()
+router = APIRouter(prefix="/api")
 
 
 @router.post("/docs", response_model=Doc, status_code=status.HTTP_201_CREATED)
@@ -259,7 +223,7 @@ def list_docs(request: Request, db: Session = Depends(get_db)):
     sync_document_records_to_docs(db)
     user_id, identifiers = get_caller_user_identities(request, db)
     all_docs = db.query(DocModel).order_by(DocModel.created_at.desc(), DocModel.id.desc()).all()
-    return [d for d in all_docs if user_can_see_doc(d, user_id, identifiers)]
+    return [d for d in all_docs if user_can_see_doc(d, user_id, identifiers, db=db)]
 
 
 @router.get("/docs/{id}", response_model=Doc)
@@ -276,7 +240,7 @@ def get_doc(id: str, request: Request, db: Session = Depends(get_db)):
     if not doc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Doc not found")
     user_id, identifiers = get_caller_user_identities(request, db)
-    if not user_can_see_doc(doc, user_id, identifiers):
+    if not user_can_see_doc(doc, user_id, identifiers, db=db):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Doc not found")
     return doc
 
@@ -294,14 +258,15 @@ def share_doc(id: str, body: DocShare, request: Request, db: Session = Depends(g
     if not doc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Doc not found")
     user_id, identifiers = get_caller_user_identities(request, db)
-    if not user_can_see_doc(doc, user_id, identifiers):
+    if not user_can_see_doc(doc, user_id, identifiers, db=db):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Doc not found")
 
     if doc.created_by and user_id and doc.created_by not in identifiers and doc.user_id not in identifiers:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the document creator can share it")
 
+    from tools.documents import _as_list
     new_users = (body.users or []) + (body.shared_with or [])
-    current = list(doc.shared_with or [])
+    current = _as_list(doc.shared_with)
     for u in new_users:
         if u and u not in current:
             current.append(u)
@@ -313,10 +278,7 @@ def share_doc(id: str, body: DocShare, request: Request, db: Session = Depends(g
     from core.models import DocumentRecord
     doc_rec = db.get(DocumentRecord, id) or db.query(DocumentRecord).filter((DocumentRecord.filename == id) | (DocumentRecord.title == doc.title)).first()
     if doc_rec:
-        rec_shared = list(doc_rec.shared_with or [])
-        if isinstance(rec_shared, str):
-            try: rec_shared = json.loads(rec_shared)
-            except Exception: rec_shared = []
+        rec_shared = _as_list(doc_rec.shared_with)
         for u in new_users:
             if u and u not in rec_shared and u.lower() not in [str(s).lower() for s in rec_shared]:
                 rec_shared.append(u)
@@ -343,7 +305,7 @@ def delete_doc(id: str, request: Request, db: Session = Depends(get_db)):
     if not doc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Doc not found")
 
-    if not user_can_see_doc(doc, user_id, identifiers):
+    if not user_can_see_doc(doc, user_id, identifiers, db=db):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Doc not found")
 
     target_filename = doc.id

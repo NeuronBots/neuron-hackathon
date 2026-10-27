@@ -1,53 +1,75 @@
 diff --git a/backend/routes/misc.py b/backend/routes/misc.py
-index 64721c9..082bfa4 100644
+index 64721c9..6462c1d 100644
 --- a/backend/routes/misc.py
 +++ b/backend/routes/misc.py
 @@ -9 +9 @@ from pydantic import BaseModel, Field
 -from core.access import get_current_user
 +from core.access import get_current_user, get_current_user_optional
-@@ -157 +157 @@ async def save_document(filename: str, request: Request, user: User = Depends(ge
+@@ -156,2 +156,2 @@ _EDIT_LIMIT = 16 * 1024 * 1024
+-async def save_document(filename: str, request: Request, user: User = Depends(get_current_user)):
 -    """Save an edited slideshow. Only HTML slideshows are edited in the app."""
-+    """Save an edited slideshow or markdown document."""
-@@ -162,2 +162,3 @@ async def save_document(filename: str, request: Request, user: User = Depends(ge
++async def save_document(filename: str, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
++    """Save an edited slideshow or markdown document. Requires read permission and ownership."""
+@@ -159 +158,0 @@ async def save_document(filename: str, request: Request, user: User = Depends(ge
+-    # Any project member may edit: the project has no read-only role, and members already change its files through their bots.
+@@ -162,2 +161,25 @@ async def save_document(filename: str, request: Request, user: User = Depends(ge
 -    if path.suffix.lower() != ".html":
 -        raise HTTPException(status_code=400, detail="Only slideshows can be edited here.")
++    if not user_may_read(user.id, filename, db=db):
++        raise HTTPException(status_code=404, detail="Document not found")
++
 +    ext = path.suffix.lower()
 +    if ext not in (".html", ".md"):
 +        raise HTTPException(status_code=400, detail="Only slideshows and markdown documents can be edited here.")
-@@ -166 +167 @@ async def save_document(filename: str, request: Request, user: User = Depends(ge
++
++    from core.models import DocumentRecord, Doc as DocModel
++    doc_rec = db.get(DocumentRecord, filename)
++    doc_model = db.get(DocModel, filename)
++
++    is_owner = False
++    has_owner_recorded = False
++    if doc_rec and (doc_rec.user_id or doc_rec.created_by):
++        has_owner_recorded = True
++        if (doc_rec.user_id and doc_rec.user_id == user.id) or (doc_rec.created_by and doc_rec.created_by == user.id):
++            is_owner = True
++    if doc_model and (doc_model.user_id or doc_model.created_by):
++        has_owner_recorded = True
++        if (doc_model.user_id and doc_model.user_id == user.id) or (doc_model.created_by and doc_model.created_by == user.id):
++            is_owner = True
++
++    if has_owner_recorded and not is_owner:
++        raise HTTPException(status_code=403, detail="Only the document owner can edit this document")
++
+@@ -166 +188 @@ async def save_document(filename: str, request: Request, user: User = Depends(ge
 -        raise HTTPException(status_code=413 if body else 400, detail="The slideshow is empty or too large (16 MB at most).")
 +        raise HTTPException(status_code=413 if body else 400, detail="The document is empty or too large (16 MB at most).")
-@@ -168 +169 @@ async def save_document(filename: str, request: Request, user: User = Depends(ge
+@@ -168 +190 @@ async def save_document(filename: str, request: Request, user: User = Depends(ge
 -        body.decode("utf-8")
 +        text_content = body.decode("utf-8")
-@@ -170,3 +171,17 @@ async def save_document(filename: str, request: Request, user: User = Depends(ge
+@@ -170,3 +192,13 @@ async def save_document(filename: str, request: Request, user: User = Depends(ge
 -        raise HTTPException(status_code=400, detail="The slideshow must be UTF-8 text.")
 -    # Whatever the app sent, no handler, javascript: link or new script is stored.
 -    page = slideshow.clean_page(body.decode("utf-8"), path.read_text(encoding="utf-8", errors="replace")).encode("utf-8")
 +        raise HTTPException(status_code=400, detail="The document must be UTF-8 text.")
 +    
 +    if ext == ".html":
-+        # Whatever the app sent, no handler, javascript: link or new script is stored.
 +        page = slideshow.clean_page(text_content, path.read_text(encoding="utf-8", errors="replace")).encode("utf-8")
 +    else:
 +        page = text_content.encode("utf-8")
-+        from core.database import SessionLocal
-+        from core.models import Doc as DocModel
 +        from datetime import datetime, timezone
-+        with SessionLocal() as db:
-+            doc_model = db.get(DocModel, filename) or db.query(DocModel).filter((DocModel.id == filename) | (DocModel.title == filename)).first()
-+            if doc_model:
-+                doc_model.content = text_content
-+                doc_model.updated_at = datetime.now(timezone.utc)
-+                db.commit()
++        # Lookup Doc by id == filename ONLY
++        if doc_model:
++            doc_model.content = text_content
++            doc_model.updated_at = datetime.now(timezone.utc)
++            db.commit()
 +
-@@ -236 +251 @@ def change_slide(filename: str, body: SlideChange, user: User = Depends(get_curr
+@@ -236 +268 @@ def change_slide(filename: str, body: SlideChange, user: User = Depends(get_curr
 -def download_document(filename: str, user: User = Depends(get_current_user)):
 +def download_document(filename: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-@@ -239 +254 @@ def download_document(filename: str, user: User = Depends(get_current_user)):
+@@ -239 +271 @@ def download_document(filename: str, user: User = Depends(get_current_user)):
 -    if path is None or not path.is_file() or not user_may_read(user.id, filename):
 +    if path is None or not path.is_file() or not user_may_read(user.id, filename, db=db):
-@@ -245,0 +261,95 @@ def download_document(filename: str, user: User = Depends(get_current_user)):
+@@ -245,0 +278,93 @@ def download_document(filename: str, user: User = Depends(get_current_user)):
 +
 +
 +
@@ -57,27 +79,25 @@ index 64721c9..082bfa4 100644
 +
 +@router.post("/api/documents/{filename}/share")
 +def share_document(filename: str, body: ShareDocIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-+    import json
 +    from core.models import DocumentRecord, Doc as DocModel
++    from tools.documents import _as_list
 +    from sqlalchemy.orm.attributes import flag_modified
 +    row = db.get(DocumentRecord, filename)
 +    if not row or not user_may_read(user.id, filename, db=db):
 +        raise HTTPException(status_code=404, detail="Document not found")
-+    if row.user_id and row.user_id != user.id:
++    is_owner = (row.user_id and row.user_id == user.id) or (row.created_by and row.created_by == user.id)
++    if (row.user_id or row.created_by) and not is_owner:
 +        raise HTTPException(status_code=403, detail="Only the document creator can share it")
-+    current = list(row.shared_with or [])
++    current = _as_list(row.shared_with)
 +    for u in body.users:
 +        if u and u not in current:
 +            current.append(u)
 +    row.shared_with = current
 +    flag_modified(row, "shared_with")
 +
-+    doc_model = db.get(DocModel, filename) or db.query(DocModel).filter((DocModel.id == filename) | (DocModel.title == row.title)).first()
++    doc_model = db.get(DocModel, filename)
 +    if doc_model:
-+        m_current = list(doc_model.shared_with or [])
-+        if isinstance(m_current, str):
-+            try: m_current = json.loads(m_current)
-+            except Exception: m_current = []
++        m_current = _as_list(doc_model.shared_with)
 +        for u in body.users:
 +            if u and u not in m_current:
 +                m_current.append(u)

@@ -1,15 +1,13 @@
 diff --git a/src/DocumentsView.tsx b/src/DocumentsView.tsx
-index 3c81d11..0aa3786 100644
+index 3c81d11..f8d3f93 100644
 --- a/src/DocumentsView.tsx
 +++ b/src/DocumentsView.tsx
 @@ -2 +2 @@ import { useEffect, useState } from "react"
 -import { fetchDocuments } from "./api"
 +import { fetchDocuments, shareDocumentFile, deleteDocumentFile, sendDirect } from "./api"
-@@ -4,0 +5,3 @@ import { TeamButton } from "./Sidebar"
+@@ -4,0 +5 @@ import { TeamButton } from "./Sidebar"
 +import type { ProjectMember } from "./types"
-+
-+export { DocListPanel } from "./DocListPanel"
-@@ -24,2 +27,12 @@ function made(iso: string | null): string {
+@@ -24,2 +25,12 @@ function made(iso: string | null): string {
 -/** Every document the project's bots have saved, newest first. */
 -export function DocumentsView({ onClose, onOpenTeam, teamOpen }: { onClose: () => void; onOpenTeam: () => void; teamOpen: boolean }) {
 +/** Files view: every saved file/document in the project, newest first. */
@@ -24,9 +22,9 @@ index 3c81d11..0aa3786 100644
 +  teamOpen: boolean
 +  members?: ProjectMember[]
 +}) {
-@@ -27,0 +41 @@ export function DocumentsView({ onClose, onOpenTeam, teamOpen }: { onClose: () =
+@@ -27,0 +39 @@ export function DocumentsView({ onClose, onOpenTeam, teamOpen }: { onClose: () =
 +  const [loading, setLoading] = useState(false)
-@@ -28,0 +43,24 @@ export function DocumentsView({ onClose, onOpenTeam, teamOpen }: { onClose: () =
+@@ -28,0 +41,24 @@ export function DocumentsView({ onClose, onOpenTeam, teamOpen }: { onClose: () =
 +  const [shareDoc, setShareDoc] = useState<Doc | null>(null)
 +  const [shareTarget, setShareTarget] = useState("")
 +  const [shareNote, setShareNote] = useState("")
@@ -51,10 +49,10 @@ index 3c81d11..0aa3786 100644
 +        setLoading(false)
 +      })
 +  }
-@@ -31 +69 @@ export function DocumentsView({ onClose, onOpenTeam, teamOpen }: { onClose: () =
+@@ -31 +67 @@ export function DocumentsView({ onClose, onOpenTeam, teamOpen }: { onClose: () =
 -    fetchDocuments().then(setDocs).catch((err) => { setDocs([]); setFailed(err instanceof Error ? err.message : "request failed") })
 +    loadDocs()
-@@ -33,0 +72,46 @@ export function DocumentsView({ onClose, onOpenTeam, teamOpen }: { onClose: () =
+@@ -33,0 +70,46 @@ export function DocumentsView({ onClose, onOpenTeam, teamOpen }: { onClose: () =
 +  async function handleShare(e: React.FormEvent) {
 +    e.preventDefault()
 +    if (!shareDoc || !shareTarget) return
@@ -101,10 +99,10 @@ index 3c81d11..0aa3786 100644
 +    }
 +  }
 +
-@@ -41 +125 @@ export function DocumentsView({ onClose, onOpenTeam, teamOpen }: { onClose: () =
+@@ -41 +123 @@ export function DocumentsView({ onClose, onOpenTeam, teamOpen }: { onClose: () =
 -          <h2 className="cal-title">Documents</h2>
 +          <h2 className="cal-title">Files</h2>
-@@ -45,0 +130,105 @@ export function DocumentsView({ onClose, onOpenTeam, teamOpen }: { onClose: () =
+@@ -45,0 +128,105 @@ export function DocumentsView({ onClose, onOpenTeam, teamOpen }: { onClose: () =
 +
 +      {shareDoc && (
 +        <div className="doc-overlay" onClick={() => setShareDoc(null)}>
@@ -210,7 +208,7 @@ index 3c81d11..0aa3786 100644
 +        </div>
 +      )}
 +
-@@ -56,2 +245,14 @@ export function DocumentsView({ onClose, onOpenTeam, teamOpen }: { onClose: () =
+@@ -56,2 +243,14 @@ export function DocumentsView({ onClose, onOpenTeam, teamOpen }: { onClose: () =
 -        {docs && docs.length === 0 && (
 -          <p className="agent-docs-empty">{failed ? `Could not load documents: ${failed}` : "Your bots have not made any documents yet."}</p>
 +        {loading && docs === null && (
@@ -227,9 +225,9 @@ index 3c81d11..0aa3786 100644
 +        )}
 +        {!loading && !failed && docs && docs.length > 0 && shown.length === 0 && (
 +          <p className="agent-docs-empty">No {KINDS.find(([id]) => id === kind)?.[1]} files yet.</p>
-@@ -59 +259,0 @@ export function DocumentsView({ onClose, onOpenTeam, teamOpen }: { onClose: () =
+@@ -59 +257,0 @@ export function DocumentsView({ onClose, onOpenTeam, teamOpen }: { onClose: () =
 -        {docs && docs.length > 0 && shown.length === 0 && <p className="agent-docs-empty">No {KINDS.find(([id]) => id === kind)?.[1]} documents yet.</p>}
-@@ -61 +261,15 @@ export function DocumentsView({ onClose, onOpenTeam, teamOpen }: { onClose: () =
+@@ -61 +259,15 @@ export function DocumentsView({ onClose, onOpenTeam, teamOpen }: { onClose: () =
 -          <FileCard key={doc.filename} path={doc.url} label={doc.title} detail={[doc.agent_name, made(doc.created_at)].filter(Boolean).join(" · ")} bot={doc.agent_id ? { id: doc.agent_id, name: doc.agent_name } : undefined} />
 +          <FileCard
 +            key={doc.filename}

@@ -1,5 +1,5 @@
 diff --git a/backend/core/database.py b/backend/core/database.py
-index 20e3807..3695af3 100644
+index 20e3807..1cec202 100644
 --- a/backend/core/database.py
 +++ b/backend/core/database.py
 @@ -96,0 +97,9 @@ def migrate() -> None:
@@ -22,13 +22,14 @@ index 20e3807..3695af3 100644
 +        if "direct_messages" in existing:  # a summary or a write in progress when the server stopped never finishes; let its asker send it again
 +            conn.execute(text("UPDATE direct_messages SET share = 'pending' WHERE share = 'sharing'"))
 +            conn.execute(text("UPDATE direct_messages SET share = 'proceed' WHERE share = 'running' AND action <> ''"))
-@@ -239,0 +258,9 @@ def migrate() -> None:
+@@ -239,0 +258,10 @@ def migrate() -> None:
 +        if "documents" in existing:
 +            doc_rec_cols = {c["name"] for c in insp.get_columns("documents")}
++            shared_ddl = "ALTER TABLE documents ADD COLUMN shared_with JSON DEFAULT '[]'::json" if engine.dialect.name == "postgresql" else "ALTER TABLE documents ADD COLUMN shared_with TEXT DEFAULT '[]'"
 +            for name, ddl in (
 +                ("user_id", "ALTER TABLE documents ADD COLUMN user_id VARCHAR(36) DEFAULT ''"),
 +                ("created_by", "ALTER TABLE documents ADD COLUMN created_by VARCHAR(120) DEFAULT ''"),
-+                ("shared_with", "ALTER TABLE documents ADD COLUMN shared_with TEXT DEFAULT '[]'"),
++                ("shared_with", shared_ddl),
 +            ):
 +                if name not in doc_rec_cols:
 +                    conn.execute(text(ddl))

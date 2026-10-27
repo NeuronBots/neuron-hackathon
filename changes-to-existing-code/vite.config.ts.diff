@@ -1,9 +1,0 @@
-diff --git a/vite.config.ts b/vite.config.ts
-index a461058..2d4a342 100644
---- a/vite.config.ts
-+++ b/vite.config.ts
-@@ -50,0 +51,4 @@ export default defineConfig({
-+      "/docs": {
-+        target: "http://localhost:8000",
-+        changeOrigin: true,
-+      },

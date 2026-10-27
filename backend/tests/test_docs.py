@@ -1,5 +1,6 @@
 """Tests for document store CRUD endpoints and access control (NURN-153)."""
 from datetime import datetime, timedelta
+import re
 import uuid
 
 import pytest
@@ -48,7 +49,7 @@ def test_post_valid_doc_returns_201(client):
         "content": "Architecture for Meta hackathon work",
         "tags": ["meta", "specs"],
     }
-    res = client.post("/docs", json=payload)
+    res = client.post("/api/docs", json=payload)
     assert res.status_code == 201, res.text
     data = res.json()
     assert data["title"] == payload["title"]
@@ -67,50 +68,53 @@ def test_post_valid_doc_without_tags_defaults_empty_list(client):
         "title": "Minimal Doc",
         "content": "No tags provided",
     }
-    res = client.post("/docs", json=payload)
+    res = client.post("/api/docs", json=payload)
     assert res.status_code == 201, res.text
     data = res.json()
     assert data["tags"] == []
 
 
 def test_post_empty_title_returns_422(client):
-    res = client.post("/docs", json={"title": "", "content": "Valid content"})
+    res = client.post("/api/docs", json={"title": "", "content": "Valid content"})
     assert res.status_code == 422
 
-    res = client.post("/docs", json={"title": "   ", "content": "Valid content"})
+    res = client.post("/api/docs", json={"title": "   ", "content": "Valid content"})
     assert res.status_code == 422
 
-    res = client.post("/docs", json={"content": "Valid content"})
+    res = client.post("/api/docs", json={"content": "Valid content"})
     assert res.status_code == 422
 
 
 def test_post_empty_content_returns_422(client):
-    res = client.post("/docs", json={"title": "Valid title", "content": ""})
+    res = client.post("/api/docs", json={"title": "Valid title", "content": ""})
     assert res.status_code == 422
 
-    res = client.post("/docs", json={"title": "Valid title", "content": "   "})
+    res = client.post("/api/docs", json={"title": "Valid title", "content": "   "})
     assert res.status_code == 422
 
-    res = client.post("/docs", json={"title": "Valid title"})
+    res = client.post("/api/docs", json={"title": "Valid title"})
     assert res.status_code == 422
 
 
 def test_post_title_too_long_returns_422(client):
     long_title = "x" * 201
-    res = client.post("/docs", json={"title": long_title, "content": "Valid content"})
+    res = client.post("/api/docs", json={"title": long_title, "content": "Valid content"})
     assert res.status_code == 422
 
 
-def test_get_docs_list_contains_created_doc_ordered_newest_first(client):
-    res1 = client.post("/docs", json={"title": "First Doc", "content": "First content"})
+def test_get_docs_list_contains_created_doc_ordered_newest_first(db, client):
+    user = make_user(db, "alice_order", token="tok_alice_order")
+    client.cookies.set(COOKIE, "tok_alice_order")
+
+    res1 = client.post("/api/docs", json={"title": "First Doc", "content": "First content"})
     assert res1.status_code == 201
     doc1 = res1.json()
 
-    res2 = client.post("/docs", json={"title": "Second Doc", "content": "Second content"})
+    res2 = client.post("/api/docs", json={"title": "Second Doc", "content": "Second content"})
     assert res2.status_code == 201
     doc2 = res2.json()
 
-    res_list = client.get("/docs")
+    res_list = client.get("/api/docs")
     assert res_list.status_code == 200
     docs = res_list.json()
 
@@ -122,18 +126,21 @@ def test_get_docs_list_contains_created_doc_ordered_newest_first(client):
     assert idx2 < idx1
 
 
-def test_get_single_doc_by_id(client):
-    created = client.post("/docs", json={"title": "Single Doc", "content": "Single content"}).json()
+def test_get_single_doc_by_id(db, client):
+    user = make_user(db, "alice_single", token="tok_alice_single")
+    client.cookies.set(COOKIE, "tok_alice_single")
+
+    created = client.post("/api/docs", json={"title": "Single Doc", "content": "Single content"}).json()
     doc_id = created["id"]
 
-    res = client.get(f"/docs/{doc_id}")
+    res = client.get(f"/api/docs/{doc_id}")
     assert res.status_code == 200
     assert res.json()["id"] == doc_id
     assert res.json()["title"] == "Single Doc"
 
 
 def test_get_single_doc_404_if_missing(client):
-    res = client.get("/docs/non-existent-id")
+    res = client.get("/api/docs/non-existent-id")
     assert res.status_code == 404
 
 
@@ -144,67 +151,67 @@ def test_user_can_only_see_own_docs_unless_shared(db, client):
 
     # Alice creates a private doc
     client.cookies.set(COOKIE, "alice_tok")
-    res_alice_doc = client.post("/docs", json={"title": "Alice Secret", "content": "For Alice only"})
+    res_alice_doc = client.post("/api/docs", json={"title": "Alice Secret", "content": "For Alice only"})
     assert res_alice_doc.status_code == 201
     alice_doc = res_alice_doc.json()
 
     # Bob creates a private doc
     client.cookies.set(COOKIE, "bob_tok")
-    res_bob_doc = client.post("/docs", json={"title": "Bob Secret", "content": "For Bob only"})
+    res_bob_doc = client.post("/api/docs", json={"title": "Bob Secret", "content": "For Bob only"})
     assert res_bob_doc.status_code == 201
     bob_doc = res_bob_doc.json()
 
     # Alice sees only her doc
     client.cookies.set(COOKIE, "alice_tok")
-    res_a_list = client.get("/docs")
+    res_a_list = client.get("/api/docs")
     a_ids = [d["id"] for d in res_a_list.json()]
     assert alice_doc["id"] in a_ids
     assert bob_doc["id"] not in a_ids
 
     # Alice tries to get Bob's doc directly -> 404
-    assert client.get(f"/docs/{bob_doc['id']}").status_code == 404
+    assert client.get(f"/api/docs/{bob_doc['id']}").status_code == 404
 
     # Bob sees only his doc
     client.cookies.set(COOKIE, "bob_tok")
-    res_b_list = client.get("/docs")
+    res_b_list = client.get("/api/docs")
     b_ids = [d["id"] for d in res_b_list.json()]
     assert bob_doc["id"] in b_ids
     assert alice_doc["id"] not in b_ids
 
     # Bob tries to get Alice's doc directly -> 404
-    assert client.get(f"/docs/{alice_doc['id']}").status_code == 404
+    assert client.get(f"/api/docs/{alice_doc['id']}").status_code == 404
 
     # Charlie sees neither
     client.cookies.set(COOKIE, "charlie_tok")
-    res_c_list = client.get("/docs")
+    res_c_list = client.get("/api/docs")
     c_ids = [d["id"] for d in res_c_list.json()]
     assert alice_doc["id"] not in c_ids
     assert bob_doc["id"] not in c_ids
-    assert client.get(f"/docs/{alice_doc['id']}").status_code == 404
-    assert client.get(f"/docs/{bob_doc['id']}").status_code == 404
+    assert client.get(f"/api/docs/{alice_doc['id']}").status_code == 404
+    assert client.get(f"/api/docs/{bob_doc['id']}").status_code == 404
 
     # Alice shares her doc with Bob via POST /docs/{id}/share
     client.cookies.set(COOKIE, "alice_tok")
-    res_share = client.post(f"/docs/{alice_doc['id']}/share", json={"users": [bob.id]})
+    res_share = client.post(f"/api/docs/{alice_doc['id']}/share", json={"users": [bob.id]})
     assert res_share.status_code == 200
     assert bob.id in res_share.json()["shared_with"]
 
     # Now Bob can see Alice's doc in GET /docs and GET /docs/{id}
     client.cookies.set(COOKIE, "bob_tok")
-    res_b_list_after = client.get("/docs")
+    res_b_list_after = client.get("/api/docs")
     b_ids_after = [d["id"] for d in res_b_list_after.json()]
     assert alice_doc["id"] in b_ids_after
     assert bob_doc["id"] in b_ids_after
-    res_b_get_a = client.get(f"/docs/{alice_doc['id']}")
+    res_b_get_a = client.get(f"/api/docs/{alice_doc['id']}")
     assert res_b_get_a.status_code == 200
     assert res_b_get_a.json()["title"] == "Alice Secret"
 
     # Charlie still cannot see it
     client.cookies.set(COOKIE, "charlie_tok")
-    res_c_list_after = client.get("/docs")
+    res_c_list_after = client.get("/api/docs")
     c_ids_after = [d["id"] for d in res_c_list_after.json()]
     assert alice_doc["id"] not in c_ids_after
-    assert client.get(f"/docs/{alice_doc['id']}").status_code == 404
+    assert client.get(f"/api/docs/{alice_doc['id']}").status_code == 404
 
 
 def test_create_doc_with_shared_with_at_creation(db, client):
@@ -213,7 +220,7 @@ def test_create_doc_with_shared_with_at_creation(db, client):
 
     # Alice creates a doc pre-shared with Bob using his email
     client.cookies.set(COOKIE, "alice2_tok")
-    res = client.post("/docs", json={
+    res = client.post("/api/docs", json={
         "title": "Shared from start",
         "content": "Collaborative content",
         "shared_with": [bob.email],
@@ -223,7 +230,7 @@ def test_create_doc_with_shared_with_at_creation(db, client):
 
     # Bob can see it immediately by email identity
     client.cookies.set(COOKIE, "bob2_tok")
-    res_b = client.get(f"/docs/{doc_id}")
+    res_b = client.get(f"/api/docs/{doc_id}")
     assert res_b.status_code == 200
     assert res_b.json()["title"] == "Shared from start"
 
@@ -234,7 +241,7 @@ def test_non_creator_cannot_share_doc(db, client):
     charlie = make_user(db, "charlie3", token="charlie3_tok")
 
     client.cookies.set(COOKIE, "alice3_tok")
-    res_doc = client.post("/docs", json={
+    res_doc = client.post("/api/docs", json={
         "title": "Alice doc",
         "content": "Secret",
         "shared_with": [bob.id],
@@ -243,7 +250,7 @@ def test_non_creator_cannot_share_doc(db, client):
 
     # Bob (shared recipient, not creator) attempts to share with Charlie -> 403 Forbidden
     client.cookies.set(COOKIE, "bob3_tok")
-    res_forbidden = client.post(f"/docs/{doc_id}/share", json={"users": [charlie.id]})
+    res_forbidden = client.post(f"/api/docs/{doc_id}/share", json={"users": [charlie.id]})
     assert res_forbidden.status_code == 403
 
 
@@ -308,7 +315,7 @@ async def test_bot_created_document_scoped_to_asker_and_shared(db, client, tmp_p
     res_a_down = client.get(f"/api/documents/{actual_filename}")
     assert res_a_down.status_code == 200
 
-    res_a_crud = client.get("/docs")
+    res_a_crud = client.get("/api/docs")
     assert res_a_crud.status_code == 200
     assert any(d["title"] == "Meta Spec" for d in res_a_crud.json())
 
@@ -321,7 +328,7 @@ async def test_bot_created_document_scoped_to_asker_and_shared(db, client, tmp_p
     res_b_down = client.get(f"/api/documents/{actual_filename}")
     assert res_b_down.status_code == 404
 
-    res_b_crud = client.get("/docs")
+    res_b_crud = client.get("/api/docs")
     assert not any(d["title"] == "Meta Spec" for d in res_b_crud.json())
 
     # Alice shares it with Bob
@@ -389,14 +396,14 @@ async def test_bot_generated_doc_forwarded_to_person_b(db, client, tmp_path, mon
 
     # Alice can see it
     client.cookies.set(COOKIE, "tok_alice_fwd")
-    res_a_docs = client.get("/docs")
+    res_a_docs = client.get("/api/docs")
     assert any(d["title"] == "Alice Private Report" for d in res_a_docs.json())
 
     # Bob cannot see it
     client.cookies.set(COOKIE, "tok_bob_fwd")
-    res_b_docs = client.get("/docs")
+    res_b_docs = client.get("/api/docs")
     assert not any(d["title"] == "Alice Private Report" for d in res_b_docs.json())
-    assert client.get(f"/docs/{filename}").status_code == 404
+    assert client.get(f"/api/docs/{filename}").status_code == 404
 
     # Alice forwards the document to Bob via direct message
     client.cookies.set(COOKIE, "tok_alice_fwd")
@@ -406,37 +413,37 @@ async def test_bot_generated_doc_forwarded_to_person_b(db, client, tmp_path, mon
 
     # Now Bob CAN see the document in /docs and GET /docs/{id}
     client.cookies.set(COOKIE, "tok_bob_fwd")
-    res_b_docs2 = client.get("/docs")
+    res_b_docs2 = client.get("/api/docs")
     assert any(d["title"] == "Alice Private Report" for d in res_b_docs2.json())
 
-    res_b_single = client.get(f"/docs/{filename}")
+    res_b_single = client.get(f"/api/docs/{filename}")
     assert res_b_single.status_code == 200
     assert res_b_single.json()["title"] == "Alice Private Report"
 
     # Charlie still cannot see it
     client.cookies.set(COOKIE, "tok_charlie_fwd")
-    res_c_docs = client.get("/docs")
+    res_c_docs = client.get("/api/docs")
     assert not any(d["title"] == "Alice Private Report" for d in res_c_docs.json())
-    assert client.get(f"/docs/{filename}").status_code == 404
+    assert client.get(f"/api/docs/{filename}").status_code == 404
 
 def test_delete_doc_endpoint(db, client):
     alice = make_user(db, "alice_del", token="tok_alice_del")
     client.cookies.set(COOKIE, "tok_alice_del")
 
     # Alice creates a doc
-    res = client.post("/docs", json={"title": "To Delete", "content": "Will be removed"})
+    res = client.post("/api/docs", json={"title": "To Delete", "content": "Will be removed"})
     assert res.status_code == 201
     doc_id = res.json()["id"]
 
     # Doc exists
-    assert client.get(f"/docs/{doc_id}").status_code == 200
+    assert client.get(f"/api/docs/{doc_id}").status_code == 200
 
     # Delete doc
-    res_del = client.delete(f"/docs/{doc_id}")
+    res_del = client.delete(f"/api/docs/{doc_id}")
     assert res_del.status_code == 204
 
     # Now it is 404
-    assert client.get(f"/docs/{doc_id}").status_code == 404
+    assert client.get(f"/api/docs/{doc_id}").status_code == 404
 
 
 @pytest.mark.anyio
@@ -583,7 +590,7 @@ async def test_delete_unauthorized_user_cannot_delete_other_user_doc(db, client,
     assert res_del_api.status_code == 403
 
     # Bob attempts to delete via /docs/{filename} -> 404 (hidden from Bob)
-    res_del_doc = client.delete(f"/docs/{filename}")
+    res_del_doc = client.delete(f"/api/docs/{filename}")
     assert res_del_doc.status_code == 404
 
 
@@ -694,7 +701,7 @@ async def test_share_via_direct_message_markdown_link(db, client, tmp_path, monk
 
     # Bob initially cannot see it
     client.cookies.set(COOKIE, "tok_bob_dm")
-    assert client.get(f"/docs/{filename}").status_code == 404
+    assert client.get(f"/api/docs/{filename}").status_code == 404
 
     # Alice shares via direct message with Markdown link format [Title](url) without old forward prefix
     client.cookies.set(COOKIE, "tok_alice_dm")
@@ -704,7 +711,7 @@ async def test_share_via_direct_message_markdown_link(db, client, tmp_path, monk
 
     # Now Bob has access and can see it in GET /docs/{id}
     client.cookies.set(COOKIE, "tok_bob_dm")
-    res_b_doc = client.get(f"/docs/{filename}")
+    res_b_doc = client.get(f"/api/docs/{filename}")
     assert res_b_doc.status_code == 200
     assert res_b_doc.json()["title"] == "Project Roadmap"
 
@@ -752,3 +759,242 @@ async def test_put_document_rejects_non_editable_extension(db, client, tmp_path,
     assert res_put.status_code == 400
     assert "Only slideshows and markdown documents can be edited here." in res_put.json()["detail"]
 
+
+
+@pytest.mark.anyio
+async def test_unowned_document_visibility_scoped_to_project_members_never_guests(db, client, tmp_path, monkeypatch):
+    """Unowned documents are visible to project members only, never guests or non-members (Finding 1)."""
+    import tools.documents as documents
+    from core.models import Agent, DocumentRecord, Project, ProjectMember
+
+    monkeypatch.setattr(documents, "DOC_DIR", tmp_path)
+    monkeypatch.setattr(documents, "_r2", lambda: None)
+
+    proj = Project(id="p_unowned", name="Unowned Test Project")
+    db.add(proj)
+    db.commit()
+
+    alice = make_user(db, "alice_unowned", token="tok_alice_unowned")
+    bob_non_member = make_user(db, "bob_outsider", token="tok_bob_outsider")
+    db.add(ProjectMember(project_id=proj.id, user_id=alice.id, role="member"))
+    db.commit()
+
+    # Create an unowned DocumentRecord (no user_id and no created_by)
+    doc_path = tmp_path / "legacy_notes-20261028-000000.md"
+    doc_path.write_text("# Legacy Notes\nShared project knowledge", encoding="utf-8")
+    rec = DocumentRecord(
+        filename=doc_path.name,
+        agent_id=None,
+        project_id=proj.id,
+        user_id="",
+        created_by="",
+        shared_with=[],
+        title="Legacy Notes",
+        created_at=datetime.utcnow(),
+    )
+    db.add(rec)
+    db.commit()
+
+    # 1. Guest (unauthenticated) CANNOT see unowned document
+    client.cookies.clear()
+    res_guest_get = client.get(f"/api/docs/{doc_path.name}")
+    assert res_guest_get.status_code == 404
+    res_guest_list = client.get("/api/docs")
+    assert not any(d["id"] == doc_path.name for d in res_guest_list.json())
+
+    # 2. Project member CAN see unowned document in the project
+    client.cookies.set(COOKIE, "tok_alice_unowned")
+    res_member_get = client.get(f"/api/docs/{doc_path.name}")
+    assert res_member_get.status_code == 200
+    assert res_member_get.json()["title"] == "Legacy Notes"
+
+    res_member_list = client.get("/api/docs")
+    assert any(d["id"] == doc_path.name for d in res_member_list.json())
+
+    # 3. Outsider (non-project member) CANNOT see unowned document
+    client.cookies.set(COOKIE, "tok_bob_outsider")
+    res_outsider_get = client.get(f"/api/docs/{doc_path.name}")
+    assert res_outsider_get.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_dm_auto_share_requires_sender_ownership(db, client, tmp_path, monkeypatch):
+    """DM auto-share only grants access when the sender is the document owner (Finding 2)."""
+    import tools.documents as documents
+    from tools.dispatch import run_tool
+    from core.models import Agent, Project, ProjectMember
+    from core.usage import set_usage_user, reset_usage_user
+
+    monkeypatch.setattr(documents, "DOC_DIR", tmp_path)
+    monkeypatch.setattr(documents, "_r2", lambda: None)
+
+    proj = Project(id="p_dm_perm", name="DM Perm Project")
+    db.add(proj)
+    db.commit()
+    bot = Agent(id="bot_dm_perm", name="DM Perm Bot", system_prompt="", project_id=proj.id)
+    db.add(bot)
+    db.commit()
+
+    alice = make_user(db, "alice_dm_owner", token="tok_alice_dm_owner")
+    bob = make_user(db, "bob_dm_reader", token="tok_bob_dm_reader")
+    charlie = make_user(db, "charlie_dm_target", token="tok_charlie_dm_target")
+    db.add_all([
+        ProjectMember(project_id=proj.id, user_id=alice.id, role="member"),
+        ProjectMember(project_id=proj.id, user_id=bob.id, role="member"),
+        ProjectMember(project_id=proj.id, user_id=charlie.id, role="member"),
+    ])
+    db.commit()
+
+    # Alice creates a document and shares it with Bob
+    client.cookies.set(COOKIE, "tok_alice_dm_owner")
+    u_token = set_usage_user(alice.id, proj.id)
+    try:
+        made = await run_tool(
+            "create_document",
+            {"filename": "confidential_strategy.md", "format": "md", "title": "Confidential Strategy", "content": "Strategy content"},
+            agent_id=bot.id,
+        )
+    finally:
+        reset_usage_user(u_token)
+
+    m = re.search(r"/api/documents/([^\s\)]+)", made)
+    assert m is not None
+    filename = m.group(1)
+
+    # Alice shares it with Bob via share endpoint
+    res_share = client.post(f"/api/documents/{filename}/share", json={"users": [bob.id]})
+    assert res_share.status_code == 200
+
+    # Bob has read access, but is NOT the creator/owner
+    client.cookies.set(COOKIE, "tok_bob_dm_reader")
+    assert client.get(f"/api/docs/{filename}").status_code == 200
+
+    # Charlie cannot see it yet
+    client.cookies.set(COOKIE, "tok_charlie_dm_target")
+    assert client.get(f"/api/docs/{filename}").status_code == 404
+
+    # Bob attempts to forward/DM the document link to Charlie
+    client.cookies.set(COOKIE, "tok_bob_dm_reader")
+    res_fwd_bob = client.post(
+        f"/api/direct/{charlie.id}",
+        headers={"x-project-id": proj.id},
+        json={"content": f"Hey Charlie, check this link: /api/documents/{filename}"},
+    )
+    assert res_fwd_bob.status_code == 201
+
+    # Charlie still CANNOT see it because Bob is not the owner
+    client.cookies.set(COOKIE, "tok_charlie_dm_target")
+    assert client.get(f"/api/docs/{filename}").status_code == 404
+
+    # Now Alice (the owner) forwards the document link to Charlie
+    client.cookies.set(COOKIE, "tok_alice_dm_owner")
+    res_fwd_alice = client.post(
+        f"/api/direct/{charlie.id}",
+        headers={"x-project-id": proj.id},
+        json={"content": f"Hey Charlie, here is the doc: /api/documents/{filename}"},
+    )
+    assert res_fwd_alice.status_code == 201
+
+    # Now Charlie CAN see it because the owner forwarded it
+    client.cookies.set(COOKIE, "tok_charlie_dm_target")
+    assert client.get(f"/api/docs/{filename}").status_code == 200
+
+
+@pytest.mark.postgres
+def test_postgres_string_shared_with_parses_properly(db, client):
+    """Postgres migrated row with string shared_with is parsed correctly by _as_list (Finding 5)."""
+    from tools.documents import _as_list
+
+    # String format from database migration
+    raw_str = '["alice@example.com", "bob@example.com"]'
+    parsed = _as_list(raw_str)
+    assert parsed == ["alice@example.com", "bob@example.com"]
+
+    comma_str = "alice@example.com, bob@example.com"
+    assert _as_list(comma_str) == ["alice@example.com", "bob@example.com"]
+
+    already_list = ["alice@example.com"]
+    assert _as_list(already_list) == ["alice@example.com"]
+
+
+@pytest.mark.anyio
+async def test_markdown_put_requires_ownership_and_exact_id_match(db, client, tmp_path, monkeypatch):
+    """PUT /api/documents/{filename} requires ownership and looks up Doc by id == filename only (Finding 6)."""
+    import tools.documents as documents
+    from tools.dispatch import run_tool
+    from core.models import Agent, Doc as DocModel, Project, ProjectMember
+    from core.usage import set_usage_user, reset_usage_user
+
+    monkeypatch.setattr(documents, "DOC_DIR", tmp_path)
+    monkeypatch.setattr(documents, "_r2", lambda: None)
+
+    proj = Project(id="p_put_perm", name="PUT Perm Project")
+    db.add(proj)
+    db.commit()
+    bot = Agent(id="bot_put_perm", name="PUT Perm Bot", system_prompt="", project_id=proj.id)
+    db.add(bot)
+    db.commit()
+
+    alice = make_user(db, "alice_put_owner", token="tok_alice_put_owner")
+    bob = make_user(db, "bob_put_non_owner", token="tok_bob_put_non_owner")
+    db.add_all([
+        ProjectMember(project_id=proj.id, user_id=alice.id, role="member"),
+        ProjectMember(project_id=proj.id, user_id=bob.id, role="member"),
+    ])
+    db.commit()
+
+    # Alice creates a private markdown document
+    client.cookies.set(COOKIE, "tok_alice_put_owner")
+    u_token = set_usage_user(alice.id, proj.id)
+    try:
+        made = await run_tool(
+            "create_document",
+            {"filename": "contract.md", "format": "md", "title": "Contract Spec", "content": "Original contract"},
+            agent_id=bot.id,
+        )
+    finally:
+        reset_usage_user(u_token)
+
+    m = re.search(r"/api/documents/([^\s\)]+)", made)
+    assert m is not None
+    filename = m.group(1)
+
+    # Bob creates an unrelated Doc that happens to have title == filename
+    bob_doc = DocModel(
+        id=str(uuid.uuid4()),
+        title=filename,  # Same as Alice's filename
+        content="Bob unrelated content",
+        created_by=bob.id,
+        user_id=bob.id,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    db.add(bob_doc)
+    db.commit()
+
+    # Bob (member of same project, but not owner of contract) attempts to PUT /api/documents/{filename}
+    client.cookies.set(COOKIE, "tok_bob_put_non_owner")
+    res_bob_put = client.put(
+        f"/api/documents/{filename}",
+        content="# Malicious Edit\nOverwritten text".encode("utf-8"),
+        headers={"Content-Type": "text/markdown; charset=utf-8"},
+    )
+    # Must be 404 (hidden because not shared) or 403 (forbidden if checked)
+    assert res_bob_put.status_code in (403, 404)
+
+    # Verify Bob's unrelated Doc.content was NOT changed
+    db.refresh(bob_doc)
+    assert bob_doc.content == "Bob unrelated content"
+
+    # Alice (owner) can edit successfully
+    client.cookies.set(COOKIE, "tok_alice_put_owner")
+    res_alice_put = client.put(
+        f"/api/documents/{filename}",
+        content="# Alice Legitimate Edit\nUpdated contract text".encode("utf-8"),
+        headers={"Content-Type": "text/markdown; charset=utf-8"},
+    )
+    assert res_alice_put.status_code == 200
+
+    # Bob's unrelated Doc.content is STILL unchanged
+    db.refresh(bob_doc)
+    assert bob_doc.content == "Bob unrelated content"

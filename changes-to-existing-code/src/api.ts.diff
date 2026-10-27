@@ -1,5 +1,5 @@
 diff --git a/src/api.ts b/src/api.ts
-index c214349..32ada3d 100644
+index c214349..a5899bf 100644
 --- a/src/api.ts
 +++ b/src/api.ts
 @@ -56 +56 @@ export async function fetchAgents(): Promise<
@@ -73,7 +73,7 @@ index c214349..32ada3d 100644
 +
 @@ -932 +958,0 @@ export type SpecProposal = {
 -  model: string
-@@ -969,0 +996,82 @@ export async function savePushSubscription(subscription: PushSubscriptionJSON):
+@@ -969,0 +996,71 @@ export async function savePushSubscription(subscription: PushSubscriptionJSON):
 +
 +
 +export interface DocItem {
@@ -88,19 +88,13 @@ index c214349..32ada3d 100644
 +  updated_at: string
 +}
 +
-+function docsFetch(path: string, init: RequestInit = {}) {
-+  const headers = new Headers(init.headers)
-+  if (activeProjectId) headers.set("X-Project-Id", activeProjectId)
-+  return fetch(path, { ...init, headers, credentials: "include" })
-+}
-+
 +export async function fetchDocs(): Promise<DocItem[]> {
-+  const res = await docsFetch("/docs")
++  const res = await apiFetch("/docs")
 +  return handleResponse(res) as Promise<DocItem[]>
 +}
 +
 +export async function fetchDocById(id: string): Promise<DocItem> {
-+  const res = await docsFetch(`/docs/${encodeURIComponent(id)}`)
++  const res = await apiFetch(`/docs/${encodeURIComponent(id)}`)
 +  return handleResponse(res) as Promise<DocItem>
 +}
 +
@@ -110,7 +104,7 @@ index c214349..32ada3d 100644
 +  tags?: string[]
 +  shared_with?: string[]
 +}): Promise<DocItem> {
-+  const res = await docsFetch("/docs", {
++  const res = await apiFetch("/docs", {
 +    method: "POST",
 +    headers: { "Content-Type": "application/json" },
 +    body: JSON.stringify(body),
@@ -118,9 +112,8 @@ index c214349..32ada3d 100644
 +  return handleResponse(res) as Promise<DocItem>
 +}
 +
-+
 +export async function shareDoc(id: string, users: string[]): Promise<DocItem> {
-+  const res = await docsFetch(`/docs/${encodeURIComponent(id)}/share`, {
++  const res = await apiFetch(`/docs/${encodeURIComponent(id)}/share`, {
 +    method: "POST",
 +    headers: { "Content-Type": "application/json" },
 +    body: JSON.stringify({ users }),
@@ -146,13 +139,9 @@ index c214349..32ada3d 100644
 +}
 +
 +export async function deleteDoc(id: string): Promise<void> {
-+  const res = await fetch(`/docs/${encodeURIComponent(id)}`, {
++  const res = await apiFetch(`/docs/${encodeURIComponent(id)}`, {
 +    method: "DELETE",
-+    credentials: "include",
 +  })
 +  if (res.status === 204) return
-+  if (!res.ok) {
-+    const err = await res.json().catch(() => ({ detail: "Failed to delete" }))
-+    throw new Error(err.detail || "Failed to delete")
-+  }
++  await handleResponse(res)
 +}
