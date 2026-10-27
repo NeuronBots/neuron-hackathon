@@ -1,8 +1,24 @@
 diff --git a/backend/main.py b/backend/main.py
-index fac5732..83fd357 100644
+index fac5732..e97bb42 100644
 --- a/backend/main.py
 +++ b/backend/main.py
-@@ -70,0 +71,6 @@ def _enforce_single_worker() -> None:
+@@ -16,15 +15,0 @@ import_sqlite()
+-def _apply_tiers() -> None:
+-    from core.database import SessionLocal
+-    from services.spawns import move_agents_to_tiers
+-
+-    db = SessionLocal()
+-    try:
+-        moved = move_agents_to_tiers(db)
+-        if moved:
+-            print(f"[startup] moved {moved} bots to model tiers")
+-    finally:
+-        db.close()
+-
+-
+-_apply_tiers()
+-
+@@ -70,0 +56,6 @@ def _enforce_single_worker() -> None:
 +@app.on_event("startup")
 +async def _check_model_base() -> None:
 +    from llm.config import check_model_base

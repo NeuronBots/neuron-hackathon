@@ -1,0 +1,7 @@
+diff --git a/backend/services/trace_export.py b/backend/services/trace_export.py
+index c3ed621..ef683f3 100644
+--- a/backend/services/trace_export.py
++++ b/backend/services/trace_export.py
+@@ -105 +105 @@ def build_trace(db: Session, agent_id: str, user_id: str, request_id: str, path:
+-        "agents": [{"id": a.id, "name": a.name, "model": a.model, "parent_id": a.parent_id, "instructions": a.system_prompt} for a in agents],
++        "agents": [{"id": a.id, "name": a.name, "parent_id": a.parent_id, "instructions": a.system_prompt} for a in agents],

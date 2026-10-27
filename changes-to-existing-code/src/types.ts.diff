@@ -1,0 +1,10 @@
+diff --git a/src/types.ts b/src/types.ts
+index adc5714..06e0b8a 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -80 +79,0 @@ export type AgentRecord = {
+-  model: string
+@@ -118 +116,0 @@ export type AgentDraft = {
+-  model: string
+@@ -126 +123,0 @@ export type SpawnedAgent = {
+-  model: string

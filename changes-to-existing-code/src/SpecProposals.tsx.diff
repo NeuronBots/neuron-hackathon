@@ -1,0 +1,8 @@
+diff --git a/src/SpecProposals.tsx b/src/SpecProposals.tsx
+index 982464b..30005ef 100644
+--- a/src/SpecProposals.tsx
++++ b/src/SpecProposals.tsx
+@@ -2 +1,0 @@ import { useCallback, useEffect, useState } from "react"
+-import { modelLabel } from "./models"
+@@ -43 +41,0 @@ export function SpecProposals({ streaming }: { streaming: boolean }) {
+-          <p>Model: {modelLabel(p.model)}</p>

@@ -1,7 +1,7 @@
 diff --git a/backend/core/models.py b/backend/core/models.py
-index 38a5312..05cd138 100644
+index 38a5312..67a3569 100644
 --- a/backend/core/models.py
 +++ b/backend/core/models.py
 @@ -30 +30 @@ class Agent(Base):
 -    model = Column(String(120), nullable=False, default="claude-sonnet-5-5")
-+    model = Column(String(120), nullable=False, default="workhorse")
++    model = Column(String(120), nullable=False, default="workhorse")  # unused: models are set at the source. Kept so existing databases need no migration

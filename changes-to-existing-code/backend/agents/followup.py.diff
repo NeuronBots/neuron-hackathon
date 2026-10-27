@@ -1,0 +1,28 @@
+diff --git a/backend/agents/followup.py b/backend/agents/followup.py
+index d709509..2ccaac3 100644
+--- a/backend/agents/followup.py
++++ b/backend/agents/followup.py
+@@ -10,0 +11 @@ from core.database import SessionLocal
++from core.limits import clamp_model
+@@ -12 +13 @@ from llm.client import continue_text, looks_cut
+-from llm.config import ANTHROPIC_API_KEY, ANTHROPIC_BASE
++from llm.config import ANTHROPIC_API_KEY, ANTHROPIC_BASE, CHAT_MODEL
+@@ -57,0 +59 @@ def _peer_summary(target: Agent, asker: Agent, question: str, reply: str, db: Se
++    model = clamp_model(CHAT_MODEL)
+@@ -63 +65 @@ def _peer_summary(target: Agent, asker: Agent, question: str, reply: str, db: Se
+-                json={"model": target.model, "max_tokens": 300, "system": system_for(target, db), "messages": [{"role": "user", "content": prompt}]},
++                json={"model": model, "max_tokens": 300, "system": system_for(target, db), "messages": [{"role": "user", "content": prompt}]},
+@@ -68 +70 @@ def _peer_summary(target: Agent, asker: Agent, question: str, reply: str, db: Se
+-        note_payload(target.model, data, agent_id=target.id, kind="followup")
++        note_payload(model, data, agent_id=target.id, kind="followup")
+@@ -77,0 +80 @@ async def stream_sender_followup(source: Agent, exchanges: list, original_user_m
++    model = await asyncio.to_thread(clamp_model, CHAT_MODEL)
+@@ -83 +86 @@ async def stream_sender_followup(source: Agent, exchanges: list, original_user_m
+-                json={"model": source.model, "max_tokens": 8192, "stream": True, "system": source_system, "messages": [{"role": "user", "content": prompt}]},
++                json={"model": model, "max_tokens": 8192, "stream": True, "system": source_system, "messages": [{"role": "user", "content": prompt}]},
+@@ -105 +108 @@ async def stream_sender_followup(source: Agent, exchanges: list, original_user_m
+-                record_usage(source.model, usage, agent_id=source.id, kind="followup")
++                record_usage(model, usage, agent_id=source.id, kind="followup")
+@@ -108 +111 @@ async def stream_sender_followup(source: Agent, exchanges: list, original_user_m
+-            more = await asyncio.to_thread(continue_text, source.model, source_system, prompt, reply)
++            more = await asyncio.to_thread(continue_text, model, source_system, prompt, reply)

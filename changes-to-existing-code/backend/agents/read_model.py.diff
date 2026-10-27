@@ -1,0 +1,6 @@
+diff --git a/backend/agents/read_model.py b/backend/agents/read_model.py
+index 60e16fb..e9e33cd 100644
+--- a/backend/agents/read_model.py
++++ b/backend/agents/read_model.py
+@@ -99 +98,0 @@ def agent_to_read(
+-        "model": agent.model,

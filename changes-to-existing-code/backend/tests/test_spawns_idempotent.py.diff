@@ -1,0 +1,32 @@
+diff --git a/backend/tests/test_spawns_idempotent.py b/backend/tests/test_spawns_idempotent.py
+index 65b7092..ec0f6d5 100644
+--- a/backend/tests/test_spawns_idempotent.py
++++ b/backend/tests/test_spawns_idempotent.py
+@@ -12 +11,0 @@ from core.models import Agent, AgentSpecProposal, Project, ProjectMember, User
+-from core.tiers import TIERS
+@@ -53 +52 @@ def marker(name="Market Scout", role="You watch the market."):
+-    return [{"name": name, "system_prompt": role, "model": "WORKHORSE"}]
++    return [{"name": name, "system_prompt": role}]
+@@ -129 +128 @@ def test_two_identical_markers_in_one_reply_give_one_card(db, team):
+-def test_a_repeat_while_pending_carries_the_latest_role_model_and_label(db, team):
++def test_a_repeat_while_pending_carries_the_latest_role_and_label(db, team):
+@@ -131 +130 @@ def test_a_repeat_while_pending_carries_the_latest_role_model_and_label(db, team
+-    (again,) = queue_spawns(team.parent, [{"name": "Market Scout", "system_prompt": "new role", "model": "JUDGEMENT"}], set(), db)
++    (again,) = queue_spawns(team.parent, [{"name": "Market Scout", "system_prompt": "new role"}], set(), db)
+@@ -134,2 +133,2 @@ def test_a_repeat_while_pending_carries_the_latest_role_model_and_label(db, team
+-    assert row.system_prompt == "new role" and row.model == TIERS["JUDGEMENT"]
+-    propose_once(team.parent, "Market Scout", "newer role", None, "Scouting", db)  # no model given: the last one stays
++    assert row.system_prompt == "new role"
++    propose_once(team.parent, "Market Scout", "newer role", "Scouting", db)
+@@ -137 +136 @@ def test_a_repeat_while_pending_carries_the_latest_role_model_and_label(db, team
+-    assert (row.system_prompt, row.model, row.label) == ("newer role", TIERS["JUDGEMENT"], "Scouting")
++    assert (row.system_prompt, row.label) == ("newer role", "Scouting")
+@@ -239 +238 @@ def test_markers_that_cannot_be_used_are_still_refused(db, team, events):
+-    assert queue_spawns(team.parent, [{"name": "  ", "system_prompt": "r", "model": None}], set(), db) == []
++    assert queue_spawns(team.parent, [{"name": "  ", "system_prompt": "r"}], set(), db) == []
+@@ -260 +259 @@ def test_a_retry_that_overlaps_the_first_request_waits_and_resolves_to_it(db, te
+-            out["result"] = propose_once(parent_2, "Market Scout", "role", None, None, second)
++            out["result"] = propose_once(parent_2, "Market Scout", "role", None, second)
+@@ -266 +265 @@ def test_a_retry_that_overlaps_the_first_request_waits_and_resolves_to_it(db, te
+-        propose(parent_1, "Market Scout", "role", None, None, first)
++        propose(parent_1, "Market Scout", "role", None, first)

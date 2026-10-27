@@ -1,0 +1,10 @@
+diff --git a/src/App.tsx b/src/App.tsx
+index 5d89efb..ae58aba 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -343 +343 @@ export function App() {
+-  async function handleEditSave(draft: { id: string; name: string; system_prompt: string; model: string; field: string; label: string }): Promise<boolean> {
++  async function handleEditSave(draft: { id: string; name: string; system_prompt: string; field: string; label: string }): Promise<boolean> {
+@@ -345 +345 @@ export function App() {
+-      const updated = await updateAgent(draft.id, { name: draft.name, system_prompt: draft.system_prompt, model: draft.model, field: draft.field, label: draft.label })
++      const updated = await updateAgent(draft.id, { name: draft.name, system_prompt: draft.system_prompt, field: draft.field, label: draft.label })

@@ -1,12 +1,14 @@
 diff --git a/backend/llm/config.py b/backend/llm/config.py
-index 8252552..9e857a3 100644
+index 8252552..78af6e3 100644
 --- a/backend/llm/config.py
 +++ b/backend/llm/config.py
 @@ -6,0 +7,2 @@ from dotenv import load_dotenv
 +from core.tiers import TIERS
 +
-@@ -16 +18 @@ ANTHROPIC_BASE = os.getenv("API_BASE_URL", "https://api.anthropic.com/v1").rstri
+@@ -15,2 +17,2 @@ ANTHROPIC_BASE = os.getenv("API_BASE_URL", "https://api.anthropic.com/v1").rstri
+-# Model that answers ask_teammate calls. Fast by default; set ASK_MODEL="" to use each teammate's own model.
 -ASK_MODEL = os.getenv("ASK_MODEL", "claude-haiku-5-5").strip()
++# Model that answers ask_teammate calls. Fast by default; set ASK_MODEL="" to use CHAT_MODEL.
 +ASK_MODEL = os.getenv("ASK_MODEL", TIERS["FAST"]).strip()
 @@ -23 +25 @@ CHAT_MAX_TOKENS = 16000  # long reports are written inside a create_document cal
 -CHAT_MODEL = os.getenv("CHAT_MODEL", "claude-sonnet-5-5").strip()

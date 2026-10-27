@@ -1,0 +1,9 @@
+diff --git a/src/BotProfile.tsx b/src/BotProfile.tsx
+index e341aac..e7b3419 100644
+--- a/src/BotProfile.tsx
++++ b/src/BotProfile.tsx
+@@ -11 +11 @@ type Props = {
+-  onEditSave: (draft: { id: string; name: string; system_prompt: string; model: string; field: string; label: string }) => Promise<boolean>
++  onEditSave: (draft: { id: string; name: string; system_prompt: string; field: string; label: string }) => Promise<boolean>
+@@ -60 +59,0 @@ export function BotProfile({ agent, onClose, onEditSave, onDeleteAgent, onBuildM
+-      model: agent.model,

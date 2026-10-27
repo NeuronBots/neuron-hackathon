@@ -1,7 +1,12 @@
 diff --git a/backend/core/schemas.py b/backend/core/schemas.py
-index 35ff848..2662ddb 100644
+index 35ff848..ec92a94 100644
 --- a/backend/core/schemas.py
 +++ b/backend/core/schemas.py
-@@ -9 +9 @@ class AgentCreate(BaseModel):
+@@ -9 +8,0 @@ class AgentCreate(BaseModel):
 -    model: str = Field(default="claude-sonnet-5-5", max_length=120)
-+    model: str = Field(default="workhorse", max_length=120)
+@@ -19 +17,0 @@ class AgentUpdate(BaseModel):
+-    model: Optional[str] = Field(default=None, max_length=120)
+@@ -28 +25,0 @@ class AgentRead(BaseModel):
+-    model: str
+@@ -60 +56,0 @@ class ChatRequest(BaseModel):
+-    model_override: Optional[str] = None

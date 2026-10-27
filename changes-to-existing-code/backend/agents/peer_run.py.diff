@@ -1,0 +1,16 @@
+diff --git a/backend/agents/peer_run.py b/backend/agents/peer_run.py
+index a113e51..bed4fb1 100644
+--- a/backend/agents/peer_run.py
++++ b/backend/agents/peer_run.py
+@@ -15 +15 @@ from llm.client import cached, continue_text, looks_cut
+-from llm.config import ANTHROPIC_API_KEY, ANTHROPIC_BASE, CHAT_MAX_TOKENS
++from llm.config import ANTHROPIC_API_KEY, ANTHROPIC_BASE, CHAT_MAX_TOKENS, CHAT_MODEL
+@@ -129 +129 @@ async def _run_peer_inner(
+-                    "model": await asyncio.to_thread(clamp_model, model or target.model),
++                    "model": await asyncio.to_thread(clamp_model, model or CHAT_MODEL),
+@@ -166 +166 @@ async def _run_peer_inner(
+-                    more = await asyncio.to_thread(continue_text, (model or target.model), target_system, incoming, reply)
++                    more = await asyncio.to_thread(continue_text, body["model"], target_system, incoming, reply)
+@@ -246 +246 @@ async def _run_peer_inner(
+-                        "model": (model or target.model),
++                        "model": await asyncio.to_thread(clamp_model, model or CHAT_MODEL),
