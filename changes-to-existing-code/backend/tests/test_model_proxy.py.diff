@@ -1,5 +1,5 @@
 diff --git a/backend/tests/test_model_proxy.py b/backend/tests/test_model_proxy.py
-index bbd7a86..346c087 100644
+index bbd7a86..4887e04 100644
 --- a/backend/tests/test_model_proxy.py
 +++ b/backend/tests/test_model_proxy.py
 @@ -1 +1,2 @@
@@ -17,7 +17,7 @@ index bbd7a86..346c087 100644
 -assert (real, shown) == ("deepseek-v4-pro", "claude-opus-5-5") and deep["model"] == real
 -assert "output_config" not in deep, "no effort is sent unless DEEPSEEK_EFFORT_* is set"
 -assert "Never say you are DeepSeek" in deep["system"][0]["text"] and deep["system"][1] == {"type": "text", "text": "Be brief."}
-@@ -19,2 +18,80 @@ assert "Never say you are DeepSeek" in deep["system"][0]["text"] and deep["syste
+@@ -19,2 +18,79 @@ assert "Never say you are DeepSeek" in deep["system"][0]["text"] and deep["syste
 -assert mp.prepare({**body, "model": "claude-haiku-5-5"}, mp._PROVIDERS["deepseek"])[1] == "deepseek-flash"
 -assert mp.prepare({**body, "model": "something-else"}, mp._PROVIDERS["deepseek"])[1] == "deepseek-flash", "unknown ids fall back to the sonnet tier"
 +def prep(provider: str, model: str = "claude-opus-5-5"):
@@ -81,31 +81,30 @@ index bbd7a86..346c087 100644
 +    assert mp._efforts("META", {t: "high" for t in mp.TIERS})["fast"] == "", "a blank tier variable beats a legacy one"
 +
 +
-+def test_startup_refuses_tier_names_without_the_proxy(monkeypatch):
++def test_startup_requires_the_model_proxy(monkeypatch):
 +    from llm import config
 +
-+    monkeypatch.setattr(config, "CHAT_MODEL", "workhorse")
 +    monkeypatch.setattr(config, "ANTHROPIC_BASE", "https://api.anthropic.com/v1")
-+    with pytest.raises(RuntimeError, match="model proxy"):
++    with pytest.raises(RuntimeError, match="not the model proxy"):
++        config.check_model_base()
++    for name in ("CHAT_MODEL", "ASK_MODEL", "ROUTER_MODEL"):  # overriding these does not help: other call sites send tiers too
++        monkeypatch.setattr(config, name, "claude-sonnet-5-5")
++    with pytest.raises(RuntimeError, match="not the model proxy"):
 +        config.check_model_base()
 +    monkeypatch.setattr(config, "ANTHROPIC_BASE", "https://neuron.example/api/model-proxy/v1")
 +    config.check_model_base()
-+    monkeypatch.setattr(config, "ANTHROPIC_BASE", "https://api.anthropic.com/v1")
-+    for name in ("CHAT_MODEL", "ASK_MODEL", "ROUTER_MODEL"):
-+        monkeypatch.setattr(config, name, "claude-sonnet-5-5")
-+    config.check_model_base()  # real Claude ids against Anthropic are fine
 +
 +
 +def test_prepare_does_not_mutate_the_caller_body():
 +    body = copy.deepcopy(BODY)
 +    mp.prepare(body, mp._PROVIDERS["meta"])
 +    assert body == BODY
-@@ -22,4 +98,0 @@ assert mp.prepare({**body, "model": "something-else"}, mp._PROVIDERS["deepseek"]
+@@ -22,4 +97,0 @@ assert mp.prepare({**body, "model": "something-else"}, mp._PROVIDERS["deepseek"]
 -step, real, _ = mp.prepare(body, mp._PROVIDERS["stepfun"])  # StepFun keeps its behaviour: effort is set
 -assert real == "step-5-preview" and step["output_config"] == {"effort": "medium"}
 -assert "StepFun" in step["system"][0]["text"]
 -print("ok")
-@@ -27,4 +100,5 @@ print("ok")
+@@ -27,4 +99,5 @@ print("ok")
 -orr, real, shown = mp.prepare(body, mp._PROVIDERS["openrouter"])
 -assert orr["model"] == real and "/" in real and orr["system"][0]["text"].startswith("You are Claude")
 -assert mp._PROVIDERS["openrouter"]["url"].endswith("/api/v1/messages")

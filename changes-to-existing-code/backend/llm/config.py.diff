@@ -1,5 +1,5 @@
 diff --git a/backend/llm/config.py b/backend/llm/config.py
-index 8252552..0528193 100644
+index 8252552..9e857a3 100644
 --- a/backend/llm/config.py
 +++ b/backend/llm/config.py
 @@ -6,0 +7,2 @@ from dotenv import load_dotenv
@@ -17,12 +17,11 @@ index 8252552..0528193 100644
 @@ -32 +34 @@ ROUTER_MODEL = os.getenv("ROUTER_MODEL", "claude-haiku-5-5").strip()  # empty tu
 -# Per-tool models, as JSON in TOOL_MODELS: {"ask_teammate": "claude-haiku-5-5"}. Keys are tool names or fnmatch patterns.
 +# Per-tool models, as JSON in TOOL_MODELS: {"ask_teammate": "fast"}. Keys are tool names or fnmatch patterns.
-@@ -48,0 +51,8 @@ def model_for_tool(name: str) -> str:
+@@ -48,0 +51,7 @@ def model_for_tool(name: str) -> str:
 +def check_model_base() -> None:
-+    """The app asks for tiers (fast, workhorse, ...), which only the model proxy understands: stop at startup rather than fail every call."""
-+    tiered = [m for m in (CHAT_MODEL, ASK_MODEL, ROUTER_MODEL) if m in TIERS.values()]
-+    if tiered and "/model-proxy" not in ANTHROPIC_BASE:
-+        raise RuntimeError(f"API_BASE_URL={ANTHROPIC_BASE} is not the model proxy, so the tier model names {tiered} would be rejected. "
-+                           "Set API_BASE_URL=<this server>/api/model-proxy/v1, or set CHAT_MODEL, ASK_MODEL and ROUTER_MODEL to ids that upstream serves.")
++    """The model proxy is required: the app sends tier names (fast, workhorse, ...) from many places, and only the proxy understands them."""
++    if "/model-proxy" not in ANTHROPIC_BASE:
++        raise RuntimeError(f"API_BASE_URL={ANTHROPIC_BASE} is not the model proxy. The app sends tier names as model ids, which only the proxy "
++                           "understands. Set API_BASE_URL=<this server>/api/model-proxy/v1.")
 +
 +
