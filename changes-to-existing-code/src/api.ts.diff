@@ -1,5 +1,5 @@
 diff --git a/src/api.ts b/src/api.ts
-index c214349..1e77c59 100644
+index c214349..a5899bf 100644
 --- a/src/api.ts
 +++ b/src/api.ts
 @@ -56 +56 @@ export async function fetchAgents(): Promise<
@@ -24,19 +24,26 @@ index c214349..1e77c59 100644
 @@ -102 +100 @@ export async function updateAgent(
 -  return handleResponse(res) as Promise<{ id: string; name: string; system_prompt: string; model: string; parent_id: string | null; is_master: boolean; field: string; label: string; color: string; peer_partner_ids?: string[]; memory?: string; created_at: string; last_active?: number | null }>
 +  return handleResponse(res) as Promise<{ id: string; name: string; system_prompt: string; parent_id: string | null; is_master: boolean; field: string; label: string; color: string; peer_partner_ids?: string[]; memory?: string; created_at: string; last_active?: number | null }>
-@@ -324 +322 @@ export async function chatStream(
+@@ -287,2 +285,4 @@ export async function fetchDocumentText(path: string): Promise<string> {
+-export async function saveDocument(path: string, html: string): Promise<void> {
+-  await handleResponse(await apiFetch(path.replace(/^\/api/, ""), { method: "PUT", body: html, headers: { "Content-Type": "text/html; charset=utf-8" } }))
++export async function saveDocument(path: string, content: string): Promise<void> {
++  const isHtml = path.endsWith(".html")
++  const contentType = isHtml ? "text/html; charset=utf-8" : "text/markdown; charset=utf-8"
++  await handleResponse(await apiFetch(path.replace(/^\/api/, ""), { method: "PUT", body: content, headers: { "Content-Type": contentType } }))
+@@ -324 +324 @@ export async function chatStream(
 -  body: { content: string; model_override?: string; allow_spawn: boolean; voice?: boolean; voice_token?: string; attachments?: Array<{ id: string; name: string }> } | null,
 +  body: { content: string; allow_spawn: boolean; voice?: boolean; voice_token?: string; attachments?: Array<{ id: string; name: string }> } | null,
-@@ -327 +325 @@ export async function chatStream(
+@@ -327 +327 @@ export async function chatStream(
 -  onSpawn: (agents: Array<{ id: string; name: string; model: string; identity: string }>) => void,
 +  onSpawn: (agents: Array<{ id: string; name: string; identity: string }>) => void,
-@@ -426 +424 @@ export async function chatStream(
+@@ -426 +426 @@ export async function chatStream(
 -              agents?: Array<{ id: string; name: string; model: string; identity: string }>
 +              agents?: Array<{ id: string; name: string; identity: string }>
-@@ -784 +782 @@ export async function deleteInvite(projectId: string, email: string): Promise<vo
+@@ -784 +784 @@ export async function deleteInvite(projectId: string, email: string): Promise<vo
 -export type DirectMessage = { id: number; from: string; to: string; content: string; at: string | null; reactions?: Record<string, string>; reply_to?: number | null }
 +export type DirectMessage = { id: number; from: string; to: string; content: string; at: string | null; reactions?: Record<string, string>; reply_to?: number | null; withheld?: string[]; share?: "" | "pending" | "sharing" | "shared" | "declined" | "drafted" | "draft" | "sent" | "dropped" | "proceed" | "running" | "done" | "cancelled" | "private"; action?: boolean }
-@@ -823,0 +822,27 @@ export async function sendDirect(personId: string, content: string, replyTo?: nu
+@@ -823,0 +824,27 @@ export async function sendDirect(personId: string, content: string, replyTo?: nu
 +export async function shareDirect(personId: string, messageId: number, share: boolean): Promise<DirectMessage> {
 +  const res = await apiFetch(`/direct/${encodeURIComponent(personId)}/${messageId}/share`, {
 +    method: "POST",
@@ -64,5 +71,77 @@ index c214349..1e77c59 100644
 +  return handleResponse(res) as Promise<DirectMessage>
 +}
 +
-@@ -932 +956,0 @@ export type SpecProposal = {
+@@ -932 +958,0 @@ export type SpecProposal = {
 -  model: string
+@@ -969,0 +996,71 @@ export async function savePushSubscription(subscription: PushSubscriptionJSON):
++
++
++export interface DocItem {
++  id: string
++  title: string
++  content: string
++  tags: string[]
++  created_by?: string
++  user_id?: string
++  shared_with?: string[]
++  created_at: string
++  updated_at: string
++}
++
++export async function fetchDocs(): Promise<DocItem[]> {
++  const res = await apiFetch("/docs")
++  return handleResponse(res) as Promise<DocItem[]>
++}
++
++export async function fetchDocById(id: string): Promise<DocItem> {
++  const res = await apiFetch(`/docs/${encodeURIComponent(id)}`)
++  return handleResponse(res) as Promise<DocItem>
++}
++
++export async function createDoc(body: {
++  title: string
++  content: string
++  tags?: string[]
++  shared_with?: string[]
++}): Promise<DocItem> {
++  const res = await apiFetch("/docs", {
++    method: "POST",
++    headers: { "Content-Type": "application/json" },
++    body: JSON.stringify(body),
++  })
++  return handleResponse(res) as Promise<DocItem>
++}
++
++export async function shareDoc(id: string, users: string[]): Promise<DocItem> {
++  const res = await apiFetch(`/docs/${encodeURIComponent(id)}/share`, {
++    method: "POST",
++    headers: { "Content-Type": "application/json" },
++    body: JSON.stringify({ users }),
++  })
++  return handleResponse(res) as Promise<DocItem>
++}
++
++export async function shareDocumentFile(filename: string, users: string[]): Promise<{ filename: string; shared_with: string[] }> {
++  const res = await apiFetch(`/documents/${encodeURIComponent(filename)}/share`, {
++    method: "POST",
++    headers: { "Content-Type": "application/json" },
++    body: JSON.stringify({ users }),
++  })
++  return handleResponse(res) as Promise<{ filename: string; shared_with: string[] }>
++}
++
++export async function deleteDocumentFile(filename: string): Promise<void> {
++  const res = await apiFetch(`/documents/${encodeURIComponent(filename)}`, {
++    method: "DELETE",
++  })
++  if (res.status === 204) return
++  await handleResponse(res)
++}
++
++export async function deleteDoc(id: string): Promise<void> {
++  const res = await apiFetch(`/docs/${encodeURIComponent(id)}`, {
++    method: "DELETE",
++  })
++  if (res.status === 204) return
++  await handleResponse(res)
++}

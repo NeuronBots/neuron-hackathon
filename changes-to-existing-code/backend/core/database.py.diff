@@ -1,8 +1,30 @@
 diff --git a/backend/core/database.py b/backend/core/database.py
-index 20e3807..656b4b2 100644
+index 20e3807..3a6f117 100644
 --- a/backend/core/database.py
 +++ b/backend/core/database.py
-@@ -112,0 +113,9 @@ def migrate() -> None:
+@@ -96,0 +97,21 @@ def migrate() -> None:
++        if "docs" in existing:
++            doc_cols = {c["name"] for c in insp.get_columns("docs")}
++            shared_ddl = (
++                "ALTER TABLE docs ADD COLUMN shared_with JSON DEFAULT '[]'::json"
++                if engine.dialect.name == "postgresql"
++                else "ALTER TABLE docs ADD COLUMN shared_with TEXT DEFAULT '[]'"
++            )
++            for name, ddl in (
++                ("created_by", "ALTER TABLE docs ADD COLUMN created_by VARCHAR(120) DEFAULT ''"),
++                ("user_id", "ALTER TABLE docs ADD COLUMN user_id VARCHAR(36) DEFAULT ''"),
++                ("shared_with", shared_ddl),
++            ):
++                if name not in doc_cols:
++                    conn.execute(text(ddl))
++            if engine.dialect.name == "postgresql":
++                id_col = next((c for c in insp.get_columns("docs") if c["name"] == "id"), None)
++                if id_col and getattr(id_col.get("type"), "length", None) != 140:
++                    conn.execute(text("ALTER TABLE docs ALTER COLUMN id TYPE VARCHAR(140)"))
++                sw_col = next((c for c in insp.get_columns("docs") if c["name"] == "shared_with"), None)
++                if sw_col and ("TEXT" in str(sw_col.get("type")).upper() or "VARCHAR" in str(sw_col.get("type")).upper()):
++                    conn.execute(text("ALTER TABLE docs ALTER COLUMN shared_with TYPE JSON USING (CASE WHEN shared_with IS NULL OR shared_with = '' THEN '[]'::json ELSE shared_with::json END)"))
+@@ -112,0 +134,9 @@ def migrate() -> None:
 +        if "direct_messages" in existing and "withheld" not in {c["name"] for c in insp.get_columns("direct_messages")}:
 +            conn.execute(text("ALTER TABLE direct_messages ADD COLUMN withheld VARCHAR(60) NOT NULL DEFAULT ''"))
 +        if "direct_messages" in existing and "share" not in {c["name"] for c in insp.get_columns("direct_messages")}:
@@ -12,3 +34,14 @@ index 20e3807..656b4b2 100644
 +        if "direct_messages" in existing:  # a summary or a write in progress when the server stopped never finishes; let its asker send it again
 +            conn.execute(text("UPDATE direct_messages SET share = 'pending' WHERE share = 'sharing'"))
 +            conn.execute(text("UPDATE direct_messages SET share = 'proceed' WHERE share = 'running' AND action <> ''"))
+@@ -239,0 +270,10 @@ def migrate() -> None:
++        if "documents" in existing:
++            doc_rec_cols = {c["name"] for c in insp.get_columns("documents")}
++            shared_ddl = "ALTER TABLE documents ADD COLUMN shared_with JSON DEFAULT '[]'::json" if engine.dialect.name == "postgresql" else "ALTER TABLE documents ADD COLUMN shared_with TEXT DEFAULT '[]'"
++            for name, ddl in (
++                ("user_id", "ALTER TABLE documents ADD COLUMN user_id VARCHAR(36) DEFAULT ''"),
++                ("created_by", "ALTER TABLE documents ADD COLUMN created_by VARCHAR(120) DEFAULT ''"),
++                ("shared_with", shared_ddl),
++            ):
++                if name not in doc_rec_cols:
++                    conn.execute(text(ddl))

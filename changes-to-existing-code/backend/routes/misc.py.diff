@@ -1,0 +1,165 @@
+diff --git a/backend/routes/misc.py b/backend/routes/misc.py
+index 64721c9..6462c1d 100644
+--- a/backend/routes/misc.py
++++ b/backend/routes/misc.py
+@@ -9 +9 @@ from pydantic import BaseModel, Field
+-from core.access import get_current_user
++from core.access import get_current_user, get_current_user_optional
+@@ -156,2 +156,2 @@ _EDIT_LIMIT = 16 * 1024 * 1024
+-async def save_document(filename: str, request: Request, user: User = Depends(get_current_user)):
+-    """Save an edited slideshow. Only HTML slideshows are edited in the app."""
++async def save_document(filename: str, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
++    """Save an edited slideshow or markdown document. Requires read permission and ownership."""
+@@ -159 +158,0 @@ async def save_document(filename: str, request: Request, user: User = Depends(ge
+-    # Any project member may edit: the project has no read-only role, and members already change its files through their bots.
+@@ -162,2 +161,25 @@ async def save_document(filename: str, request: Request, user: User = Depends(ge
+-    if path.suffix.lower() != ".html":
+-        raise HTTPException(status_code=400, detail="Only slideshows can be edited here.")
++    if not user_may_read(user.id, filename, db=db):
++        raise HTTPException(status_code=404, detail="Document not found")
++
++    ext = path.suffix.lower()
++    if ext not in (".html", ".md"):
++        raise HTTPException(status_code=400, detail="Only slideshows and markdown documents can be edited here.")
++
++    from core.models import DocumentRecord, Doc as DocModel
++    doc_rec = db.get(DocumentRecord, filename)
++    doc_model = db.get(DocModel, filename)
++
++    is_owner = False
++    has_owner_recorded = False
++    if doc_rec and (doc_rec.user_id or doc_rec.created_by):
++        has_owner_recorded = True
++        if (doc_rec.user_id and doc_rec.user_id == user.id) or (doc_rec.created_by and doc_rec.created_by == user.id):
++            is_owner = True
++    if doc_model and (doc_model.user_id or doc_model.created_by):
++        has_owner_recorded = True
++        if (doc_model.user_id and doc_model.user_id == user.id) or (doc_model.created_by and doc_model.created_by == user.id):
++            is_owner = True
++
++    if has_owner_recorded and not is_owner:
++        raise HTTPException(status_code=403, detail="Only the document owner can edit this document")
++
+@@ -166 +188 @@ async def save_document(filename: str, request: Request, user: User = Depends(ge
+-        raise HTTPException(status_code=413 if body else 400, detail="The slideshow is empty or too large (16 MB at most).")
++        raise HTTPException(status_code=413 if body else 400, detail="The document is empty or too large (16 MB at most).")
+@@ -168 +190 @@ async def save_document(filename: str, request: Request, user: User = Depends(ge
+-        body.decode("utf-8")
++        text_content = body.decode("utf-8")
+@@ -170,3 +192,13 @@ async def save_document(filename: str, request: Request, user: User = Depends(ge
+-        raise HTTPException(status_code=400, detail="The slideshow must be UTF-8 text.")
+-    # Whatever the app sent, no handler, javascript: link or new script is stored.
+-    page = slideshow.clean_page(body.decode("utf-8"), path.read_text(encoding="utf-8", errors="replace")).encode("utf-8")
++        raise HTTPException(status_code=400, detail="The document must be UTF-8 text.")
++    
++    if ext == ".html":
++        page = slideshow.clean_page(text_content, path.read_text(encoding="utf-8", errors="replace")).encode("utf-8")
++    else:
++        page = text_content.encode("utf-8")
++        from datetime import datetime, timezone
++        # Lookup Doc by id == filename ONLY
++        if doc_model:
++            doc_model.content = text_content
++            doc_model.updated_at = datetime.now(timezone.utc)
++            db.commit()
++
+@@ -236 +268 @@ def change_slide(filename: str, body: SlideChange, user: User = Depends(get_curr
+-def download_document(filename: str, user: User = Depends(get_current_user)):
++def download_document(filename: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+@@ -239 +271 @@ def download_document(filename: str, user: User = Depends(get_current_user)):
+-    if path is None or not path.is_file() or not user_may_read(user.id, filename):
++    if path is None or not path.is_file() or not user_may_read(user.id, filename, db=db):
+@@ -245,0 +278,93 @@ def download_document(filename: str, user: User = Depends(get_current_user)):
++
++
++
++class ShareDocIn(BaseModel):
++    users: list[str] = Field(default_factory=list)
++
++
++@router.post("/api/documents/{filename}/share")
++def share_document(filename: str, body: ShareDocIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
++    from core.models import DocumentRecord, Doc as DocModel
++    from tools.documents import _as_list
++    from sqlalchemy.orm.attributes import flag_modified
++    row = db.get(DocumentRecord, filename)
++    if not row or not user_may_read(user.id, filename, db=db):
++        raise HTTPException(status_code=404, detail="Document not found")
++    is_owner = (row.user_id and row.user_id == user.id) or (row.created_by and row.created_by == user.id)
++    if (row.user_id or row.created_by) and not is_owner:
++        raise HTTPException(status_code=403, detail="Only the document creator can share it")
++    current = _as_list(row.shared_with)
++    for u in body.users:
++        if u and u not in current:
++            current.append(u)
++    row.shared_with = current
++    flag_modified(row, "shared_with")
++
++    doc_model = db.get(DocModel, filename)
++    if doc_model:
++        m_current = _as_list(doc_model.shared_with)
++        for u in body.users:
++            if u and u not in m_current:
++                m_current.append(u)
++        doc_model.shared_with = m_current
++        flag_modified(doc_model, "shared_with")
++
++    db.commit()
++    return {"filename": row.filename, "shared_with": row.shared_with}
++
++
++@router.delete("/api/documents/{filename}", status_code=204)
++def delete_document_endpoint(filename: str, user = Depends(get_current_user_optional), db: Session = Depends(get_db)):
++    import json
++    from core.models import DocumentRecord, Doc as DocModel, User
++    from tools.documents import delete_document
++
++    rec = db.get(DocumentRecord, filename) or db.query(DocumentRecord).filter(DocumentRecord.title == filename).first()
++    doc_model = db.get(DocModel, filename) or db.query(DocModel).filter((DocModel.id == filename) | (DocModel.title == filename)).first()
++
++    if not rec and not doc_model:
++        from tools.documents import document_path
++        p = document_path(filename)
++        if p and p.is_file():
++            delete_document(filename)
++            return None
++        raise HTTPException(status_code=404, detail="Document not found")
++
++    if isinstance(user, User):
++        user_idents = {user.id.lower()}
++        if user.email:
++            user_idents.add(user.email.lower())
++
++        if rec and (rec.user_id or rec.created_by):
++            rec_owner = (rec.user_id or rec.created_by).lower()
++            shared = rec.shared_with or []
++            if isinstance(shared, str):
++                try: shared = json.loads(shared)
++                except Exception: shared = []
++            shared_lower = {str(s).lower() for s in shared}
++            if rec_owner not in user_idents and not any(i in shared_lower for i in user_idents):
++                raise HTTPException(status_code=403, detail="Permission denied")
++
++        if doc_model and (doc_model.user_id or doc_model.created_by):
++            doc_owner = (doc_model.user_id or doc_model.created_by).lower()
++            shared_m = doc_model.shared_with or []
++            if isinstance(shared_m, str):
++                try: shared_m = json.loads(shared_m)
++                except Exception: shared_m = []
++            shared_m_lower = {str(s).lower() for s in shared_m}
++            if doc_owner not in user_idents and not any(i in shared_m_lower for i in user_idents):
++                raise HTTPException(status_code=403, detail="Permission denied")
++
++    target_filename = rec.filename if rec else filename
++    if rec:
++        db.delete(rec)
++    if doc_model:
++        db.delete(doc_model)
++    db.commit()
++
++    try:
++        delete_document(target_filename)
++    except Exception:
++        pass
++    return None
++

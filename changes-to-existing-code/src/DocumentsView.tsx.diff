@@ -1,0 +1,246 @@
+diff --git a/src/DocumentsView.tsx b/src/DocumentsView.tsx
+index 3c81d11..f8d3f93 100644
+--- a/src/DocumentsView.tsx
++++ b/src/DocumentsView.tsx
+@@ -2 +2 @@ import { useEffect, useState } from "react"
+-import { fetchDocuments } from "./api"
++import { fetchDocuments, shareDocumentFile, deleteDocumentFile, sendDirect } from "./api"
+@@ -4,0 +5 @@ import { TeamButton } from "./Sidebar"
++import type { ProjectMember } from "./types"
+@@ -24,2 +25,12 @@ function made(iso: string | null): string {
+-/** Every document the project's bots have saved, newest first. */
+-export function DocumentsView({ onClose, onOpenTeam, teamOpen }: { onClose: () => void; onOpenTeam: () => void; teamOpen: boolean }) {
++/** Files view: every saved file/document in the project, newest first. */
++export function DocumentsView({
++  onClose,
++  onOpenTeam,
++  teamOpen,
++  members = [],
++}: {
++  onClose: () => void
++  onOpenTeam: () => void
++  teamOpen: boolean
++  members?: ProjectMember[]
++}) {
+@@ -27,0 +39 @@ export function DocumentsView({ onClose, onOpenTeam, teamOpen }: { onClose: () =
++  const [loading, setLoading] = useState(false)
+@@ -28,0 +41,24 @@ export function DocumentsView({ onClose, onOpenTeam, teamOpen }: { onClose: () =
++  const [shareDoc, setShareDoc] = useState<Doc | null>(null)
++  const [shareTarget, setShareTarget] = useState("")
++  const [shareNote, setShareNote] = useState("")
++  const [shareStatus, setShareStatus] = useState("")
++  const [shareSending, setShareSending] = useState(false)
++  const [deleteTarget, setDeleteTarget] = useState<Doc | null>(null)
++  const [deleting, setDeleting] = useState(false)
++  const [deleteError, setDeleteError] = useState("")
++
++  function loadDocs() {
++    setLoading(true)
++    setFailed("")
++    fetchDocuments()
++      .then((data) => {
++        setDocs(data)
++      })
++      .catch((err) => {
++        setDocs([])
++        setFailed(err instanceof Error ? err.message : "request failed")
++      })
++      .finally(() => {
++        setLoading(false)
++      })
++  }
+@@ -31 +67 @@ export function DocumentsView({ onClose, onOpenTeam, teamOpen }: { onClose: () =
+-    fetchDocuments().then(setDocs).catch((err) => { setDocs([]); setFailed(err instanceof Error ? err.message : "request failed") })
++    loadDocs()
+@@ -33,0 +70,46 @@ export function DocumentsView({ onClose, onOpenTeam, teamOpen }: { onClose: () =
++  async function handleShare(e: React.FormEvent) {
++    e.preventDefault()
++    if (!shareDoc || !shareTarget) return
++    setShareSending(true)
++    setShareStatus("")
++    try {
++      const targetUser = members.find((m) => m.id === shareTarget || m.email === shareTarget)
++      const targetId = targetUser ? targetUser.id : shareTarget
++      const targetEmail = targetUser ? targetUser.email : shareTarget
++
++      await shareDocumentFile(shareDoc.filename, [targetId, targetEmail].filter(Boolean))
++
++      if (targetUser) {
++        const msgText = `${shareNote ? shareNote + "\n\n" : ""}[${shareDoc.title}](${shareDoc.url})`
++        await sendDirect(targetUser.id, msgText).catch(() => {})
++      }
++
++      setShareStatus(`Shared with ${targetUser?.name || shareTarget}`)
++      window.setTimeout(() => {
++        setShareDoc(null)
++        setShareStatus("")
++        setShareTarget("")
++        setShareNote("")
++      }, 1200)
++    } catch (err) {
++      setShareStatus(`Failed to share: ${err instanceof Error ? err.message : String(err)}`)
++    } finally {
++      setShareSending(false)
++    }
++  }
++
++  async function confirmDelete() {
++    if (!deleteTarget) return
++    setDeleting(true)
++    setDeleteError("")
++    try {
++      await deleteDocumentFile(deleteTarget.filename)
++      setDocs((prev) => (prev ? prev.filter((d) => d.filename !== deleteTarget.filename) : []))
++      setDeleteTarget(null)
++    } catch (err) {
++      setDeleteError(err instanceof Error ? err.message : "Failed to delete file.")
++    } finally {
++      setDeleting(false)
++    }
++  }
++
+@@ -41 +123 @@ export function DocumentsView({ onClose, onOpenTeam, teamOpen }: { onClose: () =
+-          <h2 className="cal-title">Documents</h2>
++          <h2 className="cal-title">Files</h2>
+@@ -45,0 +128,105 @@ export function DocumentsView({ onClose, onOpenTeam, teamOpen }: { onClose: () =
++
++      {shareDoc && (
++        <div className="doc-overlay" onClick={() => setShareDoc(null)}>
++          <div className="doc-col" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440, margin: "auto", background: "var(--field)", padding: 24, borderRadius: 16, border: "1px solid var(--line)" }}>
++            <h3 style={{ margin: "0 0 12px", fontFamily: "var(--serif)", color: "var(--ink)" }}>Share {shareDoc.title}</h3>
++            <form onSubmit={(e) => void handleShare(e)}>
++              <label style={{ display: "block", fontSize: "0.85rem", color: "var(--soft)", marginBottom: 6 }}>Share with teammate:</label>
++              {members.length > 0 ? (
++                <select
++                  value={shareTarget}
++                  onChange={(e) => setShareTarget(e.target.value)}
++                  className="task-filter-select"
++                  style={{ width: "100%", marginBottom: 12, padding: "8px 10px" }}
++                  required
++                >
++                  <option value="">Select a teammate…</option>
++                  {members.map((m) => (
++                    <option key={m.id} value={m.id}>{m.name} ({m.email})</option>
++                  ))}
++                </select>
++              ) : (
++                <input
++                  type="text"
++                  placeholder="User ID or Email"
++                  value={shareTarget}
++                  onChange={(e) => setShareTarget(e.target.value)}
++                  style={{ width: "100%", marginBottom: 12, padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--field)", color: "var(--ink)" }}
++                  required
++                />
++              )}
++              <textarea
++                placeholder="Optional note for the recipient…"
++                value={shareNote}
++                onChange={(e) => setShareNote(e.target.value)}
++                rows={2}
++                style={{ width: "100%", boxSizing: "border-box", marginBottom: 12, padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--field)", color: "var(--ink)", resize: "vertical" }}
++              />
++              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center" }}>
++                {shareStatus && (
++                  <span style={{ marginRight: "auto", fontSize: "0.82rem", color: shareStatus.startsWith("Failed") ? "var(--danger)" : "var(--pine)" }}>
++                    {shareStatus}
++                  </span>
++                )}
++                <button className="btn btn-quiet btn-sm" type="button" onClick={() => setShareDoc(null)}>Cancel</button>
++                <button className="btn btn-primary btn-sm" type="submit" disabled={shareSending || !shareTarget}>
++                  {shareSending ? "Sharing…" : "Share"}
++                </button>
++              </div>
++            </form>
++          </div>
++        </div>
++      )}
++
++      {deleteTarget && (
++        <div className="doc-overlay" onClick={() => !deleting && setDeleteTarget(null)}>
++          <div
++            className="doc-col"
++            onClick={(e) => e.stopPropagation()}
++            style={{
++              maxWidth: 420,
++              margin: "auto",
++              background: "var(--field)",
++              padding: 24,
++              borderRadius: 16,
++              border: "1px solid var(--line)",
++              boxShadow: "0 20px 40px rgba(0, 0, 0, 0.4)",
++            }}
++          >
++            <h3 style={{ margin: "0 0 10px", fontFamily: "var(--serif)", color: "var(--ink)", fontSize: "1.2rem" }}>
++              Delete File
++            </h3>
++            <p style={{ margin: "0 0 16px", fontSize: "0.92rem", color: "var(--soft)", lineHeight: 1.5 }}>
++              Are you sure you want to delete <b style={{ color: "var(--ink)" }}>{deleteTarget.title}</b>? This action cannot be undone.
++            </p>
++            {deleteError && (
++              <p style={{ margin: "0 0 12px", fontSize: "0.85rem", color: "var(--danger, #ff6b6b)" }}>
++                {deleteError}
++              </p>
++            )}
++            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", alignItems: "center" }}>
++              <button
++                className="btn btn-quiet btn-sm"
++                type="button"
++                disabled={deleting}
++                onClick={() => {
++                  setDeleteTarget(null)
++                  setDeleteError("")
++                }}
++              >
++                Cancel
++              </button>
++              <button
++                className="btn btn-sm btn-primary"
++                type="button"
++                disabled={deleting}
++                style={{ background: "#dc2626", borderColor: "#dc2626", color: "#fff" }}
++                onClick={() => void confirmDelete()}
++              >
++                {deleting ? "Deleting…" : "Delete"}
++              </button>
++            </div>
++          </div>
++        </div>
++      )}
++
+@@ -56,2 +243,14 @@ export function DocumentsView({ onClose, onOpenTeam, teamOpen }: { onClose: () =
+-        {docs && docs.length === 0 && (
+-          <p className="agent-docs-empty">{failed ? `Could not load documents: ${failed}` : "Your bots have not made any documents yet."}</p>
++        {loading && docs === null && (
++          <p className="agent-docs-empty">Loading files…</p>
++        )}
++        {failed && (
++          <div className="agent-docs-empty" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
++            <span>Could not load files: {failed}</span>
++            <button className="btn btn-primary btn-sm" type="button" onClick={loadDocs}>Retry</button>
++          </div>
++        )}
++        {!loading && !failed && docs && docs.length === 0 && (
++          <p className="agent-docs-empty">Your bots have not made any files yet.</p>
++        )}
++        {!loading && !failed && docs && docs.length > 0 && shown.length === 0 && (
++          <p className="agent-docs-empty">No {KINDS.find(([id]) => id === kind)?.[1]} files yet.</p>
+@@ -59 +257,0 @@ export function DocumentsView({ onClose, onOpenTeam, teamOpen }: { onClose: () =
+-        {docs && docs.length > 0 && shown.length === 0 && <p className="agent-docs-empty">No {KINDS.find(([id]) => id === kind)?.[1]} documents yet.</p>}
+@@ -61 +259,15 @@ export function DocumentsView({ onClose, onOpenTeam, teamOpen }: { onClose: () =
+-          <FileCard key={doc.filename} path={doc.url} label={doc.title} detail={[doc.agent_name, made(doc.created_at)].filter(Boolean).join(" · ")} bot={doc.agent_id ? { id: doc.agent_id, name: doc.agent_name } : undefined} />
++          <FileCard
++            key={doc.filename}
++            path={doc.url}
++            label={doc.title}
++            detail={[doc.agent_name, made(doc.created_at)].filter(Boolean).join(" · ")}
++            bot={doc.agent_id ? { id: doc.agent_id, name: doc.agent_name } : undefined}
++            iconOnly
++            onShare={() => {
++              setShareDoc(doc)
++              setShareTarget("")
++              setShareNote("")
++              setShareStatus("")
++            }}
++            onDelete={() => { setDeleteTarget(doc); setDeleteError(""); }}
++          />

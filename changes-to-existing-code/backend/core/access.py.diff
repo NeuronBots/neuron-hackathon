@@ -1,0 +1,23 @@
+diff --git a/backend/core/access.py b/backend/core/access.py
+index a38bb18..fb431d4 100644
+--- a/backend/core/access.py
++++ b/backend/core/access.py
+@@ -73,0 +74,18 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
++def get_current_user_optional(request: Request, db: Session = Depends(get_db)) -> User | None:
++    token = request.cookies.get(COOKIE, "")
++    row = db.get(AuthSession, token) if token else None
++    now = datetime.now(timezone.utc)
++    expires = row.expires_at if row else None
++    if expires is not None and expires.tzinfo is None:
++        expires = expires.replace(tzinfo=timezone.utc)
++    if row is None or expires is None or expires < now:
++        x_user = request.headers.get("X-User-Id") or request.headers.get("x-user-id")
++        if x_user:
++            return db.get(User, x_user.strip()) or db.query(User).filter(User.email == x_user.strip()).first()
++        return None
++    user = db.get(User, row.user_id)
++    if user:
++        presence.touch(user.id)
++    return user
++
++

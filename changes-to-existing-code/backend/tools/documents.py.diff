@@ -1,0 +1,169 @@
+diff --git a/backend/tools/documents.py b/backend/tools/documents.py
+index ae75800..279fc0b 100644
+--- a/backend/tools/documents.py
++++ b/backend/tools/documents.py
+@@ -79,0 +80,68 @@ def replace_document(filename: str, data: bytes) -> None:
++def _as_list(v) -> list:
++    """Safely coerce a JSON column value, comma-delimited string, or list to a list."""
++    if v is None:
++        return []
++    if isinstance(v, str):
++        s = v.strip()
++        if not s:
++            return []
++        try:
++            parsed = json.loads(s)
++            if isinstance(parsed, list):
++                return parsed
++        except Exception:
++            return [t.strip() for t in s.split(",") if t.strip()]
++    if isinstance(v, (list, tuple, set)):
++        return list(v)
++    return [v]
++
++
++def can_read(
++    doc,
++    user_id: str | None,
++    identifiers: set[str] | None = None,
++    project_ids: set[str] | None = None,
++    db=None,
++) -> bool:
++    """Shared predicate for document visibility across DocModel and DocumentRecord.
++    Unowned documents mean project members only, never guests.
++    """
++    if not user_id:
++        return False
++
++    idents = set(identifiers or ())
++    idents.add(user_id)
++    idents_lower = {i.lower() for i in idents}
++
++    owner = getattr(doc, "created_by", None) or getattr(doc, "user_id", None)
++    if owner:
++        if owner.lower() in idents_lower or owner in idents:
++            return True
++        shared = _as_list(getattr(doc, "shared_with", None))
++        shared_lower = {str(s).lower() for s in shared}
++        return any(i in shared_lower for i in idents_lower)
++
++    # Unowned document: project members only
++    proj_id = getattr(doc, "project_id", None)
++    if not proj_id and db is not None:
++        from core.models import DocumentRecord
++        doc_id = getattr(doc, "filename", None) or getattr(doc, "id", None)
++        if doc_id:
++            rec = db.get(DocumentRecord, doc_id)
++            if rec:
++                proj_id = rec.project_id
++
++    if proj_id:
++        if project_ids is not None:
++            return proj_id in project_ids
++        if db is not None:
++            from core.models import ProjectMember
++            return db.get(ProjectMember, (proj_id, user_id)) is not None
++        from core.database import SessionLocal
++        from core.models import ProjectMember
++        with SessionLocal() as s:
++            return s.get(ProjectMember, (proj_id, user_id)) is not None
++
++    return False
++
++
+@@ -515 +583,69 @@ def _title_of(path: Path) -> str:
+-def record(agent_id: str, result: str, title: str = "") -> None:
++def record(agent_id: str, result: str, title: str = "", content: str = "") -> None:
++    """Note who made the file a create_document call just wrote. Never raises: a missing note must not fail the tool."""
++    from datetime import datetime, timezone
++    import json
++    import uuid
++    from core.database import SessionLocal
++    from core.models import Agent, Doc as DocModel, DocumentRecord
++    from core.usage import current_user
++
++    found = _LINK.search(result or "")
++    path = document_path(found.group(1)) if found else None
++    if path is None:
++        return
++    db = SessionLocal()
++    try:
++        uid = current_user() or ""
++        doc_rec = db.get(DocumentRecord, path.name)
++        if doc_rec is None:
++            agent = db.get(Agent, agent_id)
++            doc_rec = DocumentRecord(
++                filename=path.name,
++                agent_id=agent_id,
++                project_id=agent.project_id if agent else None,
++                user_id=uid or None,
++                created_by=uid or "",
++                shared_with=[],
++                title=(title or _title_of(path))[:200],
++                created_at=datetime.utcnow(),
++            )
++            db.add(doc_rec)
++        elif not doc_rec.user_id and uid:
++            doc_rec.user_id = uid
++            doc_rec.created_by = uid
++        db.commit()
++
++        # Doc insert in a savepoint so DocumentRecord is safely committed even if Doc insert fails
++        try:
++            with db.begin_nested():
++                existing_doc = db.get(DocModel, path.name)
++                if not existing_doc:
++                    doc_content = content if isinstance(content, str) else ""
++                    if not doc_content and path.is_file():
++                        try:
++                            doc_content = path.read_text(encoding="utf-8", errors="replace")[:16000]
++                        except Exception:
++                            doc_content = f"Document {path.name}"
++                    doc_title = (title or _title_of(path))[:200]
++                    now = datetime.now(timezone.utc)
++                    db.add(DocModel(
++                        id=path.name,
++                        title=doc_title,
++                        content=doc_content or f"Document {path.name}",
++                        tags=["bot", "generated"],
++                        created_by=uid,
++                        user_id=uid,
++                        shared_with=[],
++                        created_at=now,
++                        updated_at=now,
++                    ))
++            db.commit()
++        except Exception:
++            pass
++    except Exception:
++        db.rollback()
++    finally:
++        db.close()
++
++
++def _old_record(agent_id: str, result: str, title: str = "") -> None:
+@@ -562,2 +698,17 @@ def document_project(user_id: str, filename: str) -> str | None:
+-def user_may_read(user_id: str, filename: str) -> bool:
+-    return document_project(user_id, filename) is not None
++def user_may_read(user_id: str, filename: str, db=None) -> bool:
++    from core.database import SessionLocal
++    from core.models import DocumentRecord, User
++
++    session = db or SessionLocal()
++    try:
++        row = session.get(DocumentRecord, filename)
++        if not row:
++            return False
++        user_idents = {user_id.lower()}
++        user_obj = session.get(User, user_id)
++        if user_obj and user_obj.email:
++            user_idents.add(user_obj.email.lower())
++        return can_read(row, user_id, user_idents, db=session)
++    finally:
++        if db is None:
++            session.close()
+@@ -571,0 +723,4 @@ def read_document(agent_id: str, filename: str) -> str:
++    from core.usage import current_user
++    uid = current_user()
++    if uid and not user_may_read(uid, path.name):
++        return "Error (403): that document belongs outside your project. Ask the user to share it with you."
