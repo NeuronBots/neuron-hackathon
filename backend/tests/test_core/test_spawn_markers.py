@@ -21,3 +21,9 @@ def test_one_liner_before_a_block_does_not_steal_its_closer():
 def test_marker_without_a_closer_is_not_a_spawn():
     clean, spawns = parse_spawns("x [[SPAWN: broken]] oops")
     assert spawns == [] and "[[SPAWN: broken]]" in clean
+
+
+def test_stray_start_does_not_swallow_the_next_one_liner():
+    clean, spawns = parse_spawns("x [[SPAWN: broken]] oops\n[[SPAWN: Bob | do X | FAST]]")
+    assert spawns == [{"name": "Bob", "system_prompt": "do X"}]
+    assert clean == "x [[SPAWN: broken]] oops"

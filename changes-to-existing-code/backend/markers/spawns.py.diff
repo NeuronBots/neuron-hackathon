@@ -1,7 +1,10 @@
 diff --git a/backend/markers/spawns.py b/backend/markers/spawns.py
-index 5127144..f832974 100644
+index 5127144..dce4b44 100644
 --- a/backend/markers/spawns.py
 +++ b/backend/markers/spawns.py
+@@ -6 +6 @@ _SPAWN_SIMPLE = re.compile(
+-    r"\[\[SPAWN:\s*(.+?)\s*\|\s*(.+?)\s*(?:\|\s*(.+?))?\s*\]\]",
++    r"\[\[SPAWN:\s*((?:(?!\[\[).)+?)\s*\|\s*((?:(?!\[\[).)+?)\s*(?:\|\s*((?:(?!\[\[).)+?))?\s*\]\]",  # no "[[" inside: a stray start must not run into the next marker
 @@ -11 +11 @@ _SPAWN_SIMPLE = re.compile(
 -# Multi-line spawn block (new): [[SPAWN: name | model]]\n...instructions...\n[[/SPAWN]]
 +# Multi-line spawn block (new): [[SPAWN: name]] (an old "| model" part is read and ignored). The closing tag is required, and no other SPAWN may start before it; a one-liner has none, so it falls to _SPAWN_SIMPLE. A name has no "]" or "|"\n...instructions...\n[[/SPAWN]]
