@@ -1,5 +1,5 @@
 diff --git a/backend/agents/followup.py b/backend/agents/followup.py
-index d709509..cccbd88 100644
+index d709509..29700a2 100644
 --- a/backend/agents/followup.py
 +++ b/backend/agents/followup.py
 @@ -11,2 +11,2 @@ from core.database import SessionLocal
@@ -26,8 +26,8 @@ index d709509..cccbd88 100644
 -        note_payload(target.model, data, agent_id=target.id, kind="followup")
 +        note_payload(model, data, agent_id=target.id, kind="followup")
 @@ -76,0 +77,3 @@ async def stream_sender_followup(source: Agent, exchanges: list, original_user_m
-+    if await asyncio.to_thread(over_limit, current_user()):
-+        yield "final", None
++    if blocked := await asyncio.to_thread(over_limit, current_user()):
++        yield "final", blocked  # the user sees why, not an unexplained opening
 +        return
 @@ -77,0 +81 @@ async def stream_sender_followup(source: Agent, exchanges: list, original_user_m
 +    model = CHAT_MODEL

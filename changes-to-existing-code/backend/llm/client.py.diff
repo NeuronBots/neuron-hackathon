@@ -1,5 +1,5 @@
 diff --git a/backend/llm/client.py b/backend/llm/client.py
-index 4ba5c58..529b6b1 100644
+index 4ba5c58..6f1fcf9 100644
 --- a/backend/llm/client.py
 +++ b/backend/llm/client.py
 @@ -1,0 +2 @@
@@ -8,9 +8,14 @@ index 4ba5c58..529b6b1 100644
 -from core.usage import note_payload
 +from core.limits import over_limit
 +from core.usage import current_user, note_payload
-@@ -13,0 +16,25 @@ NOW = "\n\nThe current time is "
+@@ -13,0 +16,30 @@ NOW = "\n\nThe current time is "
 +BUSY = (402, 429, 502, 503, 529)  # the provider is busy for a moment, then recovers
 +TRIES = 4
++
++
++def backoff(n: int) -> float:
++    """Seconds to wait after the nth busy answer (n from 0)."""
++    return 1.5 * (n + 1)
 +
 +
 +def _headers() -> dict:
@@ -23,21 +28,21 @@ index 4ba5c58..529b6b1 100644
 +        resp = client.post(f"{ANTHROPIC_BASE}/messages", headers=_headers(), json=body)
 +        if resp.status_code not in BUSY or n == TRIES - 1:
 +            return resp
-+        time.sleep(1.5 * (n + 1))
++        time.sleep(backoff(n))
 +
 +
-+async def apost_retry(client: httpx.AsyncClient, body: dict) -> httpx.Response:
-+    """post_retry for an async client."""
-+    for n in range(TRIES):
++async def apost_retry(client: httpx.AsyncClient, body: dict, tries: int = TRIES) -> httpx.Response:
++    """post_retry for an async client; tries=1 makes a single attempt."""
++    for n in range(tries):
 +        resp = await client.post(f"{ANTHROPIC_BASE}/messages", headers=_headers(), json=body)
-+        if resp.status_code not in BUSY or n == TRIES - 1:
++        if resp.status_code not in BUSY or n == tries - 1:
 +            return resp
-+        await asyncio.sleep(1.5 * (n + 1))
++        await asyncio.sleep(backoff(n))
 +
-@@ -45,0 +73,2 @@ def complete(model: str, system: str, user: str, max_tokens: int = 1024, *, thin
+@@ -45,0 +78,2 @@ def complete(model: str, system: str, user: str, max_tokens: int = 1024, *, thin
 +    if blocked := over_limit(current_user()):  # the plan's token cap, counted from usage whatever the model
 +        raise RuntimeError(blocked)
-@@ -55,13 +84 @@ def complete(model: str, system: str, user: str, max_tokens: int = 1024, *, thin
+@@ -55,13 +89 @@ def complete(model: str, system: str, user: str, max_tokens: int = 1024, *, thin
 -        for busy_try in range(4):  # 402/429/5xx mean "busy for a moment"; wait and ask again
 -            resp = client.post(
 -                f"{ANTHROPIC_BASE}/messages",
@@ -52,7 +57,7 @@ index 4ba5c58..529b6b1 100644
 -                break
 -            time.sleep(1.5 * (busy_try + 1))
 +        resp = post_retry(client, payload)
-@@ -99,18 +116,10 @@ def continue_text(model: str, system: str, prompt: str, partial: str) -> str:
+@@ -99,18 +121,10 @@ def continue_text(model: str, system: str, prompt: str, partial: str) -> str:
 -            resp = client.post(
 -                f"{ANTHROPIC_BASE}/messages",
 -                headers={

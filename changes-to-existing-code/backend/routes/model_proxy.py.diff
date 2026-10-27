@@ -1,5 +1,5 @@
 diff --git a/backend/routes/model_proxy.py b/backend/routes/model_proxy.py
-index 13bca2a..d594c54 100644
+index 13bca2a..8ce91cb 100644
 --- a/backend/routes/model_proxy.py
 +++ b/backend/routes/model_proxy.py
 @@ -1 +1 @@
@@ -69,29 +69,31 @@ index 13bca2a..d594c54 100644
 @@ -50 +60 @@ def provider() -> dict:
 -    name = os.getenv("MODEL_PROXY_PROVIDER", "stepfun").strip().lower()
 +    name = os.getenv("MODEL_PROXY_PROVIDER", "meta").strip().lower()
-@@ -56,2 +66,3 @@ def provider() -> dict:
+@@ -56,2 +66,5 @@ def provider() -> dict:
 -def _tier(claude: str, models: dict[str, str]) -> str:
 -    return next((t for t in models if t in claude), "sonnet")
 +def _tier(asked: str) -> str:
 +    """A tier name as is; anything else is workhorse."""
++    if asked not in TIERS:
++        log.warning("model-proxy unknown model %r, using workhorse", asked)
 +    return asked if asked in TIERS else "workhorse"
-@@ -61 +72 @@ def prepare(body: dict, prov: dict) -> tuple[dict, str, str]:
+@@ -61 +74 @@ def prepare(body: dict, prov: dict) -> tuple[dict, str, str]:
 -    """The request for the provider, with the id it will answer to and the Claude id the caller asked for."""
 +    """The request for the provider, with the id it will answer to and the tier the caller asked for."""
-@@ -63 +74 @@ def prepare(body: dict, prov: dict) -> tuple[dict, str, str]:
+@@ -63 +76 @@ def prepare(body: dict, prov: dict) -> tuple[dict, str, str]:
 -    tier = _tier(shown, prov["models"])
 +    tier = _tier(shown)
-@@ -69,2 +80,2 @@ def prepare(body: dict, prov: dict) -> tuple[dict, str, str]:
+@@ -69,2 +82,2 @@ def prepare(body: dict, prov: dict) -> tuple[dict, str, str]:
 -        "You are Claude, an AI model made by Anthropic. If asked who or what model you are, say you are Claude from Anthropic. "
 -        f"Never say you are {prov['never']}."
 +        f"You are Neuron, an AI model. If asked who or what model you are, say you are Neuron{', running on ' + prov['runs_on'] if prov.get('runs_on') else ''}."
 +        + (f" Never say you are {prov['never']}." if prov.get("never") else "")
-@@ -81,0 +93 @@ async def proxy_messages(request: Request):
+@@ -81,0 +95 @@ async def proxy_messages(request: Request):
 +    name = next(n for n, p in _PROVIDERS.items() if p is prov)
-@@ -88,0 +101,2 @@ async def proxy_messages(request: Request):
+@@ -88,0 +103,2 @@ async def proxy_messages(request: Request):
 +    t0 = time.monotonic()
 +    note = lambda status, what: log.info("model-proxy provider=%s asked=%s model=%s stream=%s status=%s %s_ms=%d", name, shown, real, bool(body.get("stream")), status, what, (time.monotonic() - t0) * 1000)  # per-provider numbers for the usage logs
-@@ -93,0 +108 @@ async def proxy_messages(request: Request):
+@@ -93,0 +110 @@ async def proxy_messages(request: Request):
 +        note(r.status_code, "total")
-@@ -96,0 +112 @@ async def proxy_messages(request: Request):
+@@ -96,0 +114 @@ async def proxy_messages(request: Request):
 +    note(upstream.status_code, "ttfb")
