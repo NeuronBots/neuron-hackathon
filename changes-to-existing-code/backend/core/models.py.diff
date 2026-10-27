@@ -1,5 +1,5 @@
 diff --git a/backend/core/models.py b/backend/core/models.py
-index 38a5312..43450a8 100644
+index 38a5312..36ed513 100644
 --- a/backend/core/models.py
 +++ b/backend/core/models.py
 @@ -30 +30 @@ class Agent(Base):
@@ -17,13 +17,16 @@ index 38a5312..43450a8 100644
 +    action = Column(Text, nullable=False, default="", server_default="")
 @@ -460,0 +470 @@ def get_shared_context(agent: Agent, limit: int = 24, user_id: str | None = None
 +    from core.audience import readers, scrub
-@@ -474,0 +485 @@ def get_shared_context(agent: Agent, limit: int = 24, user_id: str | None = None
+@@ -474,0 +485,4 @@ def get_shared_context(agent: Agent, limit: int = 24, user_id: str | None = None
++    # Accepted residual risk (NURN-132): bots keep one memory for the whole team, so other people's chats stay in a shared reply's context.
++    # Only the name, links, emails and ids are removed; names and free text inside a message can still reach it, and the note below is the rest of the guard.
++    # To close it, drop these lines when readers() is set, or hold every shared answer for the asker's approval.
 +    anon = {r.user_id for r in rows} - set(readers()) if readers() else set()  # in a chat shared with someone, other people's chats stay knowledge without a name
-@@ -476,2 +487,2 @@ def get_shared_context(agent: Agent, limit: int = 24, user_id: str | None = None
+@@ -476,2 +490,2 @@ def get_shared_context(agent: Agent, limit: int = 24, user_id: str | None = None
 -        who = names.get(r.user_id, "Someone")
 -        text = " ".join((r.content or "").split())[:400]
 +        who = "A teammate" if r.user_id in anon else names.get(r.user_id, "Someone")
 +        text = scrub(r.content or "", 300) if r.user_id in anon else " ".join((r.content or "").split())[:400]  # a private chat's words reach a shared reply without links, emails or ids
-@@ -478,0 +490,2 @@ def get_shared_context(agent: Agent, limit: int = 24, user_id: str | None = None
+@@ -478,0 +493,2 @@ def get_shared_context(agent: Agent, limit: int = 24, user_id: str | None = None
 +    if anon:
 +        lines.insert(0, "(Lines naming 'A teammate' are private chats. Use them as background. Do not quote them or say who said what.)")
