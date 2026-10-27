@@ -1,0 +1,19 @@
+diff --git a/backend/integrations/atlassian_mcp.py b/backend/integrations/atlassian_mcp.py
+index e554c04..35ce8e7 100644
+--- a/backend/integrations/atlassian_mcp.py
++++ b/backend/integrations/atlassian_mcp.py
+@@ -75 +75 @@ async def _headers() -> dict[str, str]:
+-    auth = "Bearer " + token if token else _auth_header()
++    auth = "Bearer " + token if token else (None if connections.no_fallback() else _auth_header())
+@@ -127,0 +128,8 @@ def _session():
++def owns(name: str) -> bool:
++    """True when this name is an Atlassian tool: one of the REST set, or published by get_tools()."""
++    from integrations import atlassian_rest
++
++    cached = _tool_cache.get(current_user(), ([], 0.0))[0] or []
++    return any(t.get("name") == name for t in (*atlassian_rest.TOOLS, *cached))
++
++
+@@ -179,0 +188,2 @@ async def call_tool(name: str, arguments: dict) -> str:
++    if connections.no_fallback():
++        raise RuntimeError("Atlassian is not connected. Connect it in Settings.")

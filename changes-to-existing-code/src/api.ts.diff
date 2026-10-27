@@ -1,5 +1,5 @@
 diff --git a/src/api.ts b/src/api.ts
-index c214349..c4f1d51 100644
+index c214349..24c817f 100644
 --- a/src/api.ts
 +++ b/src/api.ts
 @@ -56 +56 @@ export async function fetchAgents(): Promise<
@@ -35,8 +35,8 @@ index c214349..c4f1d51 100644
 +              agents?: Array<{ id: string; name: string; identity: string }>
 @@ -784 +782 @@ export async function deleteInvite(projectId: string, email: string): Promise<vo
 -export type DirectMessage = { id: number; from: string; to: string; content: string; at: string | null; reactions?: Record<string, string>; reply_to?: number | null }
-+export type DirectMessage = { id: number; from: string; to: string; content: string; at: string | null; reactions?: Record<string, string>; reply_to?: number | null; withheld?: string[]; share?: "" | "pending" | "shared" | "declined" }
-@@ -823,0 +822,9 @@ export async function sendDirect(personId: string, content: string, replyTo?: nu
++export type DirectMessage = { id: number; from: string; to: string; content: string; at: string | null; reactions?: Record<string, string>; reply_to?: number | null; withheld?: string[]; share?: "" | "pending" | "sharing" | "shared" | "declined" | "proceed" | "running" | "done" | "cancelled" | "private"; action?: boolean }
+@@ -823,0 +822,18 @@ export async function sendDirect(personId: string, content: string, replyTo?: nu
 +export async function shareDirect(personId: string, messageId: number, share: boolean): Promise<DirectMessage> {
 +  const res = await apiFetch(`/direct/${encodeURIComponent(personId)}/${messageId}/share`, {
 +    method: "POST",
@@ -46,5 +46,14 @@ index c214349..c4f1d51 100644
 +  return handleResponse(res) as Promise<DirectMessage>
 +}
 +
-@@ -932 +938,0 @@ export type SpecProposal = {
++export async function proceedDirect(personId: string, messageId: number, proceed: boolean): Promise<DirectMessage> {
++  const res = await apiFetch(`/direct/${encodeURIComponent(personId)}/${messageId}/proceed`, {
++    method: "POST",
++    headers: { "content-type": "application/json" },
++    body: JSON.stringify({ proceed }),
++  })
++  return handleResponse(res) as Promise<DirectMessage>
++}
++
+@@ -932 +947,0 @@ export type SpecProposal = {
 -  model: string

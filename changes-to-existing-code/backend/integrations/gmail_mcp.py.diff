@@ -1,0 +1,7 @@
+diff --git a/backend/integrations/gmail_mcp.py b/backend/integrations/gmail_mcp.py
+index c6c6c72..6673f95 100644
+--- a/backend/integrations/gmail_mcp.py
++++ b/backend/integrations/gmail_mcp.py
+@@ -52 +52 @@ async def _access_token() -> str:
+-    if not (GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET and GMAIL_REFRESH_TOKEN):
++    if connections.no_fallback() or not (GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET and GMAIL_REFRESH_TOKEN):

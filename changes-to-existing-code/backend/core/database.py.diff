@@ -1,9 +1,14 @@
 diff --git a/backend/core/database.py b/backend/core/database.py
-index 20e3807..3ccb720 100644
+index 20e3807..656b4b2 100644
 --- a/backend/core/database.py
 +++ b/backend/core/database.py
-@@ -112,0 +113,4 @@ def migrate() -> None:
+@@ -112,0 +113,9 @@ def migrate() -> None:
 +        if "direct_messages" in existing and "withheld" not in {c["name"] for c in insp.get_columns("direct_messages")}:
 +            conn.execute(text("ALTER TABLE direct_messages ADD COLUMN withheld VARCHAR(60) NOT NULL DEFAULT ''"))
 +        if "direct_messages" in existing and "share" not in {c["name"] for c in insp.get_columns("direct_messages")}:
 +            conn.execute(text("ALTER TABLE direct_messages ADD COLUMN share VARCHAR(10) NOT NULL DEFAULT ''"))
++        if "direct_messages" in existing and "action" not in {c["name"] for c in insp.get_columns("direct_messages")}:
++            conn.execute(text("ALTER TABLE direct_messages ADD COLUMN action TEXT NOT NULL DEFAULT ''"))
++        if "direct_messages" in existing:  # a summary or a write in progress when the server stopped never finishes; let its asker send it again
++            conn.execute(text("UPDATE direct_messages SET share = 'pending' WHERE share = 'sharing'"))
++            conn.execute(text("UPDATE direct_messages SET share = 'proceed' WHERE share = 'running' AND action <> ''"))

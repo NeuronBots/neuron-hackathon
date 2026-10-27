@@ -1,11 +1,15 @@
 diff --git a/backend/tools/dispatch.py b/backend/tools/dispatch.py
-index 4e44231..9895cf9 100644
+index 4e44231..354907b 100644
 --- a/backend/tools/dispatch.py
 +++ b/backend/tools/dispatch.py
-@@ -19,0 +20,2 @@ from integrations.gmail_mcp import (
-+from core.audience import guard
+@@ -7,0 +8,3 @@ from integrations.atlassian_mcp import (
++from integrations.atlassian_mcp import (
++    owns as atlassian_owns,
++)
+@@ -19,0 +23,2 @@ from integrations.gmail_mcp import (
++from core.audience import guard, hold_write
 +from integrations import connections
-@@ -24,0 +27,9 @@ from tools.web_tools import web_fetch, web_search
+@@ -24,0 +30,21 @@ from tools.web_tools import web_fetch, web_search
 +async def _missing(provider: str) -> str:
 +    """An error for the bot when this shared chat's requester has not connected `provider`; empty when the call may go ahead."""
 +    try:
@@ -15,33 +19,55 @@ index 4e44231..9895cf9 100644
 +    return ""
 +
 +
-@@ -57,0 +69,2 @@ async def run_tool(name: str, arguments: dict, jira_key: str = "", repo: str = "
-+    if name in ("manageJiraSprint", "planSprint", "attachDocumentToJiraIssue") and (err := await _missing("atlassian")):
-+        return err
-@@ -59 +72 @@ async def run_tool(name: str, arguments: dict, jira_key: str = "", repo: str = "
--        return await manage_sprint(arguments, jira_key)
-+        return await guard("atlassian", await manage_sprint(arguments, jira_key))
-@@ -61 +74 @@ async def run_tool(name: str, arguments: dict, jira_key: str = "", repo: str = "
--        return await plan_sprint(arguments, jira_key)
-+        return await guard("atlassian", await plan_sprint(arguments, jira_key))
-@@ -63 +76 @@ async def run_tool(name: str, arguments: dict, jira_key: str = "", repo: str = "
--        return await attach_document(arguments, jira_key)
-+        return await guard("atlassian", await attach_document(arguments, jira_key))
-@@ -64,0 +78,2 @@ async def run_tool(name: str, arguments: dict, jira_key: str = "", repo: str = "
-+        if err := await _missing("gmail"):
-+            return err
-@@ -66 +81 @@ async def run_tool(name: str, arguments: dict, jira_key: str = "", repo: str = "
--            return await call_gmail_tool(name, arguments)
-+            return await guard("gmail", await call_gmail_tool(name, arguments))
-@@ -69,0 +85,2 @@ async def run_tool(name: str, arguments: dict, jira_key: str = "", repo: str = "
-+        if err := await _missing("github"):
-+            return err
-@@ -74 +91 @@ async def run_tool(name: str, arguments: dict, jira_key: str = "", repo: str = "
--            return await call_github_tool(name, scoped)
-+            return await guard("github", await call_github_tool(name, scoped), repo)
-@@ -76,0 +94,2 @@ async def run_tool(name: str, arguments: dict, jira_key: str = "", repo: str = "
++async def _jira_local(name: str, fn, arguments: dict, jira_key: str, agent_id: str) -> str:
++    """The sprint and attachment tools built on raw Atlassian calls: the requester's own connection only, a write waits for their Proceed, and a reader needs access to the project."""
 +    if err := await _missing("atlassian"):
 +        return err
-@@ -86 +105 @@ async def run_tool(name: str, arguments: dict, jira_key: str = "", repo: str = "
++    if held := hold_write("atlassian", name, arguments, jira_key, "", agent_id):
++        return held
++    try:
++        return await guard("atlassian", await fn(arguments, jira_key), jira_key)
++    except Exception as exc:
++        return f"Error: {exc}"
++
++
+@@ -59 +85 @@ async def run_tool(name: str, arguments: dict, jira_key: str = "", repo: str = "
+-        return await manage_sprint(arguments, jira_key)
++        return await _jira_local(name, manage_sprint, arguments, jira_key, agent_id)
+@@ -61 +87 @@ async def run_tool(name: str, arguments: dict, jira_key: str = "", repo: str = "
+-        return await plan_sprint(arguments, jira_key)
++        return await _jira_local(name, plan_sprint, arguments, jira_key, agent_id)
+@@ -63 +89 @@ async def run_tool(name: str, arguments: dict, jira_key: str = "", repo: str = "
+-        return await attach_document(arguments, jira_key)
++        return await _jira_local(name, attach_document, arguments, jira_key, agent_id)
+@@ -64,0 +91,4 @@ async def run_tool(name: str, arguments: dict, jira_key: str = "", repo: str = "
++        if err := await _missing("gmail"):
++            return err
++        if held := hold_write("gmail", name, arguments, jira_key, repo, agent_id):
++            return held
+@@ -66 +96 @@ async def run_tool(name: str, arguments: dict, jira_key: str = "", repo: str = "
+-            return await call_gmail_tool(name, arguments)
++            return await guard("gmail", await call_gmail_tool(name, arguments))
+@@ -69,0 +100,4 @@ async def run_tool(name: str, arguments: dict, jira_key: str = "", repo: str = "
++        if err := await _missing("github"):
++            return err
++        if held := hold_write("github", name, arguments, jira_key, repo, agent_id):
++            return held
+@@ -74 +108 @@ async def run_tool(name: str, arguments: dict, jira_key: str = "", repo: str = "
+-            return await call_github_tool(name, scoped)
++            return await guard("github", await call_github_tool(name, scoped), repo)
+@@ -76,0 +111,6 @@ async def run_tool(name: str, arguments: dict, jira_key: str = "", repo: str = "
++    if not atlassian_owns(name):
++        return f"Error: unknown tool {name}."
++    if err := await _missing("atlassian"):
++        return err
++    if held := hold_write("atlassian", name, arguments, jira_key, repo, agent_id):
++        return held
+@@ -81,0 +122,3 @@ async def run_tool(name: str, arguments: dict, jira_key: str = "", repo: str = "
++        if name == "getAccessibleAtlassianResources" and agent_id:
++            await asyncio.to_thread(remember_cloud_id, agent_id, result)
++        return await guard("atlassian", result, jira_key if "jira" in name.lower() else "")  # Confluence and Compass have no project to check a reader against
+@@ -84,3 +126,0 @@ async def run_tool(name: str, arguments: dict, jira_key: str = "", repo: str = "
+-    if name == "getAccessibleAtlassianResources" and agent_id:
+-        await asyncio.to_thread(remember_cloud_id, agent_id, result)
 -    return result
-+    return await guard("atlassian", result)

@@ -1,0 +1,9 @@
+diff --git a/backend/integrations/github_mcp.py b/backend/integrations/github_mcp.py
+index f5f9583..2aa837d 100644
+--- a/backend/integrations/github_mcp.py
++++ b/backend/integrations/github_mcp.py
+@@ -81 +81,3 @@ async def _headers() -> dict[str, str]:
+-    token = await connections.access_token("github") or GITHUB_PAT
++    token = await connections.access_token("github") or ("" if connections.no_fallback() else GITHUB_PAT)
++    if not token:
++        raise RuntimeError("GitHub is not connected. Connect it in Settings.")
