@@ -1,5 +1,5 @@
 diff --git a/backend/routes/people.py b/backend/routes/people.py
-index 57c04cf..ea8d681 100644
+index 57c04cf..503699f 100644
 --- a/backend/routes/people.py
 +++ b/backend/routes/people.py
 @@ -12,0 +13,2 @@ from sqlalchemy.orm import Session
@@ -86,7 +86,7 @@ index 57c04cf..ea8d681 100644
 @@ -323 +366 @@ def react(other_id: str, message_id: int, body: ReactIn, user: User = Depends(ge
 -    row = db.query(DirectMessage).filter(DirectMessage.id == message_id, _between(project.id, user.id, other.id)).with_for_update().first()
 +    row = _row(db, project.id, user, other.id, message_id, lock=True)
-@@ -335,0 +379,199 @@ def react(other_id: str, message_id: int, body: ReactIn, user: User = Depends(ge
+@@ -335,0 +379,203 @@ def react(other_id: str, message_id: int, body: ReactIn, user: User = Depends(ge
 +class ShareIn(BaseModel):
 +    share: bool
 +
@@ -251,6 +251,8 @@ index 57c04cf..ea8d681 100644
 +    if recipient.email:
 +        recipient_idents.append(recipient.email)
 +
++    from sqlalchemy.orm.attributes import flag_modified
++
 +    for target in all_targets:
 +        doc_rec = db.get(DocumentRecord, target) or db.query(DocumentRecord).filter(DocumentRecord.title == target).first()
 +        if doc_rec:
@@ -265,6 +267,7 @@ index 57c04cf..ea8d681 100644
 +                    changed = True
 +            if changed:
 +                doc_rec.shared_with = current_shared
++                flag_modified(doc_rec, "shared_with")
 +
 +        doc_model = db.get(DocModel, target) or db.query(DocModel).filter((DocModel.id == target) | (DocModel.title == target)).first()
 +        if not doc_model and doc_rec:
@@ -281,15 +284,16 @@ index 57c04cf..ea8d681 100644
 +                    changed_m = True
 +            if changed_m:
 +                doc_model.shared_with = current_shared_model
++                flag_modified(doc_model, "shared_with")
 +
 +    try:
 +        db.commit()
 +    except Exception:
 +        db.rollback()
-@@ -341,2 +583,2 @@ async def send(other_id: str, body: DirectIn, user: User = Depends(get_current_u
+@@ -341,2 +587,2 @@ async def send(other_id: str, body: DirectIn, user: User = Depends(get_current_u
 -        target = db.query(DirectMessage).filter(DirectMessage.id == body.reply_to, _between(project.id, user.id, other.id)).first()
 -        root = db.get(DirectMessage, target.reply_to or target.id) if target else None
 +        target = _row(db, project.id, user, other.id, body.reply_to)
 +        root = _row(db, project.id, user, other.id, target.reply_to or target.id) if target else None
-@@ -350,0 +593 @@ async def send(other_id: str, body: DirectIn, user: User = Depends(get_current_u
+@@ -350,0 +597 @@ async def send(other_id: str, body: DirectIn, user: User = Depends(get_current_u
 +    _share_forwarded_documents(row.content, user.id, other, db)

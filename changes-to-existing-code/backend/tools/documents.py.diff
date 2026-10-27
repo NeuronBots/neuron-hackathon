@@ -1,5 +1,5 @@
 diff --git a/backend/tools/documents.py b/backend/tools/documents.py
-index ae75800..72620ce 100644
+index ae75800..0bfecf1 100644
 --- a/backend/tools/documents.py
 +++ b/backend/tools/documents.py
 @@ -515 +515,65 @@ def _title_of(path: Path) -> str:
@@ -69,16 +69,18 @@ index ae75800..72620ce 100644
 +
 +
 +def _old_record(agent_id: str, result: str, title: str = "") -> None:
-@@ -563 +627,28 @@ def user_may_read(user_id: str, filename: str) -> bool:
+@@ -562,2 +626,30 @@ def document_project(user_id: str, filename: str) -> str | None:
+-def user_may_read(user_id: str, filename: str) -> bool:
 -    return document_project(user_id, filename) is not None
++def user_may_read(user_id: str, filename: str, db=None) -> bool:
 +    import json
 +    from core.database import SessionLocal
 +    from core.models import DocumentRecord, ProjectMember, User
 +
-+    db = SessionLocal()
++    session = db or SessionLocal()
 +    try:
-+        row = db.get(DocumentRecord, filename)
-+        if not row or not row.project_id or not db.get(ProjectMember, (row.project_id, user_id)):
++        row = session.get(DocumentRecord, filename)
++        if not row or not row.project_id or not session.get(ProjectMember, (row.project_id, user_id)):
 +            return False
 +        # If the document has a creator recorded, only that user or people it is shared with may read it
 +        if row.user_id or row.created_by:
@@ -92,14 +94,15 @@ index ae75800..72620ce 100644
 +                    shared = [s.strip() for s in shared.split(",") if s.strip()]
 +            shared_lower = {str(s).lower() for s in shared}
 +            user_idents = {user_id.lower()}
-+            user_obj = db.get(User, user_id)
++            user_obj = session.get(User, user_id)
 +            if user_obj and user_obj.email:
 +                user_idents.add(user_obj.email.lower())
 +            return any(ident in shared_lower for ident in user_idents)
 +        return True
 +    finally:
-+        db.close()
-@@ -571,0 +663,4 @@ def read_document(agent_id: str, filename: str) -> str:
++        if db is None:
++            session.close()
+@@ -571,0 +664,4 @@ def read_document(agent_id: str, filename: str) -> str:
 +    from core.usage import current_user
 +    uid = current_user()
 +    if uid and not user_may_read(uid, path.name):

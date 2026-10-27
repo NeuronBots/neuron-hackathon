@@ -306,6 +306,8 @@ def share_doc(id: str, body: DocShare, request: Request, db: Session = Depends(g
         if u and u not in current:
             current.append(u)
     doc.shared_with = current
+    from sqlalchemy.orm.attributes import flag_modified
+    flag_modified(doc, "shared_with")
     doc.updated_at = datetime.now(timezone.utc)
 
     from core.models import DocumentRecord
@@ -319,6 +321,7 @@ def share_doc(id: str, body: DocShare, request: Request, db: Session = Depends(g
             if u and u not in rec_shared and u.lower() not in [str(s).lower() for s in rec_shared]:
                 rec_shared.append(u)
         doc_rec.shared_with = rec_shared
+        flag_modified(doc_rec, "shared_with")
 
     db.commit()
     db.refresh(doc)

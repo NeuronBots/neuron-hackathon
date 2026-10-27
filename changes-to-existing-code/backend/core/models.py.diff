@@ -1,5 +1,5 @@
 diff --git a/backend/core/models.py b/backend/core/models.py
-index 38a5312..e9e26c8 100644
+index 38a5312..1332314 100644
 --- a/backend/core/models.py
 +++ b/backend/core/models.py
 @@ -0,0 +1 @@
@@ -46,12 +46,12 @@ index 38a5312..e9e26c8 100644
 +    """Document store for Meta hackathon work."""
 +    __tablename__ = "docs"
 +
-+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
++    id = Column(String(140), primary_key=True, default=lambda: str(uuid.uuid4()))
 +    title = Column(String(200), nullable=False)
 +    content = Column(Text, nullable=False)
 +    tags = Column(JSON, nullable=False, default=list)
 +    created_by = Column(String(120), nullable=True, default="")
-+    user_id = Column(String(36), nullable=True, default="")
++    user_id = Column(String(120), nullable=True, default="")
 +    shared_with = Column(JSON, nullable=False, default=list)
 +    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), server_default=func.now())
 +    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), server_default=func.now())
