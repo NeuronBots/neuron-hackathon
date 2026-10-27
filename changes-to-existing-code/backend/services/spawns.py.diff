@@ -1,0 +1,92 @@
+diff --git a/backend/services/spawns.py b/backend/services/spawns.py
+index 54268a6..33ed00c 100644
+--- a/backend/services/spawns.py
++++ b/backend/services/spawns.py
+@@ -12 +11,0 @@ from core import jsonl
+-from core.tiers import TIERS
+@@ -17,29 +15,0 @@ from core.usage import current_user
+-def _may_reason(db: Session | None) -> bool:
+-    """REASONING costs the most, so it is for admins and the top plan."""
+-    from core.models import User
+-
+-    user = db.get(User, current_user()) if db is not None and current_user() else None
+-    return bool(user and (user.is_admin or user.plan == "max"))
+-
+-
+-def _resolve(hint: str | None, db: Session | None) -> tuple[str, str | None, str]:
+-    """(model id, tier or None, why). Anything that is not a tier or a model id becomes WORKHORSE."""
+-    hint = (hint or "").strip()
+-    tier = hint.upper()
+-    if tier == "REASONING" and not _may_reason(db):
+-        return TIERS["JUDGEMENT"], "JUDGEMENT", "reasoning_not_allowed"
+-    if tier in TIERS:
+-        return TIERS[tier], tier, "requested"
+-    if hint and len(hint) <= 120 and " " not in hint and "\n" not in hint:
+-        return hint, next((t for t, m in TIERS.items() if m == hint), None), "model_id"
+-    return TIERS["WORKHORSE"], "WORKHORSE", "model_unknown" if hint else "default"
+-
+-
+-def model_hint(hint: str | None, db: Session | None = None, parent_id: str | None = None) -> str:
+-    """A tier name or a model id. The plan clamp still runs at call time. Logs tier.resolved."""
+-    model, tier, why = _resolve(hint, db)
+-    jsonl.emit("spawn.tier.bound", agent_id=parent_id, requested_model=(hint or "").strip()[:60] or None, bound_model=model, tier=tier,
+-               clamped=False, why=why)
+-    return model
+-
+-
+@@ -51 +21 @@ def short_label(label: str | None, fallback: str) -> str:
+-def create_child(parent: Agent, name: str, system_prompt: str, model: str, label: str, db: Session, turn_id: str = "") -> Agent:
++def create_child(parent: Agent, name: str, system_prompt: str, label: str, db: Session, turn_id: str = "") -> Agent:
+@@ -56 +25,0 @@ def create_child(parent: Agent, name: str, system_prompt: str, model: str, label
+-        model=model,
+@@ -68 +37 @@ def create_child(parent: Agent, name: str, system_prompt: str, model: str, label
+-               child_model=model, project_id=parent.project_id, field=child.field, apply_ms=int((time.perf_counter() - started) * 1000))
++               project_id=parent.project_id, field=child.field, apply_ms=int((time.perf_counter() - started) * 1000))
+@@ -85 +53,0 @@ PROPOSE_AGENT_TOOL = {
+-            "model": {"type": "string", "enum": list(TIERS), "description": "Capability tier. WORKHORSE (default) for most bots, FAST for simple high-volume work, JUDGEMENT when a wrong answer is costly, REASONING only for sustained deep analysis (top plan or admin)."},
+@@ -99 +67 @@ def run_propose_agent(parent: Agent, args: dict, db: Session) -> tuple[str, dict
+-    row, child, made = propose_once(parent, name, role, args.get("model"), args.get("label"), db)
++    row, child, made = propose_once(parent, name, role, args.get("label"), db)
+@@ -111,20 +79 @@ def run_propose_agent(parent: Agent, args: dict, db: Session) -> tuple[str, dict
+-def move_agents_to_tiers(db: Session) -> int:
+-    """One time: Masters go to JUDGEMENT, other Claude bots to WORKHORSE (Haiku stays FAST). Later model picks are left alone."""
+-    from core.models import AppSetting
+-
+-    if db.get(AppSetting, "tiers_applied"):
+-        return 0
+-    moved = 0
+-    for agent in db.query(Agent).all():
+-        low = (agent.model or "").lower()
+-        if not any(f in low for f in ("opus", "sonnet", "haiku", "fable")):
+-            continue  # someone chose a custom id; keep it
+-        want = TIERS["JUDGEMENT"] if agent.is_master == "true" else TIERS["FAST"] if "haiku" in low else TIERS["WORKHORSE"]
+-        if agent.model != want:
+-            agent.model, moved = want, moved + 1
+-    db.add(AppSetting(key="tiers_applied", value="1"))
+-    db.commit()
+-    return moved
+-
+-
+-def propose(parent: Agent, name: str, role: str, model_hint_value: str | None, label: str | None, db: Session) -> AgentSpecProposal:
++def propose(parent: Agent, name: str, role: str, label: str | None, db: Session) -> AgentSpecProposal:
+@@ -134 +83 @@ def propose(parent: Agent, name: str, role: str, model_hint_value: str | None, l
+-        name=name[:120], label=short_label(label, ""), system_prompt=role, model=model_hint(model_hint_value, db, parent.id),
++        name=name[:120], label=short_label(label, ""), system_prompt=role,
+@@ -184 +133 @@ def existing_spawn(parent: Agent, name: str, db: Session) -> tuple[AgentSpecProp
+-def propose_once(parent: Agent, name: str, role: str, model_hint_value: str | None, label: str | None,
++def propose_once(parent: Agent, name: str, role: str, label: str | None,
+@@ -187 +136 @@ def propose_once(parent: Agent, name: str, role: str, model_hint_value: str | No
+-    resolves to what exists instead of forking a second one. A repeat of a proposal still waiting carries the latest role, model and label.
++    resolves to what exists instead of forking a second one. A repeat of a proposal still waiting carries the latest role and label.
+@@ -192 +141 @@ def propose_once(parent: Agent, name: str, role: str, model_hint_value: str | No
+-        row = propose(parent, name, role, model_hint_value, label, db)
++        row = propose(parent, name, role, label, db)
+@@ -199,2 +147,0 @@ def propose_once(parent: Agent, name: str, role: str, model_hint_value: str | No
+-        if (model_hint_value or "").strip():
+-            row.model = model_hint(model_hint_value, db, parent.id)
+@@ -225 +172 @@ def queue_spawns(parent: Agent, spawns: list[dict], tool_proposed: set[str], db:
+-        proposal, child, _made = propose_once(parent, name, sp["system_prompt"], sp.get("model"), None, db)
++        proposal, child, _made = propose_once(parent, name, sp["system_prompt"], None, db)
+@@ -228 +175 @@ def queue_spawns(parent: Agent, spawns: list[dict], tool_proposed: set[str], db:
+-    return [{"id": p.id, "name": p.name, "model": p.model, "identity": p.system_prompt} for p in waiting.values()]
++    return [{"id": p.id, "name": p.name, "identity": p.system_prompt} for p in waiting.values()]

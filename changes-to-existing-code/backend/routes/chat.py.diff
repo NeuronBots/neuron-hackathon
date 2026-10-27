@@ -1,0 +1,15 @@
+diff --git a/backend/routes/chat.py b/backend/routes/chat.py
+index df62b39..44b490f 100644
+--- a/backend/routes/chat.py
++++ b/backend/routes/chat.py
+@@ -182,2 +182,2 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
+-    # One model for every bot's chat turn, set by CHAT_MODEL; agent.model still applies to teammates' replies (peer_run, followup).
+-    model = body.model_override.strip() if body.model_override else CHAT_MODEL
++    # One model for every bot, set at the source by CHAT_MODEL; bots do not carry a model of their own.
++    model = CHAT_MODEL
+@@ -236 +236 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
+-        if ROUTER_MODEL and not kickoff and not body.model_override and not files:
++        if ROUTER_MODEL and not kickoff and not files:
+@@ -628 +628 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
+-                    log_span("chat.peer", peer_started, agent=agent.name, model=ASK_MODEL or "own", to=target.name)
++                    log_span("chat.peer", peer_started, agent=agent.name, model=ASK_MODEL or CHAT_MODEL, to=target.name)

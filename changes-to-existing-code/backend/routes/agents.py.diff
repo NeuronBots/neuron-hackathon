@@ -1,7 +1,22 @@
 diff --git a/backend/routes/agents.py b/backend/routes/agents.py
-index 394b967..f63ce6d 100644
+index 394b967..4f5a2bd 100644
 --- a/backend/routes/agents.py
 +++ b/backend/routes/agents.py
-@@ -28 +28 @@ def _check_model(user: User, model: str, project: Project, db: Session) -> None:
+@@ -17 +17 @@ from agents.roster import field_from_name, names_by_agent, project_roster
+-from core.limits import free_model_ok, over_limit, plan_in
++from core.limits import over_limit
+@@ -26,5 +25,0 @@ router = APIRouter()
+-def _check_model(user: User, model: str, project: Project, db: Session) -> None:
+-    if plan_in(db, user, project.id)[0] == "free" and not user.is_admin and not free_model_ok(model.strip()):
 -        raise HTTPException(status_code=403, detail="Free accounts can use Haiku and Sonnet. Upgrade to use Opus.")
-+        raise HTTPException(status_code=403, detail="Free accounts can use the Fast and Workhorse models. Upgrade for more.")
+-
+-
+@@ -59,2 +53,0 @@ def create_agent(body: AgentCreate, user: User = Depends(get_current_user), proj
+-    _check_model(user, body.model, project, db)
+-
+@@ -65 +57,0 @@ def create_agent(body: AgentCreate, user: User = Depends(get_current_user), proj
+-        model=body.model.strip(),
+@@ -141,3 +132,0 @@ def update_agent(agent_id: str, body: AgentUpdate, user: User = Depends(get_curr
+-    if body.model is not None:
+-        _check_model(user, body.model, project, db)
+-        agent.model = body.model.strip()

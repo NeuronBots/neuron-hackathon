@@ -1,9 +1,9 @@
 diff --git a/backend/agents/memory.py b/backend/agents/memory.py
-index 22952c3..f12aac9 100644
+index 22952c3..d62232b 100644
 --- a/backend/agents/memory.py
 +++ b/backend/agents/memory.py
 @@ -5,0 +6 @@ from prompts.identity import VENDOR_IDENTITY
 +from core.tiers import TIERS
 @@ -48 +49 @@ def form_memory(agent: Agent, material: str, reason: str) -> str:
 -    model = agent.model or "claude-opus-5-5"
-+    model = agent.model or TIERS["JUDGEMENT"]
++    model = TIERS["JUDGEMENT"]

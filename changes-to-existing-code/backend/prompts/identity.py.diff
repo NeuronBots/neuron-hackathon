@@ -1,7 +1,13 @@
 diff --git a/backend/prompts/identity.py b/backend/prompts/identity.py
-index 66b5970..e834031 100644
+index 66b5970..fb902c8 100644
 --- a/backend/prompts/identity.py
 +++ b/backend/prompts/identity.py
+@@ -88 +88 @@ SPAWN_RECIPE = """You can save a new teammate by writing exactly:
+-[[SPAWN: agent_name | model_id]]
++[[SPAWN: agent_name]]
+@@ -91 +91 @@ The agent's role, copied from the user's request, on the following lines.
+-Model is optional: FAST, WORKHORSE (the default), JUDGEMENT or REASONING. Pick the cheapest tier that fits the job.
++Bots do not choose a model; Neuron assigns it.
 @@ -96 +96 @@ Example:
 -[[SPAWN: Researcher | claude-opus-5-5]]
-+[[SPAWN: Researcher | JUDGEMENT]]
++[[SPAWN: Researcher]]

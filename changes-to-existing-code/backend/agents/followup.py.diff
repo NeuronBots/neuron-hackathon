@@ -1,0 +1,22 @@
+diff --git a/backend/agents/followup.py b/backend/agents/followup.py
+index d709509..eede952 100644
+--- a/backend/agents/followup.py
++++ b/backend/agents/followup.py
+@@ -12 +12 @@ from llm.client import continue_text, looks_cut
+-from llm.config import ANTHROPIC_API_KEY, ANTHROPIC_BASE
++from llm.config import ANTHROPIC_API_KEY, ANTHROPIC_BASE, CHAT_MODEL
+@@ -63 +63 @@ def _peer_summary(target: Agent, asker: Agent, question: str, reply: str, db: Se
+-                json={"model": target.model, "max_tokens": 300, "system": system_for(target, db), "messages": [{"role": "user", "content": prompt}]},
++                json={"model": CHAT_MODEL, "max_tokens": 300, "system": system_for(target, db), "messages": [{"role": "user", "content": prompt}]},
+@@ -68 +68 @@ def _peer_summary(target: Agent, asker: Agent, question: str, reply: str, db: Se
+-        note_payload(target.model, data, agent_id=target.id, kind="followup")
++        note_payload(CHAT_MODEL, data, agent_id=target.id, kind="followup")
+@@ -83 +83 @@ async def stream_sender_followup(source: Agent, exchanges: list, original_user_m
+-                json={"model": source.model, "max_tokens": 8192, "stream": True, "system": source_system, "messages": [{"role": "user", "content": prompt}]},
++                json={"model": CHAT_MODEL, "max_tokens": 8192, "stream": True, "system": source_system, "messages": [{"role": "user", "content": prompt}]},
+@@ -105 +105 @@ async def stream_sender_followup(source: Agent, exchanges: list, original_user_m
+-                record_usage(source.model, usage, agent_id=source.id, kind="followup")
++                record_usage(CHAT_MODEL, usage, agent_id=source.id, kind="followup")
+@@ -108 +108 @@ async def stream_sender_followup(source: Agent, exchanges: list, original_user_m
+-            more = await asyncio.to_thread(continue_text, source.model, source_system, prompt, reply)
++            more = await asyncio.to_thread(continue_text, CHAT_MODEL, source_system, prompt, reply)

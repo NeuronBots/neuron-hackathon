@@ -1,0 +1,23 @@
+diff --git a/backend/markers/spawns.py b/backend/markers/spawns.py
+index 5127144..573b62b 100644
+--- a/backend/markers/spawns.py
++++ b/backend/markers/spawns.py
+@@ -11 +11 @@ _SPAWN_SIMPLE = re.compile(
+-# Multi-line spawn block (new): [[SPAWN: name | model]]\n...instructions...\n[[/SPAWN]]
++# Multi-line spawn block (new): [[SPAWN: name]] (an old "| model" part is read and ignored; without it the closing tag is required)\n...instructions...\n[[/SPAWN]]
+@@ -13 +13 @@ _SPAWN_BLOCK_START = re.compile(
+-    r"\[\[SPAWN:\s*(.+?)\s*\|\s*(.+?)\s*\]\]",
++    r"\[\[SPAWN:\s*([^|\]\n]+?)\s*(?:\|[^\]]*\]\]|\]\](?=[\s\S]*?\[\[/SPAWN\]\]))",
+@@ -28 +28 @@ def parse_spawns(full_reply: str) -> tuple[str, list[dict]]:
+-       [[SPAWN: name | model]]
++       [[SPAWN: name]]
+@@ -39 +39 @@ def parse_spawns(full_reply: str) -> tuple[str, list[dict]]:
+-        name, model_override = match.group(1).strip(), match.group(2).strip()
++        name = match.group(1).strip()
+@@ -42 +42 @@ def parse_spawns(full_reply: str) -> tuple[str, list[dict]]:
+-        spawns.append({"name": name, "system_prompt": body, "model": model_override})
++        spawns.append({"name": name, "system_prompt": body})
+@@ -49,2 +49 @@ def parse_spawns(full_reply: str) -> tuple[str, list[dict]]:
+-        model_override = match.group(3).strip() if match.group(3) else None
+-        spawns.append({"name": name, "system_prompt": sys_prompt, "model": model_override})
++        spawns.append({"name": name, "system_prompt": sys_prompt})
