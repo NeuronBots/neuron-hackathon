@@ -1,5 +1,5 @@
 diff --git a/backend/llm/client.py b/backend/llm/client.py
-index 4ba5c58..6f1fcf9 100644
+index 4ba5c58..8d6a4fd 100644
 --- a/backend/llm/client.py
 +++ b/backend/llm/client.py
 @@ -1,0 +2 @@
@@ -9,7 +9,7 @@ index 4ba5c58..6f1fcf9 100644
 +from core.limits import over_limit
 +from core.usage import current_user, note_payload
 @@ -13,0 +16,30 @@ NOW = "\n\nThe current time is "
-+BUSY = (402, 429, 502, 503, 529)  # the provider is busy for a moment, then recovers
++BUSY = (402, 429, 502, 503, 529)  # the provider is busy for a moment, then recovers (it answered 402 under ten parallel calls). Only these statuses are retried, not network errors
 +TRIES = 4
 +
 +

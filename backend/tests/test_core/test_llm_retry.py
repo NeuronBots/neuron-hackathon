@@ -97,7 +97,7 @@ def test_continue_text_retries_a_busy_provider(monkeypatch):
     assert client.continue_text("workhorse", "s", "p", "half").strip() == "the rest" and not answers
 
 
-def test_the_sender_followup_says_why_when_over_the_cap(monkeypatch):
+def test_the_sender_followup_gives_a_notice_not_an_answer_when_over_the_cap(monkeypatch):
     from agents import followup
 
     monkeypatch.setattr(followup, "_followup_request", lambda *a: ("s", "p"))
@@ -106,7 +106,7 @@ def test_the_sender_followup_says_why_when_over_the_cap(monkeypatch):
     async def run():
         return [item async for item in followup.stream_sender_followup(None, [], "hi", None)]
 
-    assert asyncio.run(run()) == [("final", "You have used this week's token limit.")]
+    assert asyncio.run(run()) == [("notice", "You have used this week's token limit."), ("final", None)]
 
 
 def test_peer_summary_is_empty_over_the_cap(monkeypatch):

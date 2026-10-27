@@ -1,5 +1,5 @@
 diff --git a/backend/agents/followup.py b/backend/agents/followup.py
-index d709509..29700a2 100644
+index d709509..22a68f4 100644
 --- a/backend/agents/followup.py
 +++ b/backend/agents/followup.py
 @@ -11,2 +11,2 @@ from core.database import SessionLocal
@@ -25,18 +25,22 @@ index d709509..29700a2 100644
 @@ -68 +68 @@ def _peer_summary(target: Agent, asker: Agent, question: str, reply: str, db: Se
 -        note_payload(target.model, data, agent_id=target.id, kind="followup")
 +        note_payload(model, data, agent_id=target.id, kind="followup")
-@@ -76,0 +77,3 @@ async def stream_sender_followup(source: Agent, exchanges: list, original_user_m
+@@ -75 +75 @@ async def stream_sender_followup(source: Agent, exchanges: list, original_user_m
+-    """The sender writes its answer to the user after the teammates replied; yields ("draft", text so far) as the model writes, then ("final", reply or None)."""
++    """The sender writes its answer to the user after the teammates replied; yields ("draft", text so far) as the model writes, ("notice", why) when the token cap stops it, then ("final", reply or None)."""
+@@ -76,0 +77,4 @@ async def stream_sender_followup(source: Agent, exchanges: list, original_user_m
 +    if blocked := await asyncio.to_thread(over_limit, current_user()):
-+        yield "final", blocked  # the user sees why, not an unexplained opening
++        yield "notice", blocked  # shown to the user; not an answer, so it never reaches the history
++        yield "final", None
 +        return
-@@ -77,0 +81 @@ async def stream_sender_followup(source: Agent, exchanges: list, original_user_m
+@@ -77,0 +82 @@ async def stream_sender_followup(source: Agent, exchanges: list, original_user_m
 +    model = CHAT_MODEL
-@@ -83 +87 @@ async def stream_sender_followup(source: Agent, exchanges: list, original_user_m
+@@ -83 +88 @@ async def stream_sender_followup(source: Agent, exchanges: list, original_user_m
 -                json={"model": source.model, "max_tokens": 8192, "stream": True, "system": source_system, "messages": [{"role": "user", "content": prompt}]},
 +                json={"model": model, "max_tokens": 8192, "stream": True, "system": source_system, "messages": [{"role": "user", "content": prompt}]},
-@@ -105 +109 @@ async def stream_sender_followup(source: Agent, exchanges: list, original_user_m
+@@ -105 +110 @@ async def stream_sender_followup(source: Agent, exchanges: list, original_user_m
 -                record_usage(source.model, usage, agent_id=source.id, kind="followup")
 +                record_usage(model, usage, agent_id=source.id, kind="followup")
-@@ -108 +112 @@ async def stream_sender_followup(source: Agent, exchanges: list, original_user_m
+@@ -108 +113 @@ async def stream_sender_followup(source: Agent, exchanges: list, original_user_m
 -            more = await asyncio.to_thread(continue_text, source.model, source_system, prompt, reply)
 +            more = await asyncio.to_thread(continue_text, model, source_system, prompt, reply)
