@@ -1,0 +1,11 @@
+diff --git a/backend/main.py b/backend/main.py
+index fac5732..83fd357 100644
+--- a/backend/main.py
++++ b/backend/main.py
+@@ -70,0 +71,6 @@ def _enforce_single_worker() -> None:
++@app.on_event("startup")
++async def _check_model_base() -> None:
++    from llm.config import check_model_base
++    check_model_base()
++
++
