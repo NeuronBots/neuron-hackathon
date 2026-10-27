@@ -23,16 +23,23 @@ def _text(value, limit: int = 120) -> str:
 
 
 def describe(name: str, args: dict) -> str:
-    """What the asker is approving, in words, then the exact call."""
+    """What the asker is approving: a headline, then the whole call, untruncated. The card is the only gate for a write, so nothing the call
+    will do may sit beyond what they can read."""
     key = args.get("issueIdOrKey") or args.get("issueKey") or ""
     head = {
-        "createJiraIssue": f"Create {args.get('issueTypeName') or 'a story'} in Jira project {args.get('projectKey') or ''}: “{args.get('summary') or ''}”\n{str(args.get('description') or '')[:400]}",
+        "createJiraIssue": f"Create {args.get('issueTypeName') or 'a story'} in Jira project {args.get('projectKey') or ''}: “{args.get('summary') or ''}”",
         "editJiraIssue": f"Edit {key} in Jira",
         "transitionJiraIssue": f"Move {key} to a new status in Jira",
-        "addCommentToJiraIssue": f"Comment on {key} in Jira: “{str(args.get('commentBody') or '')[:300]}”",
-        "addOrEditJiraIssueComment": f"Comment on {key} in Jira: “{str(args.get('commentBody') or args.get('body') or '')[:300]}”",
+        "addCommentToJiraIssue": f"Comment on {key} in Jira",
+        "addOrEditJiraIssueComment": f"Comment on {key} in Jira",
     }.get(name) or _words(name)
-    return f"{head.strip()}\n\nExact call: {name} {json.dumps(args, ensure_ascii=False)[:800]}"
+    if name.startswith("gmail_") and args.get("to"):
+        head += f" to {args['to']}"
+    body = json.dumps(args, ensure_ascii=False, indent=2)
+    fence = "~~~"
+    while fence in body:
+        fence += "~"
+    return f"{head.strip()}\n\nThe whole call:\n{fence}json\n{name} {body}\n{fence}"
 
 
 def done_note(name: str, args: dict, result: str) -> str:

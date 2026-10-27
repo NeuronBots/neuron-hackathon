@@ -94,7 +94,7 @@ def scrub(text: str, limit: int = 600) -> str:
 
 
 PERSONAL = ("gmail", "private chats")  # never shared, whatever the reader has connected
-_REPO = re.compile(r"^[\w.-]+/[\w.-]+$")
+_REPO = re.compile(r"^(?!\.{1,2}/)(?!.*/\.{1,2}$)[\w.-]+/[\w.-]+$")  # owner/name, and neither part may be "." or ".."
 _JIRA_KEY = re.compile(r"^[A-Z][A-Z0-9_]{1,19}$")
 _access: dict[tuple, tuple[float, bool]] = {}  # (provider, user, scope) -> (expires, can read it)
 _ACCESS_TTL = 60  # a revoked permission is honoured within a minute

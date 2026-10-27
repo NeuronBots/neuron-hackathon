@@ -1,10 +1,10 @@
 diff --git a/src/DirectChat.tsx b/src/DirectChat.tsx
-index dd14d0b..35d552a 100644
+index dd14d0b..66a1108 100644
 --- a/src/DirectChat.tsx
 +++ b/src/DirectChat.tsx
 @@ -4 +4 @@ import remarkGfm from "remark-gfm"
 -import { fetchDirect, reactDirect, sendDirect, sendDirectTyping, type DirectMessage, type TypingParticipant } from "./api"
-+import { fetchDirect, proceedDirect, reactDirect, sendDirect, shareDirect, sendDirectTyping, type DirectMessage, type TypingParticipant } from "./api"
++import { draftDirect, fetchDirect, proceedDirect, reactDirect, sendDirect, shareDirect, sendDirectTyping, type DirectMessage, type TypingParticipant } from "./api"
 @@ -97 +97 @@ export function DirectChat({ meId, person, bots, onSeen, onOpenTeam, teamOpen }:
 -  // The thread takes focus when it opens and gives it back when it closes. The composer stays reachable on purpose, so there is no trap.
 +  // The composer in the thread panel takes focus when it opens; focus goes back when it closes.
@@ -14,13 +14,14 @@ index dd14d0b..35d552a 100644
 @@ -205 +205 @@ export function DirectChat({ meId, person, bots, onSeen, onOpenTeam, teamOpen }:
 -  }, [messages, thread])
 +  }, [messages, thread, typingParticipants.length])
-@@ -218,0 +219,19 @@ export function DirectChat({ meId, person, bots, onSeen, onOpenTeam, teamOpen }:
+@@ -218,0 +219,20 @@ export function DirectChat({ meId, person, bots, onSeen, onOpenTeam, teamOpen }:
 +  const sources = (m: DirectMessage) => (m.withheld ?? []).map((w) => w[0].toUpperCase() + w.slice(1)).join(" and ") || "this"
-+  // A card for the asker: share a summary of an answer, or proceed with a write. The card answers at once and the server confirms.
++  // A card for the asker: share a summary of an answer, send the summary they read, or proceed with a write. The card answers at once and the server confirms.
 +  function decide(m: DirectMessage, yes: boolean) {
-+    const next = m.action ? (yes ? "running" : "cancelled") : (yes ? "sharing" : "declined")
++    const draft = m.share === "draft"
++    const next = draft ? (yes ? "sent" : "dropped") : m.action ? (yes ? "running" : "cancelled") : (yes ? "sharing" : "declined")
 +    setMessages((cur) => cur.map((x) => (x.id === m.id ? { ...x, share: next } : x)))
-+    ;(m.action ? proceedDirect : shareDirect)(person.id, m.id, yes)
++    ;(draft ? draftDirect : m.action ? proceedDirect : shareDirect)(person.id, m.id, yes)
 +      .then((row) => { changedAt.current = Date.now(); setMessages((cur) => cur.map((x) => (x.id === row.id ? row : x))) })
 +      .catch(() => {
 +        // Already decided in another tab, or the request failed: show what the server has, not a guess.
@@ -28,13 +29,13 @@ index dd14d0b..35d552a 100644
 +          .then((res) => {
 +            changedAt.current = Date.now()
 +            setMessages(res.messages)
-+            if (["pending", "proceed"].includes(res.messages.find((x) => x.id === m.id)?.share ?? "")) setError("Could not send your choice.")
++            if (["pending", "proceed", "draft"].includes(res.messages.find((x) => x.id === m.id)?.share ?? "")) setError("Could not send your choice.")
 +          })
 +          .catch(() => setError("Could not send your choice."))
 +      })
 +  }
 +
-@@ -280,0 +300,30 @@ export function DirectChat({ meId, person, bots, onSeen, onOpenTeam, teamOpen }:
+@@ -280,0 +301,42 @@ export function DirectChat({ meId, person, bots, onSeen, onOpenTeam, teamOpen }:
 +    const approval = (
 +      <>
 +                  {isBot && m.share === "proceed" && (
@@ -52,25 +53,37 @@ index dd14d0b..35d552a 100644
 +                  {isBot && m.share === "private" && <span className="dm-share-done">Only you see this</span>}
 +                  {isBot && m.share === "pending" && (
 +                    <div className="dm-share" role="group" aria-label={`Share with ${person.name}?`}>
-+                      <p className="dm-share-q"><b>{person.name}</b> can't access {sources(m)}. Only you can see this answer. Share a summary with them?</p>
++                      <p className="dm-share-q"><b>{person.name}</b> can't access {sources(m)}. Only you can see this answer. Want a summary for them? You will read it before it is sent.</p>
 +                      <div className="dm-share-actions">
 +                        <button type="button" className="dm-share-no" onClick={() => decide(m, false)}>No</button>
-+                        <button type="button" className="dm-share-yes" onClick={() => decide(m, true)}>Yes, share a summary</button>
++                        <button type="button" className="dm-share-yes" onClick={() => decide(m, true)}>Yes, write a summary</button>
 +                      </div>
 +                    </div>
 +                  )}
-+                  {isBot && (m.share === "sharing" || m.share === "shared" || m.share === "declined") && (
-+                    <span className="dm-share-done">{m.share === "sharing" ? `Sending a summary to ${person.name}…` : m.share === "shared" ? `Summary shared with ${person.name}` : `Not shared. ${person.name} was told they have no access`} · only you see this answer</span>
++                  {isBot && m.share === "draft" && (
++                    <div className="dm-share" role="group" aria-label={`Send to ${person.name}?`}>
++                      <p className="dm-share-q">This is the summary <b>{person.name}</b> will see. Send it? Only you see this copy.</p>
++                      <div className="dm-share-actions">
++                        <button type="button" className="dm-share-no" onClick={() => decide(m, false)}>Don't send</button>
++                        <button type="button" className="dm-share-yes" onClick={() => decide(m, true)}>Send summary</button>
++                      </div>
++                    </div>
++                  )}
++                  {isBot && (m.share === "sent" || m.share === "dropped") && (
++                    <span className="dm-share-done">{m.share === "sent" ? `Sent to ${person.name}` : `Not sent. ${person.name} was told they have no access`} · only you see this copy</span>
++                  )}
++                  {isBot && (m.share === "sharing" || m.share === "drafted" || m.share === "shared" || m.share === "declined") && (
++                    <span className="dm-share-done">{m.share === "sharing" ? "Writing a summary…" : m.share === "drafted" ? "Summary ready below. Nothing is sent until you confirm" : m.share === "shared" ? `Summary sent to ${person.name}` : `Not shared. ${person.name} was told they have no access`} · only you see this answer</span>
 +                  )}
 +      </>
 +    )
 +    const col = isBot && !!m.share  // the bubble and its approval share one column, so the card is as wide as the bubble
-@@ -291,0 +341 @@ export function DirectChat({ meId, person, bots, onSeen, onOpenTeam, teamOpen }:
+@@ -291,0 +354 @@ export function DirectChat({ meId, person, bots, onSeen, onOpenTeam, teamOpen }:
 +                <div className={col ? "dm-col" : "dm-flat"}>
-@@ -313,0 +364,2 @@ export function DirectChat({ meId, person, bots, onSeen, onOpenTeam, teamOpen }:
+@@ -313,0 +377,2 @@ export function DirectChat({ meId, person, bots, onSeen, onOpenTeam, teamOpen }:
 +                {approval}
 +                </div>
-@@ -402,0 +455,53 @@ export function DirectChat({ meId, person, bots, onSeen, onOpenTeam, teamOpen }:
+@@ -402,0 +468,53 @@ export function DirectChat({ meId, person, bots, onSeen, onOpenTeam, teamOpen }:
 +  // One composer, shown in the dock or, while a thread is open, in the thread panel.
 +  const composer = (
 +    <>
@@ -124,7 +137,7 @@ index dd14d0b..35d552a 100644
 +    </>
 +  )
 +
-@@ -432,48 +537,4 @@ export function DirectChat({ meId, person, bots, onSeen, onOpenTeam, teamOpen }:
+@@ -432,48 +550,4 @@ export function DirectChat({ meId, person, bots, onSeen, onOpenTeam, teamOpen }:
 -      <div className={thread !== null ? "chat-dock dm-dock-over" : "chat-dock"}>
 -        <div className="chat-sheet">
 -          {error && <div className="chat-status">{error}</div>}
@@ -177,13 +190,13 @@ index dd14d0b..35d552a 100644
 +        <div className="chat-dock">
 +          <div className="chat-sheet">
 +          {composer}
-@@ -482 +543 @@ export function DirectChat({ meId, person, bots, onSeen, onOpenTeam, teamOpen }:
+@@ -482 +556 @@ export function DirectChat({ meId, person, bots, onSeen, onOpenTeam, teamOpen }:
 -      </div>
 +      )}
-@@ -485 +546 @@ export function DirectChat({ meId, person, bots, onSeen, onOpenTeam, teamOpen }:
+@@ -485 +559 @@ export function DirectChat({ meId, person, bots, onSeen, onOpenTeam, teamOpen }:
 -          <div className="dm-thread" ref={threadRef} role="dialog" aria-modal="true" aria-label="Thread" tabIndex={-1} onScroll={track("thread")} onClick={(e) => e.stopPropagation()}>
 +          <div className="dm-thread" role="dialog" aria-modal="true" aria-label="Thread" tabIndex={-1} onClick={(e) => e.stopPropagation()}>
-@@ -490 +551,7 @@ export function DirectChat({ meId, person, bots, onSeen, onOpenTeam, teamOpen }:
+@@ -490 +564,7 @@ export function DirectChat({ meId, person, bots, onSeen, onOpenTeam, teamOpen }:
 -            {messages.filter((m) => rootOf(m) === thread).map((m) => rowOf(m, 1, true))}
 +            <div className="dm-thread-body" ref={threadRef} onScroll={track("thread")}>
 +              {messages.filter((m) => rootOf(m) === thread).map((m) => rowOf(m, 1, true))}

@@ -94,7 +94,7 @@ def test_no_repo_or_a_malformed_one_is_never_verified(reader, monkeypatch):
     seen = []
     token_for(monkeypatch, "tok")
     http(monkeypatch, seen=seen)
-    for scope in ("", "x/../../user", "no-slash", "a/b/c"):
+    for scope in ("", "x/../../user", "no-slash", "a/b/c", "../..", "./x", "x/..", "x/.", "..", "../x"):
         audience._access.clear()
         assert run(audience.blocked("github", scope)) == ["u2"], scope
     assert seen == []
@@ -348,16 +348,44 @@ def test_yes_starts_one_summary_and_a_second_click_cannot_start_another(chat, mo
     assert err.value.status_code == 409 and len(started) == 1
 
 
-def test_the_summary_is_scrubbed_and_the_answer_reads_shared_only_once_it_is_posted(chat, monkeypatch):
-    from routes.people import _post_summary
+def test_the_summary_is_a_scrubbed_draft_only_the_asker_sees(chat, monkeypatch):
+    from routes.people import _post_summary, thread
 
     monkeypatch.setattr("llm.client.complete", lambda model, system, user, max_tokens: "It covers the login fix, see https://x.io/pr/4, mail ann@corp.com.")
     held = chat.add("private answer", share="sharing", bot="bot", withheld="github")
     run(_post_summary(held.id))
     chat.db.expire_all()
-    posted = chat.db.query(DirectMessage).filter(DirectMessage.id != held.id).one()
-    assert posted.content == "It covers the login fix, see [link], mail [email]." and posted.share == "" and posted.bot_id == "bot"
-    assert chat.db.get(DirectMessage, held.id).share == "shared"
+    draft = chat.db.query(DirectMessage).filter(DirectMessage.id != held.id).one()
+    assert draft.content == "It covers the login fix, see [link], mail [email]." and draft.share == "draft" and draft.bot_id == "bot"
+    assert chat.db.get(DirectMessage, held.id).share == "drafted"
+    assert thread("a", chat.b, chat.project, chat.db)["messages"] == []  # nothing has reached the other person
+
+
+def test_sending_the_draft_posts_exactly_what_the_asker_read_and_dropping_it_refuses(chat):
+    from routes.people import DraftIn, decide_draft, thread
+
+    def drafted(text):
+        original = chat.add("private answer", share="drafted", bot="bot", withheld="github")
+        return original, chat.add(text, share="draft", bot="bot", action=f'{{"of": {original.id}}}')
+
+    original, draft = drafted("The login fix is in review.")
+    with pytest.raises(HTTPException) as err:
+        run(decide_draft("a", draft.id, DraftIn(send=True), chat.b, chat.project, chat.db))
+    assert err.value.status_code == 404  # the other person cannot send or even see it
+    assert run(decide_draft("b", draft.id, DraftIn(send=True), chat.a, chat.project, chat.db))["share"] == "sent"
+    chat.db.expire_all()
+    assert chat.db.get(DirectMessage, original.id).share == "shared"
+    assert [m["content"] for m in thread("a", chat.b, chat.project, chat.db)["messages"]] == ["The login fix is in review."]
+    with pytest.raises(HTTPException) as err:
+        run(decide_draft("b", draft.id, DraftIn(send=False), chat.a, chat.project, chat.db))
+    assert err.value.status_code == 409
+
+    original, draft = drafted("Another summary.")
+    assert run(decide_draft("b", draft.id, DraftIn(send=False), chat.a, chat.project, chat.db))["share"] == "dropped"
+    chat.db.expire_all()
+    assert chat.db.get(DirectMessage, original.id).share == "declined"
+    told = [m["content"] for m in thread("a", chat.b, chat.project, chat.db)["messages"]]
+    assert told[-1] == "Sorry, you don't have access to this." and "Another summary." not in told
 
 
 def test_a_summary_that_fails_goes_back_to_pending_and_tells_the_other_person_nothing(chat, monkeypatch):
@@ -385,12 +413,14 @@ def test_a_follow_up_inherits_the_last_restricted_answer_in_its_thread_only(chat
     assert _carried(chat.db, "p", "a", "zzz") == []
 
 
-def test_a_declined_answer_and_a_private_chat_do_not_keep_a_thread_restricted(chat):
+def test_a_declined_answer_and_a_private_chat_do_not_keep_a_thread_restricted_but_a_mailbox_does(chat):
     from routes.people import _carried
 
     chat.add("raw", share="declined", bot="bot", withheld="github")
     chat.add("raw", share="shared", bot="bot", withheld="private chats")
     assert _carried(chat.db, "p", "a", "b") == []
+    chat.add("raw mailbox answer", share="shared", bot="bot", withheld="gmail")
+    assert _carried(chat.db, "p", "a", "b") == ["gmail"]  # a follow-up could restate it; the mailbox is then blocked for every reader (see test_mailbox_and_private_chats_are_never_open_to_a_reader)
 
 
 # ── bots keep the team's knowledge, but a shared reply carries no names ──
@@ -557,3 +587,21 @@ def test_a_write_that_fails_goes_back_to_proceed_and_only_the_asker_hears_why(ch
     assert thread("a", chat.b, chat.project, chat.db)["messages"] == []
     mine = [m["content"] for m in thread("b", chat.a, chat.project, chat.db)["messages"]]
     assert len(mine) == 2 and "Jira said no for [email]" in mine[1]
+
+
+def test_the_proceed_card_shows_the_whole_call_even_when_it_is_long():
+    from tools.writes import describe
+
+    args = {"body": "x" * 5000, "subject": "Plan", "to": "outsider@elsewhere.io", "cc": "boss@corp.com"}  # the recipient comes after a long field
+    card = describe("gmail_send_message", args)
+    assert "outsider@elsewhere.io" in card and "boss@corp.com" in card and "x" * 5000 in card
+    assert card.splitlines()[0] == "Send message to outsider@elsewhere.io"
+    jira = describe("createJiraIssue", {"projectKey": "NURN", "summary": "Add login", "description": "d" * 3000, "labels": ["late-field"]})
+    assert "d" * 3000 in jira and "late-field" in jira and "~~~json" in jira
+
+
+def test_the_card_fence_cannot_be_closed_early_by_the_call_itself():
+    from tools.writes import describe
+
+    card = describe("gmail_send_message", {"body": "~~~\nnot a fence"})
+    assert card.count("~~~~") >= 2  # a longer fence than any run of tildes inside
