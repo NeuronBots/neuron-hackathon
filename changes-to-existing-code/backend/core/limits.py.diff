@@ -1,0 +1,15 @@
+diff --git a/backend/core/limits.py b/backend/core/limits.py
+index ba6770d..c3ce4d5 100644
+--- a/backend/core/limits.py
++++ b/backend/core/limits.py
+@@ -5,0 +6 @@ from sqlalchemy import func
++from core.tiers import TIERS
+@@ -123 +124 @@ def over_limit(user_id: str, project_id: str | None = None) -> str:
+-FREE_FALLBACK = "claude-sonnet-5-5"
++FREE_FALLBACK = TIERS["WORKHORSE"]
+@@ -135 +136 @@ def free_model_ok(model: str) -> bool:
+-    """The Free plan runs Haiku and Sonnet only."""
++    """The Free plan runs the Fast and Workhorse tiers only (and Haiku and Sonnet ids saved before the tiers)."""
+@@ -137 +138 @@ def free_model_ok(model: str) -> bool:
+-    return "haiku" in low or "sonnet" in low
++    return low in (TIERS["FAST"], TIERS["WORKHORSE"]) or "haiku" in low or "sonnet" in low

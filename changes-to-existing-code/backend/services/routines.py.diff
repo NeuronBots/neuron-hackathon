@@ -1,0 +1,9 @@
+diff --git a/backend/services/routines.py b/backend/services/routines.py
+index d8e45eb..15ed013 100644
+--- a/backend/services/routines.py
++++ b/backend/services/routines.py
+@@ -14,0 +15 @@ from core import presence
++from core.tiers import TIERS
+@@ -188 +189 @@ def _probe() -> bool:
+-                       json={"model": "claude-haiku-5-5", "max_tokens": 5, "messages": [{"role": "user", "content": "hi"}]})
++                       json={"model": TIERS["FAST"], "max_tokens": 5, "messages": [{"role": "user", "content": "hi"}]})

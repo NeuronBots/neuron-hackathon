@@ -1,13 +1,83 @@
 diff --git a/backend/tests/test_model_proxy.py b/backend/tests/test_model_proxy.py
-index bbd7a86..a9e296c 100644
+index bbd7a86..de98315 100644
 --- a/backend/tests/test_model_proxy.py
 +++ b/backend/tests/test_model_proxy.py
-@@ -28 +28 @@ orr, real, shown = mp.prepare(body, mp._PROVIDERS["openrouter"])
+@@ -1 +1,2 @@
+-"""The model proxy maps Claude ids to the chosen provider and names itself correctly to the caller. Run: .venv/bin/python tests/test_model_proxy.py"""
++"""The model proxy maps Claude ids to the chosen provider and names itself correctly to the caller. Run: .venv/bin/python -m pytest tests/test_model_proxy.py"""
++import copy
+@@ -8 +9 @@ from routes import model_proxy as mp
+-body = {
++BODY = {
+@@ -14,4 +14,0 @@ body = {
+-deep, real, shown = mp.prepare(body, mp._PROVIDERS["deepseek"])
+-assert (real, shown) == ("deepseek-v4-pro", "claude-opus-5-5") and deep["model"] == real
+-assert "output_config" not in deep, "no effort is sent unless DEEPSEEK_EFFORT_* is set"
+-assert "Never say you are DeepSeek" in deep["system"][0]["text"] and deep["system"][1] == {"type": "text", "text": "Be brief."}
+@@ -19,2 +16,2 @@ assert "Never say you are DeepSeek" in deep["system"][0]["text"] and deep["syste
+-assert mp.prepare({**body, "model": "claude-haiku-5-5"}, mp._PROVIDERS["deepseek"])[1] == "deepseek-flash"
+-assert mp.prepare({**body, "model": "something-else"}, mp._PROVIDERS["deepseek"])[1] == "deepseek-flash", "unknown ids fall back to the sonnet tier"
++def prep(provider: str, model: str = "claude-opus-5-5"):
++    return mp.prepare({**copy.deepcopy(BODY), "model": model}, mp._PROVIDERS[provider])
+@@ -22,4 +18,0 @@ assert mp.prepare({**body, "model": "something-else"}, mp._PROVIDERS["deepseek"]
+-step, real, _ = mp.prepare(body, mp._PROVIDERS["stepfun"])  # StepFun keeps its behaviour: effort is set
+-assert real == "step-5-preview" and step["output_config"] == {"effort": "medium"}
+-assert "StepFun" in step["system"][0]["text"]
+-print("ok")
+@@ -27,4 +20,52 @@ print("ok")
+-orr, real, shown = mp.prepare(body, mp._PROVIDERS["openrouter"])
 -assert orr["model"] == real and "/" in real and orr["system"][0]["text"].startswith("You are Claude")
-+assert orr["model"] == real and "/" in real and orr["system"][0]["text"].startswith("You are Neuron")
-@@ -30,0 +31,5 @@ print("openrouter ok")
+-assert mp._PROVIDERS["openrouter"]["url"].endswith("/api/v1/messages")
+-print("openrouter ok")
++def test_openrouter():
++    orr, real, _ = prep("openrouter")
++    assert orr["model"] == real and "/" in real
++    assert "output_config" not in orr, "no effort is sent unless OPENROUTER_EFFORT_* is set"
++    assert mp._PROVIDERS["openrouter"]["url"].endswith("/api/v1/messages")
 +
-+meta = mp._PROVIDERS["meta"]
-+assert [mp.prepare({**body, "model": f"claude-{m}"}, meta)[1] for m in ("opus-5-5", "sonnet-5-5", "haiku-5-5", "fable-5-1")] == ["muse-spark-1.3"] * 3 + ["muse-wonder-1.0"]
-+assert "Never say you are Spark, Wonder" in mp.prepare(body, meta)[0]["system"][0]["text"]
-+print("meta ok")
++
++def test_meta():
++    meta = mp._PROVIDERS["meta"]
++    assert meta["url"].endswith("/messages") and meta["key_env"] == "META_API_KEY"
++    got = [prep("meta", t) for t in mp.TIERS]  # callers may ask for a tier by name
++    assert [r for _, r, _ in got] == ["muse-spark-1.3"] * 3 + ["muse-wonder-1.0"]
++    assert [b.get("output_config", {}).get("effort") for b, _, _ in got] == ["low", "medium", "high", "high"]
++    assert [prep("meta", f"claude-{m}")[1] for m in ("haiku-5-5", "sonnet-5-5", "opus-5-5", "fable-5-1")] == [r for _, r, _ in got], "Claude ids land on the same tiers"
++    assert prep("meta", "something-else")[1] == "muse-spark-1.3", "unknown ids fall back to the workhorse tier"
++
++
++def test_every_provider_fills_every_tier():
++    for name, prov in mp._PROVIDERS.items():
++        assert set(prov["models"]) == set(prov["effort"]) == set(mp.TIERS), name
++        assert all(prov["models"].values()), name
++
++
++def test_legacy_env_names_still_work(monkeypatch):
++    monkeypatch.setenv("OPENROUTER_MODEL_OPUS", "old-opus")
++    monkeypatch.setenv("OPENROUTER_MODEL_JUDGEMENT", "new-judgement")
++    assert mp._tiers("OPENROUTER", dict.fromkeys(mp.TIERS, "d"))["judgement"] == "new-judgement", "the tier name wins"
++    monkeypatch.delenv("OPENROUTER_MODEL_JUDGEMENT")
++    assert mp._tiers("OPENROUTER", dict.fromkeys(mp.TIERS, "d"))["judgement"] == "old-opus"
++
++
++def test_identity_for_every_provider():
++    for name, prov in mp._PROVIDERS.items():
++        text = prep(name)[0]["system"][0]["text"]
++        assert text == (
++            "You are Neuron, an AI model. If asked who or what model you are, say you are Neuron. "
++            f"Never say you are {prov['never']}."
++        ), name
++        assert "Claude" not in text, name
++
++
++def test_prepare_does_not_mutate_the_caller_body():
++    body = copy.deepcopy(BODY)
++    mp.prepare(body, mp._PROVIDERS["meta"])
++    assert body == BODY
++
++
++if __name__ == "__main__":
++    for name, fn in list(globals().items()):
++        if name.startswith("test_"):
++            fn()
++            print(name, "ok")

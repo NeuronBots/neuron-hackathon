@@ -1,0 +1,12 @@
+diff --git a/backend/routes/projects.py b/backend/routes/projects.py
+index 4e0eac0..89127ac 100644
+--- a/backend/routes/projects.py
++++ b/backend/routes/projects.py
+@@ -17,0 +18 @@ from services.project_setup import parse_repo, scan_repo, search_repos, suggest_
++from core.tiers import TIERS
+@@ -219 +220 @@ def create_project(body: ProjectBody, user: User = Depends(get_current_user), db
+-        model="claude-opus-5-5",
++        model=TIERS["JUDGEMENT"],
+@@ -245 +246 @@ def create_project(body: ProjectBody, user: User = Depends(get_current_user), db
+-            model="claude-opus-5-5",
++            model=TIERS["JUDGEMENT"],

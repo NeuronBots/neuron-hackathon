@@ -1,0 +1,19 @@
+diff --git a/backend/llm/config.py b/backend/llm/config.py
+index 8252552..272a6b8 100644
+--- a/backend/llm/config.py
++++ b/backend/llm/config.py
+@@ -6,0 +7,2 @@ from dotenv import load_dotenv
++from core.tiers import TIERS
++
+@@ -16 +18 @@ ANTHROPIC_BASE = os.getenv("API_BASE_URL", "https://api.anthropic.com/v1").rstri
+-ASK_MODEL = os.getenv("ASK_MODEL", "claude-haiku-5-5").strip()
++ASK_MODEL = os.getenv("ASK_MODEL", TIERS["FAST"]).strip()
+@@ -23 +25 @@ CHAT_MAX_TOKENS = 16000  # long reports are written inside a create_document cal
+-CHAT_MODEL = os.getenv("CHAT_MODEL", "claude-sonnet-5-5").strip()
++CHAT_MODEL = os.getenv("CHAT_MODEL", TIERS["WORKHORSE"]).strip()
+@@ -27 +29 @@ CHAT_MODEL = os.getenv("CHAT_MODEL", "claude-sonnet-5-5").strip()
+-ROUTER_MODEL = os.getenv("ROUTER_MODEL", "claude-haiku-5-5").strip()  # empty turns routing off
++ROUTER_MODEL = os.getenv("ROUTER_MODEL", TIERS["FAST"]).strip()  # empty turns routing off
+@@ -32 +34 @@ ROUTER_MODEL = os.getenv("ROUTER_MODEL", "claude-haiku-5-5").strip()  # empty tu
+-# Per-tool models, as JSON in TOOL_MODELS: {"ask_teammate": "claude-haiku-5-5"}. Keys are tool names or fnmatch patterns.
++# Per-tool models, as JSON in TOOL_MODELS: {"ask_teammate": "fast"}. Keys are tool names or fnmatch patterns.

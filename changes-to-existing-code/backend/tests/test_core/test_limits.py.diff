@@ -1,0 +1,7 @@
+diff --git a/backend/tests/test_core/test_limits.py b/backend/tests/test_core/test_limits.py
+index b3c6fa3..c31244f 100644
+--- a/backend/tests/test_core/test_limits.py
++++ b/backend/tests/test_core/test_limits.py
+@@ -163 +163 @@ def test_week_start_is_monday_midnight(now, monday):
+-    ("claude-haiku-5-5", True), ("claude-sonnet-5-5", True), ("Claude-Sonnet-5-5", True),
++    ("fast", True), ("workhorse", True), ("judgement", False), ("reasoning", False), ("claude-haiku-5-5", True), ("claude-sonnet-5-5", True), ("Claude-Sonnet-5-5", True),

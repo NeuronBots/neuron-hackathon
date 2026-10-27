@@ -1,0 +1,10 @@
+diff --git a/backend/tests/test_core/test_small_modules.py b/backend/tests/test_core/test_small_modules.py
+index dc3d833..667cac4 100644
+--- a/backend/tests/test_core/test_small_modules.py
++++ b/backend/tests/test_core/test_small_modules.py
+@@ -23 +23 @@ def test_each_tier_names_a_distinct_model():
+-@pytest.mark.parametrize("model,tier", [("claude-haiku-5-5", "FAST"), ("claude-opus-5-5", "JUDGEMENT"), ("gpt-4", None), ("", None), (None, None)])
++@pytest.mark.parametrize("model,tier", [("fast", "FAST"), ("reasoning", "REASONING"), ("claude-haiku-5-5", "FAST"), ("claude-opus-5-5", "JUDGEMENT"), ("gpt-4", None), ("", None), (None, None)])
+@@ -114 +114 @@ def test_agent_create_defaults_and_limits():
+-    assert agent.model == "claude-sonnet-5-5" and agent.is_master is False and agent.parent_id is None
++    assert agent.model == "workhorse" and agent.is_master is False and agent.parent_id is None

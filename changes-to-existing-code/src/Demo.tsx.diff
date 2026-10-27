@@ -1,0 +1,7 @@
+diff --git a/src/Demo.tsx b/src/Demo.tsx
+index d1a98f0..ae2018b 100644
+--- a/src/Demo.tsx
++++ b/src/Demo.tsx
+@@ -244 +244 @@ const bot = (id: string, name: string, label: string, is_master = false): AgentR
+-  id, name, label, is_master, field: "", system_prompt: "", model: "claude-sonnet-5-5", parent_id: null, created_at: "",
++  id, name, label, is_master, field: "", system_prompt: "", model: "workhorse", parent_id: null, created_at: "",

@@ -1,0 +1,9 @@
+diff --git a/backend/services/goals.py b/backend/services/goals.py
+index 8a1111c..05ce5c4 100644
+--- a/backend/services/goals.py
++++ b/backend/services/goals.py
+@@ -14,0 +15 @@ from core.models import Agent, Message, Project, Task
++from core.tiers import TIERS
+@@ -16 +17 @@ from core.models import Agent, Message, Project, Task
+-GOALS_MODEL = os.getenv("GOALS_MODEL", "claude-sonnet-5-5").strip()
++GOALS_MODEL = os.getenv("GOALS_MODEL", TIERS["WORKHORSE"]).strip()

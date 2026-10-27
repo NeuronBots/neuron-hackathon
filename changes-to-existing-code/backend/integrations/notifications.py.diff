@@ -1,7 +1,14 @@
 diff --git a/backend/integrations/notifications.py b/backend/integrations/notifications.py
-index d3110e1..69da5a2 100644
+index d3110e1..5b93046 100644
 --- a/backend/integrations/notifications.py
 +++ b/backend/integrations/notifications.py
-@@ -12 +12 @@ KEYS = Path(__file__).resolve().parents[2] / "data" / "vapid.json"
+@@ -5,0 +6 @@ import json
++import logging
+@@ -12 +13,3 @@ KEYS = Path(__file__).resolve().parents[2] / "data" / "vapid.json"
 -SUBJECT = os.getenv("VAPID_SUBJECT", "mailto:admin@example.com")
-+SUBJECT = os.getenv("VAPID_SUBJECT", "mailto:admin@example.com")  # placeholder: set VAPID_SUBJECT to a real contact (mailto: or https: URL)
++SUBJECT = os.getenv("VAPID_SUBJECT") or None  # a real contact (mailto: or https: URL) that push services can reach; push is off without it
++if not SUBJECT:
++    logging.getLogger(__name__).warning("VAPID_SUBJECT is not set: web push notifications are disabled")
+@@ -66 +69 @@ def notify(user_ids: list[str], title: str, body: str, url: str = "/") -> None:
+-    if not user_ids:
++    if not user_ids or not SUBJECT:

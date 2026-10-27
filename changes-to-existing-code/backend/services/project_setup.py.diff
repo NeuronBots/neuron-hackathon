@@ -1,0 +1,12 @@
+diff --git a/backend/services/project_setup.py b/backend/services/project_setup.py
+index 690ccc8..aca3a87 100644
+--- a/backend/services/project_setup.py
++++ b/backend/services/project_setup.py
+@@ -9,0 +10 @@ from integrations.github_mcp import call_tool, is_enabled
++from core.tiers import TIERS
+@@ -191 +192 @@ async def _ask(system: str, user: str, max_tokens: int, phase: str) -> dict:
+-            "claude-sonnet-5-5",
++            TIERS["WORKHORSE"],
+@@ -198 +199 @@ async def _ask(system: str, user: str, max_tokens: int, phase: str) -> dict:
+-        log_span(phase, started, model="claude-sonnet-5-5")
++        log_span(phase, started, model=TIERS["WORKHORSE"])

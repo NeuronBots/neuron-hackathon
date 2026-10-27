@@ -1,0 +1,9 @@
+diff --git a/backend/services/voice.py b/backend/services/voice.py
+index 9caf295..525a8f2 100644
+--- a/backend/services/voice.py
++++ b/backend/services/voice.py
+@@ -11,0 +12 @@ from core.models import Agent
++from core.tiers import TIERS
+@@ -61 +62 @@ def session_config(agent: Agent, user_name: str) -> dict:
+-        "llm": "claude-haiku-4-5" if "haiku" in (agent.model or "") else "claude-sonnet-5-5",
++        "llm": "claude-haiku-4-5" if agent.model == TIERS["FAST"] or "haiku" in (agent.model or "") else "claude-sonnet-5-5",

@@ -1,0 +1,10 @@
+diff --git a/src/models.ts b/src/models.ts
+index 37ddce8..6fab75a 100644
+--- a/src/models.ts
++++ b/src/models.ts
+@@ -1,0 +2,5 @@ export const MODELS = [
++  { id: "fast", label: "Fast" },
++  { id: "workhorse", label: "Workhorse" },
++  { id: "judgement", label: "Judgement" },
++  { id: "reasoning", label: "Reasoning" },
++  // saved on bots before the tiers

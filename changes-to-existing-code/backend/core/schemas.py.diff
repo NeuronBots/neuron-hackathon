@@ -1,0 +1,7 @@
+diff --git a/backend/core/schemas.py b/backend/core/schemas.py
+index 35ff848..2662ddb 100644
+--- a/backend/core/schemas.py
++++ b/backend/core/schemas.py
+@@ -9 +9 @@ class AgentCreate(BaseModel):
+-    model: str = Field(default="claude-sonnet-5-5", max_length=120)
++    model: str = Field(default="workhorse", max_length=120)

@@ -1,0 +1,12 @@
+diff --git a/backend/routes/tasks.py b/backend/routes/tasks.py
+index 91c150a..5d91daf 100644
+--- a/backend/routes/tasks.py
++++ b/backend/routes/tasks.py
+@@ -18,0 +19 @@ from pydantic import BaseModel, Field
++from core.tiers import TIERS
+@@ -148 +149 @@ def _compile_answers(items: list[tuple[Task, str, str]]) -> dict[str, str]:
+-        raw = complete(ASK_MODEL or "claude-haiku-5-5", system, listing, 2048)
++        raw = complete(ASK_MODEL or TIERS["FAST"], system, listing, 2048)
+@@ -180 +181 @@ def _group_pending(items: list[tuple[Task, str]]) -> list[dict]:
+-        raw = complete(ASK_MODEL or "claude-haiku-5-5", system, listing, 8000)
++        raw = complete(ASK_MODEL or TIERS["FAST"], system, listing, 8000)
