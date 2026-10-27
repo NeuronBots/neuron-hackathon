@@ -1,0 +1,7 @@
+diff --git a/backend/integrations/notifications.py b/backend/integrations/notifications.py
+index d3110e1..69da5a2 100644
+--- a/backend/integrations/notifications.py
++++ b/backend/integrations/notifications.py
+@@ -12 +12 @@ KEYS = Path(__file__).resolve().parents[2] / "data" / "vapid.json"
+-SUBJECT = os.getenv("VAPID_SUBJECT", "mailto:admin@example.com")
++SUBJECT = os.getenv("VAPID_SUBJECT", "mailto:admin@example.com")  # placeholder: set VAPID_SUBJECT to a real contact (mailto: or https: URL)
