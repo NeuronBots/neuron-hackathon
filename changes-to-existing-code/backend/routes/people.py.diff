@@ -1,0 +1,105 @@
+diff --git a/backend/routes/people.py b/backend/routes/people.py
+index 57c04cf..1e48cf2 100644
+--- a/backend/routes/people.py
++++ b/backend/routes/people.py
+@@ -12,0 +13 @@ from sqlalchemy.orm import Session
++from core.audience import blocked, reset_audience, set_audience, withheld
+@@ -31 +32,2 @@ def _read(row: DirectMessage) -> dict:
+-            "reactions": json.loads(row.reactions or "{}"), "reply_to": row.reply_to}
++            "reactions": json.loads(row.reactions or "{}"), "reply_to": row.reply_to,
++            "withheld": [p for p in row.withheld.split(",") if p], "share": row.share}
+@@ -135,0 +138,6 @@ def _mentioned(text: str, project_id: str, db: Session) -> list[Agent]:
++def _carried(db: Session, project_id: str, a: str, b: str) -> list[str]:
++    """Providers behind a restricted answer in the last few messages of this chat. A follow-up can lean on what the bot learned then without calling a tool."""
++    rows = db.query(DirectMessage.withheld).filter(_between(project_id, a, b)).order_by(DirectMessage.id.desc()).limit(8).all()
++    return sorted({p for (w,) in rows for p in w.split(",") if p})
++
++
+@@ -144 +152,2 @@ async def _bot_answers(project_id: str, asker_id: str, other_id: str, bot_id: st
+-    reply = ""
++    audience = set_audience([other_id], f"{project_id}:{':'.join(sorted((asker_id, other_id)))}")
++    reply, hidden = "", []
+@@ -148 +157 @@ async def _bot_answers(project_id: str, asker_id: str, other_id: str, bot_id: st
+-            db.query(DirectMessage).filter(_between(project_id, asker_id, other_id), _same_thread(reply_to))
++            db.query(DirectMessage).filter(_between(project_id, asker_id, other_id), _same_thread(reply_to), DirectMessage.share == "")
+@@ -165,0 +175,3 @@ async def _bot_answers(project_id: str, asker_id: str, other_id: str, bot_id: st
++        hidden = withheld()
++        if not hidden:  # asking again: no tool ran, but the answer may repeat what the last restricted one held
++            hidden = [p for p in _carried(db, project_id, asker_id, other_id) if await blocked(p, project.repo)]
+@@ -168,0 +181 @@ async def _bot_answers(project_id: str, asker_id: str, other_id: str, bot_id: st
++        reset_audience(audience)
+@@ -175 +188 @@ async def _bot_answers(project_id: str, asker_id: str, other_id: str, bot_id: st
+-            own.add(DirectMessage(project_id=project_id, sender_id=asker_id, recipient_id=other_id, bot_id=bot_id, reply_to=reply_to, content=reply.strip()))
++            own.add(DirectMessage(project_id=project_id, sender_id=asker_id, recipient_id=other_id, bot_id=bot_id, reply_to=reply_to, content=reply.strip(), withheld=",".join(hidden), share="pending" if hidden else ""))
+@@ -187,0 +201,5 @@ def _same_thread(root: int | None):
++def _seen_by(user_id: str):
++    """An answer waiting on its asker's decision, or one they kept private, is shown to the asker only."""
++    return or_(DirectMessage.share == "", DirectMessage.sender_id == user_id)
++
++
+@@ -203 +221 @@ def latest_per_person(user: User = Depends(get_current_user), project: Project =
+-        .filter(DirectMessage.project_id == project.id, or_(DirectMessage.sender_id == user.id, DirectMessage.recipient_id == user.id))
++        .filter(DirectMessage.project_id == project.id, or_(DirectMessage.sender_id == user.id, DirectMessage.recipient_id == user.id), _seen_by(user.id))
+@@ -230 +248 @@ def unread_counts(body: SeenIn, user: User = Depends(get_current_user), project:
+-                    or_(DirectMessage.sender_id == user.id, DirectMessage.recipient_id == user.id),
++                    or_(DirectMessage.sender_id == user.id, DirectMessage.recipient_id == user.id), _seen_by(user.id),
+@@ -279 +297 @@ def thread(other_id: str, user: User = Depends(get_current_user), project: Proje
+-        db.query(DirectMessage).filter(_between(project.id, user.id, other.id))
++        db.query(DirectMessage).filter(_between(project.id, user.id, other.id), _seen_by(user.id))
+@@ -335,0 +354,56 @@ def react(other_id: str, message_id: int, body: ReactIn, user: User = Depends(ge
++class ShareIn(BaseModel):
++    share: bool
++
++
++SORRY = "Sorry, you don't have access to this."
++_SUMMARY_SYSTEM = (
++    "You write a short note for {name}, who cannot access the source of the text below ({sources}). "
++    "Give the gist in two or three plain sentences: what it is about and where it stands. "
++    "Do not quote it. Leave out ids, links, email addresses, names of private items, code and file contents."
++)
++
++
++async def _post_summary(project_id: str, asker_id: str, other_id: str, bot_id: str, reply_to: int | None, source: str, providers: str) -> None:
++    """Write the summary of a bot answer for the person who cannot open its source, and post it to the chat."""
++    from llm.client import complete
++    from llm.config import ASK_MODEL, CHAT_MODEL
++
++    key = (project_id, asker_id, other_id, bot_id)
++    typing_store.add_bot_typing(key)
++    token = set_usage_user(asker_id, project_id)
++    db = SessionLocal()
++    try:
++        other = db.get(User, other_id)
++        sources = ", ".join(p.capitalize() for p in providers.split(",") if p) or "a private source"
++        try:
++            text = await asyncio.to_thread(complete, ASK_MODEL or CHAT_MODEL, _SUMMARY_SYSTEM.format(name=other.name, sources=sources), source, 1500)  # the fast tier; the default one can spend the whole budget thinking and return no text
++        except Exception as exc:
++            print("summary failed:", type(exc).__name__, exc)
++            text = ""
++        db.add(DirectMessage(project_id=project_id, sender_id=asker_id, recipient_id=other_id, bot_id=bot_id, reply_to=reply_to,
++                             content=text or "I couldn't write a summary of that."))
++        db.commit()
++    finally:
++        reset_usage_user(token)
++        db.close()
++        typing_store.remove_bot_typing(key)
++
++
++@router.post("/api/direct/{other_id}/{message_id}/share")
++async def decide_share(other_id: str, message_id: int, body: ShareIn, user: User = Depends(get_current_user), project: Project = Depends(get_project), db: Session = Depends(get_db)):
++    """The asker's answer to "share this with them?". Yes sends a summary; no tells the other person they have no access."""
++    other = _other(other_id, user, project, db)
++    row = db.query(DirectMessage).filter(DirectMessage.id == message_id, _between(project.id, user.id, other.id)).with_for_update().first()
++    if row is None or row.sender_id != user.id or not row.bot_id:
++        raise HTTPException(status_code=404, detail="No such message")
++    if row.share != "pending":
++        raise HTTPException(status_code=409, detail="Already decided")
++    row.share = "shared" if body.share else "declined"
++    if not body.share:
++        db.add(DirectMessage(project_id=project.id, sender_id=user.id, recipient_id=other.id, bot_id=row.bot_id, reply_to=row.reply_to, content=SORRY))
++    db.commit()
++    if body.share:
++        runs.spawn(_post_summary(project.id, user.id, other.id, row.bot_id, row.reply_to, row.content, row.withheld))
++    return _read(row)
++
++

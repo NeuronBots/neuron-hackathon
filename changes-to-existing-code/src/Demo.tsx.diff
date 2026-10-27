@@ -1,7 +1,13 @@
 diff --git a/src/Demo.tsx b/src/Demo.tsx
-index d1a98f0..9eb6d92 100644
+index d1a98f0..d30e24e 100644
 --- a/src/Demo.tsx
 +++ b/src/Demo.tsx
 @@ -244 +244 @@ const bot = (id: string, name: string, label: string, is_master = false): AgentR
 -  id, name, label, is_master, field: "", system_prompt: "", model: "claude-sonnet-5-5", parent_id: null, created_at: "",
 +  id, name, label, is_master, field: "", system_prompt: "", parent_id: null, created_at: "",
+@@ -375 +375 @@ function ChatScene({ onLive, ready = true }: { onLive: () => void; ready?: boole
+-        onSelectAgent={(id) => { setSelected(id); setPeer(null) }} onCreateBot={async () => {}} onDeleteAgent={nothing} onOpenProfile={nothing}
++        onSelectAgent={(id) => { setSelected(id); setPeer(null) }} onCreateBot={async () => {}} onDeleteAgent={nothing} onOpenProfile={nothing} onOpenBoard={() => setBoardOpen(true)}
+@@ -389 +389 @@ function ChatScene({ onLive, ready = true }: { onLive: () => void; ready?: boole
+-        onClearMemory={nothing} onOpenProfile={nothing} onOpenBoard={() => setBoardOpen(true)} statusMsg=""
++        onClearMemory={nothing} onOpenProfile={nothing} statusMsg=""

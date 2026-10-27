@@ -1,0 +1,9 @@
+diff --git a/backend/core/database.py b/backend/core/database.py
+index 20e3807..3ccb720 100644
+--- a/backend/core/database.py
++++ b/backend/core/database.py
+@@ -112,0 +113,4 @@ def migrate() -> None:
++        if "direct_messages" in existing and "withheld" not in {c["name"] for c in insp.get_columns("direct_messages")}:
++            conn.execute(text("ALTER TABLE direct_messages ADD COLUMN withheld VARCHAR(60) NOT NULL DEFAULT ''"))
++        if "direct_messages" in existing and "share" not in {c["name"] for c in insp.get_columns("direct_messages")}:
++            conn.execute(text("ALTER TABLE direct_messages ADD COLUMN share VARCHAR(10) NOT NULL DEFAULT ''"))

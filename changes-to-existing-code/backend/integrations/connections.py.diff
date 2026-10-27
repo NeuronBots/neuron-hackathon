@@ -1,0 +1,34 @@
+diff --git a/backend/integrations/connections.py b/backend/integrations/connections.py
+index 6f4dd69..c004152 100644
+--- a/backend/integrations/connections.py
++++ b/backend/integrations/connections.py
+@@ -5,0 +6 @@ env-var credentials until they connect their own; everyone else must connect.
++import asyncio
+@@ -172,0 +174,27 @@ def _stored(user_id: str, provider: str) -> tuple[dict, float] | None:
++class MissingToken(RuntimeError):
++    """The requester has not connected this account."""
++
++
++async def require(provider: str) -> None:
++    """The credential broker for shared chats. A tool call there runs as the person who asked, with their own connection only.
++    No env or admin fallback: a missing connection fails closed and names the connector. Outside a shared chat the legacy fallback still applies."""
++    from core import audience
++    from core.database import SessionLocal
++    from core.models import User
++
++    who = audience.requester()
++    if who is None:
++        return
++    if current_user() != who.user_id:  # token lookups key on the current user, so a drifted identity must never reach one
++        raise MissingToken(f"{PROVIDERS[provider]['name']} call refused: the call is not running as the person who asked.")
++    if await asyncio.to_thread(_stored, who.user_id, provider) is not None:
++        return
++    db = SessionLocal()
++    try:
++        user = db.get(User, who.user_id)
++    finally:
++        db.close()
++    raise MissingToken(f"{PROVIDERS[provider]['name']} is not connected for {user.name if user else 'the person who asked'}. "
++                       "Shared chats never use a server credential. Ask them to connect it in Settings. Do not retry.")
++
++

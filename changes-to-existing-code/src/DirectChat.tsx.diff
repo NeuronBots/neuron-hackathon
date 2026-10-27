@@ -1,0 +1,111 @@
+diff --git a/src/DirectChat.tsx b/src/DirectChat.tsx
+index dd14d0b..b19cc46 100644
+--- a/src/DirectChat.tsx
++++ b/src/DirectChat.tsx
+@@ -4 +4 @@ import remarkGfm from "remark-gfm"
+-import { fetchDirect, reactDirect, sendDirect, sendDirectTyping, type DirectMessage, type TypingParticipant } from "./api"
++import { fetchDirect, reactDirect, sendDirect, shareDirect, sendDirectTyping, type DirectMessage, type TypingParticipant } from "./api"
+@@ -205 +205 @@ export function DirectChat({ meId, person, bots, onSeen, onOpenTeam, teamOpen }:
+-  }, [messages, thread])
++  }, [messages, thread, typingParticipants.length])
+@@ -218,0 +219,8 @@ export function DirectChat({ meId, person, bots, onSeen, onOpenTeam, teamOpen }:
++  const sources = (m: DirectMessage) => (m.withheld ?? []).map((w) => w[0].toUpperCase() + w.slice(1)).join(" and ") || "this"
++  function decide(m: DirectMessage, share: boolean) {
++    setMessages((cur) => cur.map((x) => (x.id === m.id ? { ...x, share: share ? "shared" : "declined" } : x)))  // answer at once; the server confirms
++    shareDirect(person.id, m.id, share)
++      .then((row) => { changedAt.current = Date.now(); setMessages((cur) => cur.map((x) => (x.id === row.id ? row : x))) })
++      .catch(() => { setError("Could not send your choice."); setMessages((cur) => cur.map((x) => (x.id === m.id ? { ...x, share: "pending" } : x))) })
++  }
++
+@@ -280,0 +289,17 @@ export function DirectChat({ meId, person, bots, onSeen, onOpenTeam, teamOpen }:
++    const approval = (
++      <>
++                  {isBot && m.share === "pending" && (
++                    <div className="dm-share" role="group" aria-label={`Share with ${person.name}?`}>
++                      <p className="dm-share-q"><b>{person.name}</b> can't access {sources(m)}. Only you can see this answer. Share a summary with them?</p>
++                      <div className="dm-share-actions">
++                        <button type="button" className="dm-share-no" onClick={() => decide(m, false)}>No</button>
++                        <button type="button" className="dm-share-yes" onClick={() => decide(m, true)}>Yes, share a summary</button>
++                      </div>
++                    </div>
++                  )}
++                  {isBot && (m.share === "shared" || m.share === "declined") && (
++                    <span className="dm-share-done">{m.share === "shared" ? `Summary shared with ${person.name}` : `Not shared. ${person.name} was told they have no access`} · only you see this answer</span>
++                  )}
++      </>
++    )
++    const col = isBot && !!m.share  // the bubble and its approval share one column, so the card is as wide as the bubble
+@@ -291,0 +317 @@ export function DirectChat({ meId, person, bots, onSeen, onOpenTeam, teamOpen }:
++                <div className={col ? "dm-col" : "dm-flat"}>
+@@ -313,0 +340,2 @@ export function DirectChat({ meId, person, bots, onSeen, onOpenTeam, teamOpen }:
++                {approval}
++                </div>
+@@ -432,2 +460,3 @@ export function DirectChat({ meId, person, bots, onSeen, onOpenTeam, teamOpen }:
+-      <div className={thread !== null ? "chat-dock dm-dock-over" : "chat-dock"}>
+-        <div className="chat-sheet">
++      {thread === null && (
++        <div className="chat-dock">
++          <div className="chat-sheet">
+@@ -480,0 +510 @@ export function DirectChat({ meId, person, bots, onSeen, onOpenTeam, teamOpen }:
++          </div>
+@@ -482 +512 @@ export function DirectChat({ meId, person, bots, onSeen, onOpenTeam, teamOpen }:
+-      </div>
++      )}
+@@ -485 +515 @@ export function DirectChat({ meId, person, bots, onSeen, onOpenTeam, teamOpen }:
+-          <div className="dm-thread" ref={threadRef} role="dialog" aria-modal="true" aria-label="Thread" tabIndex={-1} onScroll={track("thread")} onClick={(e) => e.stopPropagation()}>
++          <div className="dm-thread" role="dialog" aria-modal="true" aria-label="Thread" tabIndex={-1} onClick={(e) => e.stopPropagation()}>
+@@ -490 +520,53 @@ export function DirectChat({ meId, person, bots, onSeen, onOpenTeam, teamOpen }:
+-            {messages.filter((m) => rootOf(m) === thread).map((m) => rowOf(m, 1, true))}
++            <div className="dm-thread-body" ref={threadRef} onScroll={track("thread")}>
++              {messages.filter((m) => rootOf(m) === thread).map((m) => rowOf(m, 1, true))}
++              {typingParticipants.length > 0 && typingIndicators}
++            </div>
++            <div className="dm-thread-composer">
++          {error && <div className="chat-status">{error}</div>}
++              <div className="chat-composer">
++                {replyTo && thread === null && (
++                  <div className="dm-replying">
++                    <span>Replying to <b>{bots.find((b) => `bot:${b.id}` === replyTo.from)?.name ?? "bot"}</b>: {replyTo.content.replace(/\s+/g, " ").slice(0, 80)}</span>
++                    <button type="button" aria-label="Cancel reply" onClick={() => setReplyTo(null)}>×</button>
++                  </div>
++                )}
++                {suggestions.length > 0 && (
++                  <div className="mention-list" role="listbox">
++                    {suggestions.map((b, i) => (
++                      <button key={b.id} type="button" role="option" aria-selected={i === hi % suggestions.length}
++                        className={i === hi % suggestions.length ? "on" : ""}
++                        onMouseDown={(e) => { e.preventDefault(); pickBot(b) }}>
++                        <Avatar name={b.name} id={b.id} size={22} /> {b.name}
++                      </button>
++                    ))}
++                  </div>
++                )}
++                <div className="mention-field">
++                  {pinged.map((b) => (
++                      <span key={b.id} className="mention-pill">
++                        <Avatar name={b.name} id={b.id} size={18} /> {b.name}
++                        <button type="button" aria-label={`Remove ${b.name}`} onClick={() => setPinged((cur) => cur.filter((x) => x.id !== b.id))}>×</button>
++                      </span>
++                  ))}
++                <textarea
++                  ref={inputRef}
++                  className="chat-input"
++                  value={input}
++                  onChange={(e) => {
++                    const val = e.target.value
++                    setInput(val)
++                    notifyTyping(val.trim().length > 0)
++                  }}
++                  onKeyDown={handleKey}
++                  placeholder={thread !== null ? "Reply in thread" : pinged.length ? `Ask ${pinged.map((b) => b.name).join(" and ")}` : `Message ${person.name}. Type @BotName to bring a bot in`}
++                  rows={1}
++                />
++                </div>
++                <div className="chat-composer-foot">
++                  <span className="chat-composer-hint">Enter to send</span>
++                  <div className="chat-composer-actions">
++                    <button className="btn btn-primary chat-send" onClick={() => { void send() }} disabled={!input.trim()}>Send</button>
++                  </div>
++                </div>
++              </div>
++            </div>

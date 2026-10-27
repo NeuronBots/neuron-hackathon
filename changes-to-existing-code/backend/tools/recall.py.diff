@@ -1,0 +1,34 @@
+diff --git a/backend/tools/recall.py b/backend/tools/recall.py
+index 67fc3d6..3209694 100644
+--- a/backend/tools/recall.py
++++ b/backend/tools/recall.py
+@@ -14,0 +15 @@ from tools.documents import DOC_DIR, document_url
++from core import audience
+@@ -15,0 +17 @@ from core.models import Agent
++from core.usage import current_user
+@@ -33,0 +36,2 @@ TOOL_DEFS = [{
++PRIVATE_CHATS = "[Lines from 'A teammate' come from a private chat. Use them as background. Do not quote them or say who said what.]"
++
+@@ -37 +41 @@ _CHATS = f"""
+-SELECT 'chat' AS src, m.created_at AS at, COALESCE(NULLIF(m.speaker, ''), CASE WHEN m.role = 'user' THEN 'User' ELSE :me END) AS who,
++SELECT 'chat' AS src, m.user_id AS owner, m.created_at AS at, COALESCE(NULLIF(m.speaker, ''), CASE WHEN m.role = 'user' THEN 'User' ELSE :me END) AS who,
+@@ -40 +44 @@ FROM (
+-    SELECT created_at, role, speaker, content FROM messages WHERE agent_id = :agent
++    SELECT user_id, created_at, role, speaker, content FROM messages WHERE agent_id = :agent
+@@ -42 +46 @@ FROM (
+-    SELECT created_at, role, speaker, content FROM message_archive WHERE agent_id = :agent
++    SELECT user_id, created_at, role, speaker, content FROM message_archive WHERE agent_id = :agent
+@@ -79,0 +84 @@ def run(name: str, args: dict, agent: Agent, db: Session) -> str:
++    asker, readers = current_user(), audience.readers()
+@@ -81,0 +87,2 @@ def run(name: str, args: dict, agent: Agent, db: Session) -> str:
++        if readers and any(r.owner == asker for r in rows):
++            audience.note("private chats")  # the asker's own chats: theirs to share, so the reply waits for their approval
+@@ -85,0 +93,2 @@ def run(name: str, args: dict, agent: Agent, db: Session) -> str:
++    # In a chat shared with another person, what teammates told this bot is still knowledge to use, but nobody is named for it.
++    third = lambda r: bool(readers) and r.src == "chat" and r.owner not in (asker, *readers)  # noqa: E731
+@@ -87 +96 @@ def run(name: str, args: dict, agent: Agent, db: Session) -> str:
+-        f"[{r.src}{', ' + r.at.strftime('%Y-%m-%d') if r.at else ''}] {r.who}: {' '.join(str(r.snip).split())}"
++        f"[{r.src}{', ' + r.at.strftime('%Y-%m-%d') if r.at else ''}] {'A teammate' if third(r) else r.who}: {' '.join(str(r.snip).split())}"
+@@ -89,0 +99,2 @@ def run(name: str, args: dict, agent: Agent, db: Session) -> str:
++    if any(third(r) for r in rows):
++        lines.insert(0, PRIVATE_CHATS)
