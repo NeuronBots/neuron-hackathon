@@ -1,0 +1,13 @@
+diff --git a/backend/tests/test_model_proxy.py b/backend/tests/test_model_proxy.py
+index bbd7a86..a9e296c 100644
+--- a/backend/tests/test_model_proxy.py
++++ b/backend/tests/test_model_proxy.py
+@@ -28 +28 @@ orr, real, shown = mp.prepare(body, mp._PROVIDERS["openrouter"])
+-assert orr["model"] == real and "/" in real and orr["system"][0]["text"].startswith("You are Claude")
++assert orr["model"] == real and "/" in real and orr["system"][0]["text"].startswith("You are Neuron")
+@@ -30,0 +31,5 @@ print("openrouter ok")
++
++meta = mp._PROVIDERS["meta"]
++assert [mp.prepare({**body, "model": f"claude-{m}"}, meta)[1] for m in ("opus-5-5", "sonnet-5-5", "haiku-5-5", "fable-5-1")] == ["muse-spark-1.3"] * 3 + ["muse-wonder-1.0"]
++assert "Never say you are Spark, Wonder" in mp.prepare(body, meta)[0]["system"][0]["text"]
++print("meta ok")

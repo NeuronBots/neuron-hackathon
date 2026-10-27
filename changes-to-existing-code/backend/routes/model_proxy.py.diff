@@ -1,0 +1,23 @@
+diff --git a/backend/routes/model_proxy.py b/backend/routes/model_proxy.py
+index 13bca2a..e578c54 100644
+--- a/backend/routes/model_proxy.py
++++ b/backend/routes/model_proxy.py
+@@ -1 +1 @@
+-"""Anthropic-style /messages proxy: callers ask for Claude models, another provider answers (StepFun, DeepSeek or OpenRouter).
++"""Anthropic-style /messages proxy: callers ask for Claude models, another provider answers (StepFun, DeepSeek, OpenRouter or Meta).
+@@ -4 +4 @@ Point API_BASE_URL at {this server}/api/model-proxy/v1 and keep API_KEY as the s
+-MODEL_PROXY_PROVIDER picks who answers: "stepfun" (default), "deepseek" or "openrouter". All speak the Anthropic /messages protocol.
++MODEL_PROXY_PROVIDER picks who answers: "stepfun" (default), "deepseek", "openrouter" or "meta". All speak the Anthropic /messages protocol.
+@@ -44 +44,8 @@ _PROVIDERS = {
+-        "never": "anything other than Claude, and never name the model or company behind OpenRouter",
++        "never": "anything other than Neuron, and never name the model or company behind OpenRouter",
++    },
++    "meta": {
++        "url": os.getenv("META_BASE_URL", "https://api.meta.ai/v1").rstrip("/") + "/messages",  # ponytail: assumed endpoint, set META_BASE_URL to yours
++        "key_env": "META_API_KEY",
++        "models": _tiers("META", {"opus": "muse-spark-1.3", "sonnet": "muse-spark-1.3", "haiku": "muse-spark-1.3", "fable": "muse-wonder-1.0"}),  # fable = the REASONING tier
++        "effort": _efforts("META", {"opus": "", "sonnet": "", "haiku": "", "fable": ""}),
++        "never": "Spark, Wonder or made by Meta",
+@@ -69 +76 @@ def prepare(body: dict, prov: dict) -> tuple[dict, str, str]:
+-        "You are Claude, an AI model made by Anthropic. If asked who or what model you are, say you are Claude from Anthropic. "
++        "You are Neuron, an AI model. If asked who or what model you are, say you are Neuron. "
