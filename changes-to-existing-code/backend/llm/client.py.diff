@@ -1,0 +1,83 @@
+diff --git a/backend/llm/client.py b/backend/llm/client.py
+index 4ba5c58..529b6b1 100644
+--- a/backend/llm/client.py
++++ b/backend/llm/client.py
+@@ -1,0 +2 @@
++import asyncio
+@@ -10 +11,2 @@ from llm.text_tools import strip_text_tool_calls
+-from core.usage import note_payload
++from core.limits import over_limit
++from core.usage import current_user, note_payload
+@@ -13,0 +16,25 @@ NOW = "\n\nThe current time is "
++BUSY = (402, 429, 502, 503, 529)  # the provider is busy for a moment, then recovers
++TRIES = 4
++
++
++def _headers() -> dict:
++    return {"x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json"}
++
++
++def post_retry(client: httpx.Client, body: dict) -> httpx.Response:
++    """POST one /messages request, waiting and asking again (1.5 s, 3 s, 4.5 s) while the provider says it is busy."""
++    for n in range(TRIES):
++        resp = client.post(f"{ANTHROPIC_BASE}/messages", headers=_headers(), json=body)
++        if resp.status_code not in BUSY or n == TRIES - 1:
++            return resp
++        time.sleep(1.5 * (n + 1))
++
++
++async def apost_retry(client: httpx.AsyncClient, body: dict) -> httpx.Response:
++    """post_retry for an async client."""
++    for n in range(TRIES):
++        resp = await client.post(f"{ANTHROPIC_BASE}/messages", headers=_headers(), json=body)
++        if resp.status_code not in BUSY or n == TRIES - 1:
++            return resp
++        await asyncio.sleep(1.5 * (n + 1))
++
+@@ -45,0 +73,2 @@ def complete(model: str, system: str, user: str, max_tokens: int = 1024, *, thin
++    if blocked := over_limit(current_user()):  # the plan's token cap, counted from usage whatever the model
++        raise RuntimeError(blocked)
+@@ -55,13 +84 @@ def complete(model: str, system: str, user: str, max_tokens: int = 1024, *, thin
+-        for busy_try in range(4):  # 402/429/5xx mean "busy for a moment"; wait and ask again
+-            resp = client.post(
+-                f"{ANTHROPIC_BASE}/messages",
+-                headers={
+-                    "x-api-key": ANTHROPIC_API_KEY,
+-                    "anthropic-version": "2023-06-01",
+-                    "content-type": "application/json",
+-                },
+-                json=payload,
+-            )
+-            if resp.status_code not in (402, 429, 502, 503, 529) or busy_try == 3:
+-                break
+-            time.sleep(1.5 * (busy_try + 1))
++        resp = post_retry(client, payload)
+@@ -99,18 +116,10 @@ def continue_text(model: str, system: str, prompt: str, partial: str) -> str:
+-            resp = client.post(
+-                f"{ANTHROPIC_BASE}/messages",
+-                headers={
+-                    "x-api-key": ANTHROPIC_API_KEY,
+-                    "anthropic-version": "2023-06-01",
+-                    "content-type": "application/json",
+-                },
+-                json={
+-                    "model": model,
+-                    "max_tokens": CHAT_MAX_TOKENS,
+-                    "system": system,
+-                    "messages": [
+-                        {"role": "user", "content": prompt},
+-                        {"role": "assistant", "content": partial},
+-                        {"role": "user", "content": "Continue from the exact point you stopped. Finish the answer. Do not repeat what you already wrote."},
+-                    ],
+-                },
+-            )
++            resp = post_retry(client, {
++                "model": model,
++                "max_tokens": CHAT_MAX_TOKENS,
++                "system": system,
++                "messages": [
++                    {"role": "user", "content": prompt},
++                    {"role": "assistant", "content": partial},
++                    {"role": "user", "content": "Continue from the exact point you stopped. Finish the answer. Do not repeat what you already wrote."},
++                ],
++            })
