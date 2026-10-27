@@ -1,7 +1,47 @@
 diff --git a/backend/tests/test_core/test_limits.py b/backend/tests/test_core/test_limits.py
-index b3c6fa3..c31244f 100644
+index b3c6fa3..e7766f2 100644
 --- a/backend/tests/test_core/test_limits.py
 +++ b/backend/tests/test_core/test_limits.py
-@@ -163 +163 @@ def test_week_start_is_monday_midnight(now, monday):
+@@ -7 +7 @@ from core import limits
+-from core.limits import clamp_model, free_model_ok, over_limit, tokens_used, week_start
++from core.limits import over_limit, tokens_used, week_start
+@@ -160,25 +160 @@ def test_week_start_is_monday_midnight(now, monday):
+-# ── which models a plan may use ──
+-
+-@pytest.mark.parametrize("model,ok", [
 -    ("claude-haiku-5-5", True), ("claude-sonnet-5-5", True), ("Claude-Sonnet-5-5", True),
-+    ("fast", True), ("workhorse", True), ("judgement", False), ("reasoning", False), ("claude-haiku-5-5", True), ("claude-sonnet-5-5", True), ("Claude-Sonnet-5-5", True),
+-    ("claude-opus-5-5", False), ("claude-fable-5-1", False), ("", False), (None, False),
+-])
+-def test_free_may_only_use_haiku_and_sonnet(model, ok):
+-    assert free_model_ok(model) is ok
+-
+-
+-def test_clamp_without_a_user_changes_nothing(db):
+-    assert clamp_model("claude-opus-5-5", "") == "claude-opus-5-5"
+-
+-
+-def test_a_free_user_gets_sonnet_in_place_of_a_bigger_model(db):
+-    user(db, "f")
+-    assert clamp_model("claude-opus-5-5", "f") == limits.FREE_FALLBACK
+-    assert clamp_model("claude-haiku-5-5", "f") == "claude-haiku-5-5"
+-
+-
+-def test_paid_users_and_admins_keep_the_model_they_asked_for(db):
+-    user(db, "p", plan="pro"), user(db, "a", admin=True)
+-    assert clamp_model("claude-opus-5-5", "p") == "claude-opus-5-5"
+-    assert clamp_model("claude-fable-5-1", "a") == "claude-fable-5-1"
+-
++# ── the cached plan lookup ──
+@@ -189 +165,2 @@ def test_a_plan_change_shows_after_the_cache_expires(db, clock_for):
+-    assert clamp_model("claude-opus-5-5", "u") == limits.FREE_FALLBACK
++    plan = lambda: limits._lookup("u", "")[1]
++    assert plan() == "free"
+@@ -192 +169 @@ def test_a_plan_change_shows_after_the_cache_expires(db, clock_for):
+-    assert clamp_model("claude-opus-5-5", "u") == limits.FREE_FALLBACK  # still cached
++    assert plan() == "free"  # still cached
+@@ -194 +171 @@ def test_a_plan_change_shows_after_the_cache_expires(db, clock_for):
+-    assert clamp_model("claude-opus-5-5", "u") == limits.FREE_FALLBACK  # just inside the window
++    assert plan() == "free"  # just inside the window
+@@ -196 +173 @@ def test_a_plan_change_shows_after_the_cache_expires(db, clock_for):
+-    assert clamp_model("claude-opus-5-5", "u") == "claude-opus-5-5"
++    assert plan() == "pro"

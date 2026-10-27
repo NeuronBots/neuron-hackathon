@@ -1,20 +1,27 @@
 diff --git a/backend/tests/test_events.py b/backend/tests/test_events.py
-index 3c09d52..03c83e0 100644
+index 3c09d52..cb03489 100644
 --- a/backend/tests/test_events.py
 +++ b/backend/tests/test_events.py
-@@ -26,0 +27 @@ from core.models import Agent, AgentSpecProposal, AppSetting, Task
-+from core.tiers import TIERS
-@@ -93 +94 @@ def test_markers_parsed_and_rejected():
+@@ -93 +93 @@ def test_markers_parsed_and_rejected():
 -def test_child_applied_and_tier_bound():
 +def test_child_applied():
-@@ -95,2 +96,2 @@ def test_child_applied_and_tier_bound():
+@@ -95,2 +95,2 @@ def test_child_applied_and_tier_bound():
 -    row = spawns_mod.propose(parent, "Scout", "scout things", "judgement", "Scouting", db)
 -    child = spawns_mod.create_child(parent, row.name, row.system_prompt, row.model, row.label, db, row.turn_id)
 +    row = spawns_mod.propose(parent, "Scout", "scout things", "Scouting", db)
 +    child = spawns_mod.create_child(parent, row.name, row.system_prompt, label=row.label, db=db, turn_id=row.turn_id)
-@@ -100,2 +100,0 @@ def test_child_applied_and_tier_bound():
+@@ -100,14 +99,0 @@ def test_child_applied_and_tier_bound():
 -    bound = events("spawn.tier.bound")[0]
 -    assert bound["requested_model"] == "judgement" and bound["bound_model"] == "claude-opus-5-5" and bound["tier"] == "JUDGEMENT" and bound["clamped"] is False
-@@ -113 +112 @@ def test_clamp_free_plan():
+-
+-
+-def test_clamp_free_plan():
+-    from core import limits
+-    from core.usage import set_usage_user
+-
+-    limits._plans[("free-user", "")] = (__import__("time").time(), "free", False, "")
+-    set_usage_user("free-user")
+-    lines.clear()
+-    out = limits.clamp_model("claude-opus-5-5")
+-    b = events("spawn.tier.bound")[0]
 -    assert out == "claude-sonnet-5-5" and b["clamped"] is True and b["requested_model"] == "claude-opus-5-5" and b["bound_model"] == out and b["reason_code"] == "TIER_BIND_CLAMPED"
-+    assert out == TIERS["WORKHORSE"] and b["clamped"] is True and b["requested_model"] == "claude-opus-5-5" and b["bound_model"] == out and b["reason_code"] == "TIER_BIND_CLAMPED"

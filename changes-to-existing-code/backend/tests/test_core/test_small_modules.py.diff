@@ -1,16 +1,22 @@
 diff --git a/backend/tests/test_core/test_small_modules.py b/backend/tests/test_core/test_small_modules.py
-index dc3d833..3ee7d1f 100644
+index dc3d833..fa364ff 100644
 --- a/backend/tests/test_core/test_small_modules.py
 +++ b/backend/tests/test_core/test_small_modules.py
-@@ -23 +23 @@ def test_each_tier_names_a_distinct_model():
+@@ -12 +12 @@ from core.schemas import AgentCreate, AgentRead, AgentUpdate, ChatRequest, TaskU
+-from core.tiers import TIERS, tier_of
++from core.tiers import TIERS
+@@ -23,5 +22,0 @@ def test_each_tier_names_a_distinct_model():
 -@pytest.mark.parametrize("model,tier", [("claude-haiku-5-5", "FAST"), ("claude-opus-5-5", "JUDGEMENT"), ("gpt-4", None), ("", None), (None, None)])
-+@pytest.mark.parametrize("model,tier", [("fast", "FAST"), ("reasoning", "REASONING"), ("claude-haiku-5-5", "FAST"), ("claude-opus-5-5", "JUDGEMENT"), ("gpt-4", None), ("", None), (None, None)])
-@@ -114 +114 @@ def test_agent_create_defaults_and_limits():
+-def test_tier_of(model, tier):
+-    assert tier_of(model) == tier
+-
+-
+@@ -114 +109 @@ def test_agent_create_defaults_and_limits():
 -    assert agent.model == "claude-sonnet-5-5" and agent.is_master is False and agent.parent_id is None
 +    assert agent.is_master is False and agent.parent_id is None
-@@ -130 +130 @@ def test_chat_request_defaults():
+@@ -130 +125 @@ def test_chat_request_defaults():
 -    assert request.allow_spawn is True and request.attachments == [] and request.model_override is None
 +    assert request.allow_spawn is True and request.attachments == []
-@@ -137 +137 @@ def test_agent_read_turns_the_stored_master_flag_into_a_bool(stored, expected):
+@@ -137 +132 @@ def test_agent_read_turns_the_stored_master_flag_into_a_bool(stored, expected):
 -    row = Agent(id="a", name="A", system_prompt="p", model="m", parent_id=None, is_master=stored, field="", label="", color="", memory="", core_memory="", created_at=datetime(2026, 1, 1))
 +    row = Agent(id="a", name="A", system_prompt="p", parent_id=None, is_master=stored, field="", label="", color="", memory="", core_memory="", created_at=datetime(2026, 1, 1))

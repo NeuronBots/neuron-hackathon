@@ -1,0 +1,7 @@
+diff --git a/backend/core/jsonl.py b/backend/core/jsonl.py
+index 436a725..228cee5 100644
+--- a/backend/core/jsonl.py
++++ b/backend/core/jsonl.py
+@@ -25 +25 @@ SPAWN_KEY_MISSING SPAWN_KEY_MALFORMED SPAWN_KEY_FORBIDDEN SPAWN_CHILD_PERSIST_FA
+-TIER_BIND_CLAMPED TIER_BIND_DOWNGRADE_BLOCKED TOOL_SCOPE_DROPPED
++TIER_BIND_DOWNGRADE_BLOCKED TOOL_SCOPE_DROPPED

@@ -1,7 +1,10 @@
 diff --git a/backend/routes/chat.py b/backend/routes/chat.py
-index df62b39..44b490f 100644
+index df62b39..295fa5f 100644
 --- a/backend/routes/chat.py
 +++ b/backend/routes/chat.py
+@@ -62 +62 @@ from core.timing import log_span
+-from core.limits import allowance, clamp_model, over_limit, plan_in
++from core.limits import allowance, over_limit, plan_in
 @@ -182,2 +182,2 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
 -    # One model for every bot's chat turn, set by CHAT_MODEL; agent.model still applies to teammates' replies (peer_run, followup).
 -    model = body.model_override.strip() if body.model_override else CHAT_MODEL
@@ -10,6 +13,10 @@ index df62b39..44b490f 100644
 @@ -236 +236 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
 -        if ROUTER_MODEL and not kickoff and not body.model_override and not files:
 +        if ROUTER_MODEL and not kickoff and not files:
-@@ -628 +628 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
+@@ -327,2 +327 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
+-            # Free accounts run Haiku and Sonnet only, whatever model the bot is set to.
+-            request_json = {**request_json, "model": await asyncio.to_thread(clamp_model, request_json.get("model") or model)}
++            request_json = {**request_json, "model": request_json.get("model") or model}
+@@ -628 +627 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
 -                    log_span("chat.peer", peer_started, agent=agent.name, model=ASK_MODEL or "own", to=target.name)
 +                    log_span("chat.peer", peer_started, agent=agent.name, model=ASK_MODEL or CHAT_MODEL, to=target.name)
