@@ -900,10 +900,11 @@ async def test_dm_auto_share_requires_sender_ownership(db, client, tmp_path, mon
     assert client.get(f"/api/docs/{filename}").status_code == 200
 
 
-@pytest.mark.postgres
-def test_postgres_string_shared_with_parses_properly(db, client):
-    """Postgres migrated row with string shared_with is parsed correctly by _as_list (Finding 5)."""
-    from tools.documents import _as_list
+def test_db_row_string_shared_with_parses_properly(db, client):
+    """DB row with string shared_with from legacy/migration is parsed correctly by _as_list and can_read (Finding 5)."""
+    from tools.documents import _as_list, can_read
+    from core.models import Doc as DocModel
+    from sqlalchemy import text
 
     # String format from database migration
     raw_str = '["alice@example.com", "bob@example.com"]'
@@ -915,6 +916,15 @@ def test_postgres_string_shared_with_parses_properly(db, client):
 
     already_list = ["alice@example.com"]
     assert _as_list(already_list) == ["alice@example.com"]
+
+    # Insert a real DB row with string shared_with to verify can_read and DB retrieval
+    db.execute(text("INSERT INTO docs (id, title, content, tags, created_by, shared_with) VALUES ('str_sw_doc_1', 'Str SW Doc', 'content', '[]', 'owner_1', '[\"shared_user@example.com\"]')"))
+    db.commit()
+    doc = db.get(DocModel, "str_sw_doc_1")
+    assert doc is not None
+    assert _as_list(doc.shared_with) == ["shared_user@example.com"]
+    assert can_read(doc, "other_user", identifiers={"shared_user@example.com"}) is True
+    assert can_read(doc, "unshared_user", identifiers={"unshared_user@example.com"}) is False
 
 
 @pytest.mark.anyio
@@ -998,3 +1008,257 @@ async def test_markdown_put_requires_ownership_and_exact_id_match(db, client, tm
     # Bob's unrelated Doc.content is STILL unchanged
     db.refresh(bob_doc)
     assert bob_doc.content == "Bob unrelated content"
+
+
+@pytest.mark.anyio
+async def test_unowned_document_with_no_project_is_unreadable(db, client, tmp_path, monkeypatch):
+    """Unowned document with no project_id is unreadable even by project members (Finding 2)."""
+    import tools.documents as documents
+    from core.models import DocumentRecord, Project, ProjectMember
+
+    monkeypatch.setattr(documents, "DOC_DIR", tmp_path)
+    monkeypatch.setattr(documents, "_r2", lambda: None)
+
+    proj = Project(id="p_any_member", name="Any Member Project")
+    db.add(proj)
+    db.commit()
+
+    alice = make_user(db, "alice_member", token="tok_alice_member")
+    db.add(ProjectMember(project_id=proj.id, user_id=alice.id, role="member"))
+    db.commit()
+
+    # Create unowned document with NO project_id
+    orphan_path = tmp_path / "orphan-20261028-000000.md"
+    orphan_path.write_text("# Orphan\nNo project attached", encoding="utf-8")
+    orphan_rec = DocumentRecord(
+        filename=orphan_path.name,
+        agent_id=None,
+        project_id=None,
+        user_id="",
+        created_by="",
+        shared_with=[],
+        title="Orphan Document",
+        created_at=datetime.utcnow(),
+    )
+    db.add(orphan_rec)
+    db.commit()
+
+    # Even though Alice is a project member of proj, orphan doc has no project so can_read must be False
+    assert documents.can_read(orphan_rec, alice.id, project_ids={proj.id}, db=db) is False
+
+    client.cookies.set(COOKIE, "tok_alice_member")
+    res_get = client.get(f"/api/docs/{orphan_path.name}")
+    assert res_get.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_record_second_file_with_same_title(db, client, tmp_path, monkeypatch):
+    """record() creates a Doc for a second file even if it has the same title (Finding 4)."""
+    import tools.documents as documents
+    from tools.dispatch import run_tool
+    from core.models import Agent, Doc as DocModel, DocumentRecord, Project, ProjectMember
+    from core.usage import set_usage_user, reset_usage_user
+
+    monkeypatch.setattr(documents, "DOC_DIR", tmp_path)
+    monkeypatch.setattr(documents, "_r2", lambda: None)
+
+    proj = Project(id="p_same_title", name="Same Title Project")
+    db.add(proj)
+    db.commit()
+    bot = Agent(id="bot_same_title", name="Bot Same Title", system_prompt="", project_id=proj.id)
+    db.add(bot)
+    db.commit()
+
+    alice = make_user(db, "alice_same_title", token="tok_alice_same_title")
+    db.add(ProjectMember(project_id=proj.id, user_id=alice.id, role="member"))
+    db.commit()
+
+    client.cookies.set(COOKIE, "tok_alice_same_title")
+    u_token = set_usage_user(alice.id, proj.id)
+    try:
+        # File 1 with title "Status Report"
+        res1 = await run_tool(
+            "create_document",
+            {"filename": "report_v1.md", "format": "md", "title": "Status Report", "content": "# Status Report\nVersion 1"},
+            agent_id=bot.id,
+        )
+        # File 2 with same title "Status Report"
+        res2 = await run_tool(
+            "create_document",
+            {"filename": "report_v2.md", "format": "md", "title": "Status Report", "content": "# Status Report\nVersion 2"},
+            agent_id=bot.id,
+        )
+    finally:
+        reset_usage_user(u_token)
+
+    m1 = re.search(r"/api/documents/([^\s\)]+)", res1)
+    m2 = re.search(r"/api/documents/([^\s\)]+)", res2)
+    assert m1 is not None and m2 is not None
+    f1 = m1.group(1)
+    f2 = m2.group(1)
+    assert f1 != f2
+
+    # Both DocumentRecords must exist
+    rec1 = db.get(DocumentRecord, f1)
+    rec2 = db.get(DocumentRecord, f2)
+    assert rec1 is not None and rec2 is not None
+    assert rec1.title == "Status Report" and rec2.title == "Status Report"
+
+    # Both Doc rows must exist with their respective filenames as id
+    doc1 = db.get(DocModel, f1)
+    doc2 = db.get(DocModel, f2)
+    assert doc1 is not None, f"First doc {f1} missing"
+    assert doc2 is not None, f"Second doc {f2} missing (was deduplicated incorrectly)"
+    assert doc1.id == f1 and doc2.id == f2
+    assert "Version 1" in doc1.content
+    assert "Version 2" in doc2.content
+
+
+@pytest.mark.anyio
+async def test_long_filename_doc_insert_and_non_string_content(db, client, tmp_path, monkeypatch):
+    """Doc.id handles long filenames up to 140 chars and non-string content safely (Finding 3, 11)."""
+    import tools.documents as documents
+    from core.models import Agent, Doc as DocModel, DocumentRecord, Project
+    from core.usage import set_usage_user, reset_usage_user
+
+    monkeypatch.setattr(documents, "DOC_DIR", tmp_path)
+    monkeypatch.setattr(documents, "_r2", lambda: None)
+
+    proj = Project(id="p_long_name", name="Long Name Project")
+    db.add(proj)
+    db.commit()
+    bot = Agent(id="bot_long_name", name="Bot Long Name", system_prompt="", project_id=proj.id)
+    db.add(bot)
+    db.commit()
+
+    alice = make_user(db, "alice_long_name", token="tok_alice_long_name")
+
+    # Filename length: 110 chars (> 36)
+    long_filename = "detailed_system_architecture_report_with_extensive_descriptive_analysis_and_tables_20261028-123456.md"
+    assert 36 < len(long_filename) <= 140
+
+    long_path = tmp_path / long_filename
+    long_path.write_text("# Long Doc Content", encoding="utf-8")
+
+    u_token = set_usage_user(alice.id, proj.id)
+    try:
+        # Pass non-string content (dict) to verify coercion in record()
+        documents.record(
+            agent_id=bot.id,
+            result=f"Here is your file: [Architecture](/api/documents/{long_filename})",
+            title="Architecture",
+            content={"type": "spreadsheet", "rows": [1, 2, 3]},
+        )
+    finally:
+        reset_usage_user(u_token)
+
+    rec = db.get(DocumentRecord, long_filename)
+    assert rec is not None
+    assert rec.filename == long_filename
+
+    doc = db.get(DocModel, long_filename)
+    assert doc is not None
+    assert doc.id == long_filename
+    assert len(doc.id) > 36
+    assert isinstance(doc.content, str)
+
+
+@pytest.mark.anyio
+async def test_share_endpoint_with_same_title_doc_owned_by_another_user(db, client, tmp_path, monkeypatch):
+    """Sharing a document does not touch an unrelated document with the same title owned by another user (Finding 4)."""
+    import tools.documents as documents
+    from core.models import Agent, Doc as DocModel, DocumentRecord, Project, ProjectMember
+
+    monkeypatch.setattr(documents, "DOC_DIR", tmp_path)
+    monkeypatch.setattr(documents, "_r2", lambda: None)
+
+    proj = Project(id="p_share_same_title", name="Share Same Title Project")
+    db.add(proj)
+    db.commit()
+
+    alice = make_user(db, "alice_sharer", token="tok_alice_sharer")
+    bob = make_user(db, "bob_same_title_owner", token="tok_bob_same_title_owner")
+    db.add_all([
+        ProjectMember(project_id=proj.id, user_id=alice.id, role="member"),
+        ProjectMember(project_id=proj.id, user_id=bob.id, role="member"),
+    ])
+    db.commit()
+
+    # Alice's doc
+    alice_doc_id = "alice_doc_123"
+    db.add(DocModel(
+        id=alice_doc_id,
+        title="Project Roadmap",
+        content="Alice roadmap",
+        created_by=alice.id,
+        user_id=alice.id,
+        shared_with=[],
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    ))
+    db.add(DocumentRecord(
+        filename=alice_doc_id,
+        agent_id=None,
+        project_id=proj.id,
+        user_id=alice.id,
+        created_by=alice.id,
+        shared_with=[],
+        title="Project Roadmap",
+        created_at=datetime.utcnow(),
+    ))
+
+    # Bob's doc with the exact same title
+    bob_doc_id = "bob_doc_456"
+    db.add(DocModel(
+        id=bob_doc_id,
+        title="Project Roadmap",
+        content="Bob roadmap",
+        created_by=bob.id,
+        user_id=bob.id,
+        shared_with=[],
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    ))
+    db.add(DocumentRecord(
+        filename=bob_doc_id,
+        agent_id=None,
+        project_id=proj.id,
+        user_id=bob.id,
+        created_by=bob.id,
+        shared_with=[],
+        title="Project Roadmap",
+        created_at=datetime.utcnow(),
+    ))
+    db.commit()
+
+    # 1. Alice shares her doc with Charlie
+    client.cookies.set(COOKIE, "tok_alice_sharer")
+    res_share = client.post(
+        f"/api/docs/{alice_doc_id}/share",
+        json={"users": ["charlie@example.com"]},
+    )
+    assert res_share.status_code == 200
+    assert "charlie@example.com" in res_share.json()["shared_with"]
+
+    # Verify Alice's doc was updated
+    alice_doc = db.get(DocModel, alice_doc_id)
+    assert "charlie@example.com" in alice_doc.shared_with
+
+    # Verify Bob's doc was NOT updated and remains unshared
+    bob_doc = db.get(DocModel, bob_doc_id)
+    assert bob_doc.shared_with == []
+    bob_rec = db.get(DocumentRecord, bob_doc_id)
+    assert bob_rec.shared_with == []
+
+    # 2. Bob tries to share Alice's doc using Alice's doc ID -> Forbidden
+    client.cookies.set(COOKIE, "tok_bob_same_title_owner")
+    res_forbidden = client.post(
+        f"/api/docs/{alice_doc_id}/share",
+        json={"users": ["dave@example.com"]},
+    )
+    assert res_forbidden.status_code in (403, 404)
+
+    # Verify Alice's doc still only has Charlie
+    db.refresh(alice_doc)
+    assert "dave@example.com" not in alice_doc.shared_with
+

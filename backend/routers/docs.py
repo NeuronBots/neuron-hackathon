@@ -144,7 +144,7 @@ def sync_document_records_to_docs(db: Session):
     try:
         recs = db.query(DocumentRecord).all()
         for rec in recs:
-            existing = db.query(DocModel).filter((DocModel.id == rec.filename) | (DocModel.title == rec.title)).first()
+            existing = db.get(DocModel, rec.filename)
             shared_list = _as_list(rec.shared_with)
 
             path = document_path(rec.filename)
@@ -229,14 +229,12 @@ def list_docs(request: Request, db: Session = Depends(get_db)):
 @router.get("/docs/{id}", response_model=Doc)
 def get_doc(id: str, request: Request, db: Session = Depends(get_db)):
     sync_document_records_to_docs(db)
-    doc = db.query(DocModel).filter(DocModel.id == id).first()
+    doc = db.get(DocModel, id)
     if not doc:
         from core.models import DocumentRecord
         rec = db.get(DocumentRecord, id)
         if rec:
-            doc = db.query(DocModel).filter((DocModel.id == rec.filename) | (DocModel.title == rec.title)).first()
-        if not doc:
-            doc = db.query(DocModel).filter(DocModel.title == id).first()
+            doc = db.get(DocModel, rec.filename)
     if not doc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Doc not found")
     user_id, identifiers = get_caller_user_identities(request, db)
@@ -247,14 +245,12 @@ def get_doc(id: str, request: Request, db: Session = Depends(get_db)):
 
 @router.post("/docs/{id}/share", response_model=Doc)
 def share_doc(id: str, body: DocShare, request: Request, db: Session = Depends(get_db)):
-    doc = db.query(DocModel).filter(DocModel.id == id).first()
+    doc = db.get(DocModel, id)
     if not doc:
         from core.models import DocumentRecord
         rec = db.get(DocumentRecord, id)
         if rec:
-            doc = db.query(DocModel).filter((DocModel.id == rec.filename) | (DocModel.title == rec.title)).first()
-        if not doc:
-            doc = db.query(DocModel).filter(DocModel.title == id).first()
+            doc = db.get(DocModel, rec.filename)
     if not doc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Doc not found")
     user_id, identifiers = get_caller_user_identities(request, db)
@@ -276,7 +272,7 @@ def share_doc(id: str, body: DocShare, request: Request, db: Session = Depends(g
     doc.updated_at = datetime.now(timezone.utc)
 
     from core.models import DocumentRecord
-    doc_rec = db.get(DocumentRecord, id) or db.query(DocumentRecord).filter((DocumentRecord.filename == id) | (DocumentRecord.title == doc.title)).first()
+    doc_rec = db.get(DocumentRecord, id) or db.get(DocumentRecord, doc.id)
     if doc_rec:
         rec_shared = _as_list(doc_rec.shared_with)
         for u in new_users:
@@ -299,9 +295,7 @@ def delete_doc(id: str, request: Request, db: Session = Depends(get_db)):
     if not doc:
         rec = db.get(DocumentRecord, id)
         if rec:
-            doc = db.query(DocModel).filter((DocModel.id == rec.filename) | (DocModel.title == rec.title)).first()
-        if not doc:
-            doc = db.query(DocModel).filter(DocModel.title == id).first()
+            doc = db.get(DocModel, rec.filename)
     if not doc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Doc not found")
 
