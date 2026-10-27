@@ -1,5 +1,5 @@
 diff --git a/backend/routes/people.py b/backend/routes/people.py
-index 57c04cf..2bb74d6 100644
+index 57c04cf..ea8d681 100644
 --- a/backend/routes/people.py
 +++ b/backend/routes/people.py
 @@ -12,0 +13,2 @@ from sqlalchemy.orm import Session
@@ -86,7 +86,7 @@ index 57c04cf..2bb74d6 100644
 @@ -323 +366 @@ def react(other_id: str, message_id: int, body: ReactIn, user: User = Depends(ge
 -    row = db.query(DirectMessage).filter(DirectMessage.id == message_id, _between(project.id, user.id, other.id)).with_for_update().first()
 +    row = _row(db, project.id, user, other.id, message_id, lock=True)
-@@ -335,0 +379,146 @@ def react(other_id: str, message_id: int, body: ReactIn, user: User = Depends(ge
+@@ -335,0 +379,199 @@ def react(other_id: str, message_id: int, body: ReactIn, user: User = Depends(ge
 +class ShareIn(BaseModel):
 +    share: bool
 +
@@ -231,10 +231,65 @@ index 57c04cf..2bb74d6 100644
 +    if body.proceed:
 +        runs.spawn(_run_action(row.id))
 +    return _read(row)
++def _share_forwarded_documents(content: str, sender_id: str, recipient: User, db: Session) -> None:
++    """When a message with document references is forwarded/sent to a person, grant that person access."""
++    if not content:
++        return
++    import json
++    import re
++    from core.models import DocumentRecord, Doc as DocModel
 +
++    doc_files = re.findall(r"/api/documents/([A-Za-z0-9][A-Za-z0-9._-]{0,120})", content)
++    doc_ids = re.findall(r"/docs/([A-Za-z0-9._-]+)", content)
++    bare_files = re.findall(r"\b([A-Za-z0-9._-]{1,80}-\d{8}-\d{6}\.(?:md|pdf|xlsx|html))\b", content)
 +
-@@ -341,2 +530,2 @@ async def send(other_id: str, body: DirectIn, user: User = Depends(get_current_u
++    all_targets = set(doc_files + doc_ids + bare_files)
++    if not all_targets:
++        return
++
++    recipient_idents = [recipient.id]
++    if recipient.email:
++        recipient_idents.append(recipient.email)
++
++    for target in all_targets:
++        doc_rec = db.get(DocumentRecord, target) or db.query(DocumentRecord).filter(DocumentRecord.title == target).first()
++        if doc_rec:
++            current_shared = list(doc_rec.shared_with or [])
++            if isinstance(current_shared, str):
++                try: current_shared = json.loads(current_shared)
++                except Exception: current_shared = []
++            changed = False
++            for ident in recipient_idents:
++                if ident not in current_shared and ident.lower() not in [str(s).lower() for s in current_shared]:
++                    current_shared.append(ident)
++                    changed = True
++            if changed:
++                doc_rec.shared_with = current_shared
++
++        doc_model = db.get(DocModel, target) or db.query(DocModel).filter((DocModel.id == target) | (DocModel.title == target)).first()
++        if not doc_model and doc_rec:
++            doc_model = db.query(DocModel).filter((DocModel.id == doc_rec.filename) | (DocModel.title == doc_rec.title)).first()
++        if doc_model:
++            current_shared_model = list(doc_model.shared_with or [])
++            if isinstance(current_shared_model, str):
++                try: current_shared_model = json.loads(current_shared_model)
++                except Exception: current_shared_model = []
++            changed_m = False
++            for ident in recipient_idents:
++                if ident not in current_shared_model and ident.lower() not in [str(s).lower() for s in current_shared_model]:
++                    current_shared_model.append(ident)
++                    changed_m = True
++            if changed_m:
++                doc_model.shared_with = current_shared_model
++
++    try:
++        db.commit()
++    except Exception:
++        db.rollback()
+@@ -341,2 +583,2 @@ async def send(other_id: str, body: DirectIn, user: User = Depends(get_current_u
 -        target = db.query(DirectMessage).filter(DirectMessage.id == body.reply_to, _between(project.id, user.id, other.id)).first()
 -        root = db.get(DirectMessage, target.reply_to or target.id) if target else None
 +        target = _row(db, project.id, user, other.id, body.reply_to)
 +        root = _row(db, project.id, user, other.id, target.reply_to or target.id) if target else None
+@@ -350,0 +593 @@ async def send(other_id: str, body: DirectIn, user: User = Depends(get_current_u
++    _share_forwarded_documents(row.content, user.id, other, db)

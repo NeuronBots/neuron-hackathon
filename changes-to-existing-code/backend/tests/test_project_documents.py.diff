@@ -1,0 +1,18 @@
+diff --git a/backend/tests/test_project_documents.py b/backend/tests/test_project_documents.py
+index 68de351..2538721 100644
+--- a/backend/tests/test_project_documents.py
++++ b/backend/tests/test_project_documents.py
+@@ -72,3 +72,10 @@ def test_saving_a_slideshow_keeps_the_previous_version(db, tmp_path, monkeypatch
+-    with pytest.raises(HTTPException) as md:
+-        put("notes.md", b"# changed")  # only slideshows are edited here
+-    assert md.value.status_code == 400 and (tmp_path / "notes.md").read_text() == "# notes"
++    # Markdown documents can now be edited and keep previous versions
++    put("notes.md", b"# changed")
++    assert (tmp_path / "notes.md").read_text() == "# changed" and (tmp_path / "notes.md.prev").read_text() == "# notes"
++    # Unsupported extensions like PDF still raise 400
++    (tmp_path / "doc.pdf").write_text("pdf")
++    db.add(DocumentRecord(filename="doc.pdf", project_id="p1", title="PDF"))
++    db.commit()
++    with pytest.raises(HTTPException) as pdf:
++        put("doc.pdf", b"new pdf")
++    assert pdf.value.status_code == 400

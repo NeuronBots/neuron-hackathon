@@ -1,7 +1,10 @@
 diff --git a/backend/routes/agents.py b/backend/routes/agents.py
-index 394b967..936e71b 100644
+index 394b967..c0f4042 100644
 --- a/backend/routes/agents.py
 +++ b/backend/routes/agents.py
+@@ -11 +11 @@ from core import jsonl
+-from core.access import agent_in_project, get_current_user, get_project
++from core.access import agent_in_project, get_current_user, get_current_user_optional, get_project
 @@ -17 +17 @@ from agents.roster import field_from_name, names_by_agent, project_roster
 -from core.limits import free_model_ok, over_limit, plan_in
 +from core.limits import over_limit
@@ -20,14 +23,47 @@ index 394b967..936e71b 100644
 -    if body.model is not None:
 -        _check_model(user, body.model, project, db)
 -        agent.model = body.model.strip()
-@@ -219 +208 @@ def build_goals(agent_id: str, user: User = Depends(get_current_user), project:
+@@ -184,0 +174,19 @@ def _document_rows(rows, names: dict[str, str] | None = None) -> list[dict]:
++def _can_see_doc_record(row, user) -> bool:
++    if not isinstance(user, User):
++        return not getattr(row, "user_id", None) and not getattr(row, "created_by", None)
++    if not getattr(row, "user_id", None) and not getattr(row, "created_by", None):
++        return True
++    if (getattr(row, "user_id", None) and row.user_id == user.id) or (getattr(row, "created_by", None) and row.created_by == user.id):
++        return True
++    shared = getattr(row, "shared_with", None) or []
++    if isinstance(shared, str):
++        try:
++            shared = json.loads(shared)
++        except Exception:
++            shared = [s.strip() for s in shared.split(",") if s.strip()]
++    shared_lower = {str(s).lower() for s in shared}
++    user_idents = {user.id.lower()}
++    if user.email:
++        user_idents.add(user.email.lower())
++    return any(i in shared_lower for i in user_idents)
++
+@@ -186 +194 @@ def _document_rows(rows, names: dict[str, str] | None = None) -> list[dict]:
+-def agent_documents(agent_id: str, project: Project = Depends(get_project), db: Session = Depends(get_db)):
++def agent_documents(agent_id: str, user = Depends(get_current_user_optional), project: Project = Depends(get_project), db: Session = Depends(get_db)):
+@@ -191 +199,3 @@ def agent_documents(agent_id: str, project: Project = Depends(get_project), db:
+-    return _document_rows(db.query(DocumentRecord).filter(DocumentRecord.agent_id == agent_id).order_by(DocumentRecord.created_at.desc()).all())
++    rows = db.query(DocumentRecord).filter(DocumentRecord.agent_id == agent_id).order_by(DocumentRecord.created_at.desc()).all()
++    rows = [r for r in rows if _can_see_doc_record(r, user)]
++    return _document_rows(rows)
+@@ -195 +205 @@ def agent_documents(agent_id: str, project: Project = Depends(get_project), db:
+-def project_documents(project: Project = Depends(get_project), db: Session = Depends(get_db)):
++def project_documents(user = Depends(get_current_user_optional), project: Project = Depends(get_project), db: Session = Depends(get_db)):
+@@ -200,0 +211 @@ def project_documents(project: Project = Depends(get_project), db: Session = Dep
++    rows = [r for r in rows if _can_see_doc_record(r, user)]
+@@ -219 +230 @@ def build_goals(agent_id: str, user: User = Depends(get_current_user), project:
 -def build_memory(agent_id: str, body: MemoryBuild, project: Project = Depends(get_project), db: Session = Depends(get_db)):
 +def build_memory(agent_id: str, body: MemoryBuild, user: User = Depends(get_current_user), project: Project = Depends(get_project), db: Session = Depends(get_db)):
-@@ -221,0 +211,4 @@ def build_memory(agent_id: str, body: MemoryBuild, project: Project = Depends(ge
+@@ -221,0 +233,4 @@ def build_memory(agent_id: str, body: MemoryBuild, project: Project = Depends(ge
 +    blocked = over_limit(user.id, project.id)
 +    if blocked:
 +        raise HTTPException(status_code=429, detail=blocked)
 +    token = set_usage_user(user.id, project.id)
-@@ -225,0 +219,2 @@ def build_memory(agent_id: str, body: MemoryBuild, project: Project = Depends(ge
+@@ -225,0 +241,2 @@ def build_memory(agent_id: str, body: MemoryBuild, project: Project = Depends(ge
 +    finally:
 +        reset_usage_user(token)

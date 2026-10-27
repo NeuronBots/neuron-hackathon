@@ -1,0 +1,106 @@
+diff --git a/backend/tools/documents.py b/backend/tools/documents.py
+index ae75800..72620ce 100644
+--- a/backend/tools/documents.py
++++ b/backend/tools/documents.py
+@@ -515 +515,65 @@ def _title_of(path: Path) -> str:
+-def record(agent_id: str, result: str, title: str = "") -> None:
++def record(agent_id: str, result: str, title: str = "", content: str = "") -> None:
++    """Note who made the file a create_document call just wrote. Never raises: a missing note must not fail the tool."""
++    from datetime import timezone
++    import json
++    import uuid
++    from core.database import SessionLocal
++    from core.models import Agent, Doc as DocModel, DocumentRecord
++    from core.usage import current_user
++
++    found = _LINK.search(result or "")
++    path = document_path(found.group(1)) if found else None
++    if path is None:
++        return
++    db = SessionLocal()
++    try:
++        uid = current_user() or ""
++        doc_rec = db.get(DocumentRecord, path.name)
++        if doc_rec is None:
++            agent = db.get(Agent, agent_id)
++            doc_rec = DocumentRecord(
++                filename=path.name,
++                agent_id=agent_id,
++                project_id=agent.project_id if agent else None,
++                user_id=uid or None,
++                created_by=uid or "",
++                shared_with=[],
++                title=(title or _title_of(path))[:200],
++                created_at=datetime.utcnow(),
++            )
++            db.add(doc_rec)
++        elif not doc_rec.user_id and uid:
++            doc_rec.user_id = uid
++            doc_rec.created_by = uid
++
++        # Also register in Doc table
++        doc_content = content
++        if not doc_content and path.is_file():
++            try:
++                doc_content = path.read_text(encoding="utf-8", errors="replace")[:16000]
++            except Exception:
++                doc_content = f"Document {path.name}"
++
++        doc_title = (title or _title_of(path))[:200]
++        existing_doc = db.query(DocModel).filter(DocModel.title == doc_title, DocModel.created_by == uid).first()
++        if not existing_doc:
++            now = datetime.now(timezone.utc)
++            db.add(DocModel(
++                id=path.name,
++                title=doc_title,
++                content=doc_content or f"Document {path.name}",
++                tags=["bot", "generated"],
++                created_by=uid,
++                user_id=uid,
++                shared_with=[],
++                created_at=now,
++                updated_at=now,
++            ))
++        db.commit()
++    except Exception:
++        db.rollback()
++    finally:
++        db.close()
++
++
++def _old_record(agent_id: str, result: str, title: str = "") -> None:
+@@ -563 +627,28 @@ def user_may_read(user_id: str, filename: str) -> bool:
+-    return document_project(user_id, filename) is not None
++    import json
++    from core.database import SessionLocal
++    from core.models import DocumentRecord, ProjectMember, User
++
++    db = SessionLocal()
++    try:
++        row = db.get(DocumentRecord, filename)
++        if not row or not row.project_id or not db.get(ProjectMember, (row.project_id, user_id)):
++            return False
++        # If the document has a creator recorded, only that user or people it is shared with may read it
++        if row.user_id or row.created_by:
++            if row.user_id == user_id or row.created_by == user_id:
++                return True
++            shared = row.shared_with or []
++            if isinstance(shared, str):
++                try:
++                    shared = json.loads(shared)
++                except Exception:
++                    shared = [s.strip() for s in shared.split(",") if s.strip()]
++            shared_lower = {str(s).lower() for s in shared}
++            user_idents = {user_id.lower()}
++            user_obj = db.get(User, user_id)
++            if user_obj and user_obj.email:
++                user_idents.add(user_obj.email.lower())
++            return any(ident in shared_lower for ident in user_idents)
++        return True
++    finally:
++        db.close()
+@@ -571,0 +663,4 @@ def read_document(agent_id: str, filename: str) -> str:
++    from core.usage import current_user
++    uid = current_user()
++    if uid and not user_may_read(uid, path.name):
++        return "Error (403): that document belongs outside your project. Ask the user to share it with you."

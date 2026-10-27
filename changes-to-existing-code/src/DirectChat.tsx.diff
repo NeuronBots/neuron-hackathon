@@ -1,10 +1,13 @@
 diff --git a/src/DirectChat.tsx b/src/DirectChat.tsx
-index dd14d0b..66a1108 100644
+index dd14d0b..c75adb1 100644
 --- a/src/DirectChat.tsx
 +++ b/src/DirectChat.tsx
 @@ -4 +4 @@ import remarkGfm from "remark-gfm"
 -import { fetchDirect, reactDirect, sendDirect, sendDirectTyping, type DirectMessage, type TypingParticipant } from "./api"
 +import { draftDirect, fetchDirect, proceedDirect, reactDirect, sendDirect, shareDirect, sendDirectTyping, type DirectMessage, type TypingParticipant } from "./api"
+@@ -7 +7 @@ import { TeamButton } from "./Sidebar"
+-import { REACTIONS, SESSION_GAP_MS, stampLabel } from "./ChatView"
++import { FileCard, REACTIONS, SESSION_GAP_MS, splitDocs, stampLabel } from "./ChatView"
 @@ -97 +97 @@ export function DirectChat({ meId, person, bots, onSeen, onOpenTeam, teamOpen }:
 -  // The thread takes focus when it opens and gives it back when it closes. The composer stays reachable on purpose, so there is no trap.
 +  // The composer in the thread panel takes focus when it opens; focus goes back when it closes.
@@ -80,10 +83,31 @@ index dd14d0b..66a1108 100644
 +    const col = isBot && !!m.share  // the bubble and its approval share one column, so the card is as wide as the bubble
 @@ -291,0 +354 @@ export function DirectChat({ meId, person, bots, onSeen, onOpenTeam, teamOpen }:
 +                <div className={col ? "dm-col" : "dm-flat"}>
-@@ -313,0 +377,2 @@ export function DirectChat({ meId, person, bots, onSeen, onOpenTeam, teamOpen }:
+@@ -296,0 +360 @@ export function DirectChat({ meId, person, bots, onSeen, onOpenTeam, teamOpen }:
++                      const { text: subText, files: subFiles } = splitDocs(forwarded[3])
+@@ -301 +365,4 @@ export function DirectChat({ meId, person, bots, onSeen, onOpenTeam, teamOpen }:
+-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{forwarded[3]}</ReactMarkdown>
++                          {subText && <ReactMarkdown remarkPlugins={[remarkGfm]}>{subText}</ReactMarkdown>}
++                          {subFiles.map((f) => (
++                            <FileCard key={f.path} path={f.path} label={f.label} />
++                          ))}
+@@ -305,3 +372,9 @@ export function DirectChat({ meId, person, bots, onSeen, onOpenTeam, teamOpen }:
+-                    return isBot
+-                      ? <div className="msg-text"><ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown></div>
+-                      : <div className="msg-text dm-text">{withPills(m.content)}</div>
++                    const { text: cleanText, files: docFiles } = splitDocs(m.content)
++                    return (
++                      <div className="msg-text dm-text">
++                        {cleanText && (isBot ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{cleanText}</ReactMarkdown> : withPills(cleanText))}
++                        {docFiles.map((f) => (
++                          <FileCard key={f.path} path={f.path} label={f.label} />
++                        ))}
++                      </div>
++                    )
+@@ -313,0 +387,2 @@ export function DirectChat({ meId, person, bots, onSeen, onOpenTeam, teamOpen }:
 +                {approval}
 +                </div>
-@@ -402,0 +468,53 @@ export function DirectChat({ meId, person, bots, onSeen, onOpenTeam, teamOpen }:
+@@ -402,0 +478,53 @@ export function DirectChat({ meId, person, bots, onSeen, onOpenTeam, teamOpen }:
 +  // One composer, shown in the dock or, while a thread is open, in the thread panel.
 +  const composer = (
 +    <>
@@ -137,7 +161,7 @@ index dd14d0b..66a1108 100644
 +    </>
 +  )
 +
-@@ -432,48 +550,4 @@ export function DirectChat({ meId, person, bots, onSeen, onOpenTeam, teamOpen }:
+@@ -432,48 +560,4 @@ export function DirectChat({ meId, person, bots, onSeen, onOpenTeam, teamOpen }:
 -      <div className={thread !== null ? "chat-dock dm-dock-over" : "chat-dock"}>
 -        <div className="chat-sheet">
 -          {error && <div className="chat-status">{error}</div>}
@@ -190,13 +214,13 @@ index dd14d0b..66a1108 100644
 +        <div className="chat-dock">
 +          <div className="chat-sheet">
 +          {composer}
-@@ -482 +556 @@ export function DirectChat({ meId, person, bots, onSeen, onOpenTeam, teamOpen }:
+@@ -482 +566 @@ export function DirectChat({ meId, person, bots, onSeen, onOpenTeam, teamOpen }:
 -      </div>
 +      )}
-@@ -485 +559 @@ export function DirectChat({ meId, person, bots, onSeen, onOpenTeam, teamOpen }:
+@@ -485 +569 @@ export function DirectChat({ meId, person, bots, onSeen, onOpenTeam, teamOpen }:
 -          <div className="dm-thread" ref={threadRef} role="dialog" aria-modal="true" aria-label="Thread" tabIndex={-1} onScroll={track("thread")} onClick={(e) => e.stopPropagation()}>
 +          <div className="dm-thread" role="dialog" aria-modal="true" aria-label="Thread" tabIndex={-1} onClick={(e) => e.stopPropagation()}>
-@@ -490 +564,7 @@ export function DirectChat({ meId, person, bots, onSeen, onOpenTeam, teamOpen }:
+@@ -490 +574,7 @@ export function DirectChat({ meId, person, bots, onSeen, onOpenTeam, teamOpen }:
 -            {messages.filter((m) => rootOf(m) === thread).map((m) => rowOf(m, 1, true))}
 +            <div className="dm-thread-body" ref={threadRef} onScroll={track("thread")}>
 +              {messages.filter((m) => rootOf(m) === thread).map((m) => rowOf(m, 1, true))}

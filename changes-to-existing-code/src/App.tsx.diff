@@ -1,5 +1,5 @@
 diff --git a/src/App.tsx b/src/App.tsx
-index 5d89efb..16c5949 100644
+index 5d89efb..a6b207d 100644
 --- a/src/App.tsx
 +++ b/src/App.tsx
 @@ -343 +343 @@ export function App() {
@@ -11,6 +11,9 @@ index 5d89efb..16c5949 100644
 @@ -1262,0 +1263,2 @@ export function App() {
 +        onOpenCalendar={handleOpenCalendar}
 +        onOpenBoard={handleOpenBoard}
+@@ -1322 +1324 @@ export function App() {
+-        <DocumentsView onClose={handleCloseCalendar} onOpenTeam={() => setNavOpen(true)} teamOpen={navOpen} />
++        <DocumentsView onClose={handleCloseCalendar} onOpenTeam={() => setNavOpen(true)} teamOpen={navOpen} members={members} />
 @@ -1349,2 +1350,0 @@ export function App() {
 -          onOpenCalendar={handleOpenCalendar}
 -          onOpenBoard={handleOpenBoard}

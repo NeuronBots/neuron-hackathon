@@ -1,5 +1,5 @@
 diff --git a/backend/tools/dispatch.py b/backend/tools/dispatch.py
-index 4e44231..354907b 100644
+index 4e44231..546ccb4 100644
 --- a/backend/tools/dispatch.py
 +++ b/backend/tools/dispatch.py
 @@ -7,0 +8,3 @@ from integrations.atlassian_mcp import (
@@ -31,6 +31,9 @@ index 4e44231..354907b 100644
 +        return f"Error: {exc}"
 +
 +
+@@ -45 +71 @@ async def run_tool(name: str, arguments: dict, jira_key: str = "", repo: str = "
+-            await asyncio.to_thread(record, agent_id, made, str(title))
++            await asyncio.to_thread(record, agent_id, made, str(title), arguments.get("content", ""))
 @@ -59 +85 @@ async def run_tool(name: str, arguments: dict, jira_key: str = "", repo: str = "
 -        return await manage_sprint(arguments, jira_key)
 +        return await _jira_local(name, manage_sprint, arguments, jira_key, agent_id)

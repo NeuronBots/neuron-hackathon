@@ -1,0 +1,12 @@
+diff --git a/backend/router.py b/backend/router.py
+index 7575742..e49c933 100644
+--- a/backend/router.py
++++ b/backend/router.py
+@@ -12,0 +13 @@ from routes import agents, auth, billing, chat, events, misc, model_proxy, oauth
++from routers import docs as docs_router
+@@ -16 +17 @@ load_dotenv()
+-app = FastAPI(title="Neuron API")
++app = FastAPI(title="Neuron API", docs_url="/api-docs")
+@@ -37,0 +39,2 @@ for module in (auth, billing, projects, agents, chat, tasks, events, misc, model
++
++app.include_router(docs_router.router, tags=["/docs"])
