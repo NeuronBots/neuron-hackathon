@@ -124,3 +124,30 @@ def test_the_fallback_makes_one_try(monkeypatch):
     monkeypatch.setattr(client.asyncio, "sleep", no_sleep)
     fake = AsyncFake(429, 429)
     assert asyncio.run(client.apost_retry(fake, {}, tries=1)).status_code == 429 and fake.calls == 1
+
+
+def test_a_dropped_connection_is_retried_then_raised(monkeypatch):
+    monkeypatch.setattr(client.time, "sleep", lambda s: None)
+
+    class Flaky(Fake):
+        def post(self, *a, **kw):
+            self.calls += 1
+            if self.calls < 3:
+                raise client.httpx.ReadTimeout("slow")
+            return Resp(200)
+
+    flaky = Flaky()
+    assert client.post_retry(flaky, {}).status_code == 200 and flaky.calls == 3
+
+    class Dead(Fake):
+        def post(self, *a, **kw):
+            self.calls += 1
+            raise client.httpx.ConnectTimeout("down")
+
+    dead = Dead()
+    try:
+        client.post_retry(dead, {})
+    except client.httpx.ConnectTimeout:
+        assert dead.calls == client.TRIES
+    else:
+        raise AssertionError("the last timeout should surface")

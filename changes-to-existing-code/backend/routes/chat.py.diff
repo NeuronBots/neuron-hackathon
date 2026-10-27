@@ -1,5 +1,5 @@
 diff --git a/backend/routes/chat.py b/backend/routes/chat.py
-index df62b39..7c8c9df 100644
+index df62b39..e9a8559 100644
 --- a/backend/routes/chat.py
 +++ b/backend/routes/chat.py
 @@ -28 +28 @@ from board.tasks import begin_agent_work, finish_agent_work, record_exchange
@@ -40,7 +40,7 @@ index df62b39..7c8c9df 100644
 -                                    **cached(system, tool_defs, api_messages),
 -                                },
 -                            )
-+                            resp = await apost_retry(follow_client, {"model": model, "max_tokens": CHAT_MAX_TOKENS, **cached(system, tool_defs, api_messages)}, tries=2)  # the turn goes on without it
++                            resp = await apost_retry(follow_client, {"model": model, "max_tokens": CHAT_MAX_TOKENS, **cached(system, tool_defs, api_messages)}, tries=1)  # the turn goes on without it, so no waiting
 @@ -628 +615 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
 -                    log_span("chat.peer", peer_started, agent=agent.name, model=ASK_MODEL or "own", to=target.name)
 +                    log_span("chat.peer", peer_started, agent=agent.name, model=ASK_MODEL or CHAT_MODEL, to=target.name)
@@ -54,6 +54,7 @@ index df62b39..7c8c9df 100644
 -                                "model": model, "max_tokens": CHAT_MAX_TOKENS, **cached(system, tool_defs, final_ask)})
 +                            resp = await apost_retry(follow_client, {  # one try: the first call already waited out a busy provider
 +                                "model": model, "max_tokens": CHAT_MAX_TOKENS, **cached(system, tool_defs, final_ask)}, tries=1)
-@@ -916,0 +903,2 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
+@@ -916,0 +903,3 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
 +                elif kind == "notice":
-+                    yield f"data: {json.dumps({'type': 'status', 'message': value})}\n\n"
++                    notice = "Couldn't write the follow-up: " + value  # "couldn't" is what makes the chat keep the banner after the turn
++                    yield f"data: {json.dumps({'type': 'status', 'message': notice})}\n\n"

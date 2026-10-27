@@ -1,5 +1,5 @@
 diff --git a/backend/llm/client.py b/backend/llm/client.py
-index 4ba5c58..8d6a4fd 100644
+index 4ba5c58..07c5af3 100644
 --- a/backend/llm/client.py
 +++ b/backend/llm/client.py
 @@ -1,0 +2 @@
@@ -8,8 +8,8 @@ index 4ba5c58..8d6a4fd 100644
 -from core.usage import note_payload
 +from core.limits import over_limit
 +from core.usage import current_user, note_payload
-@@ -13,0 +16,30 @@ NOW = "\n\nThe current time is "
-+BUSY = (402, 429, 502, 503, 529)  # the provider is busy for a moment, then recovers (it answered 402 under ten parallel calls). Only these statuses are retried, not network errors
+@@ -13,0 +16,40 @@ NOW = "\n\nThe current time is "
++BUSY = (402, 429, 502, 503, 529)  # the provider is busy for a moment, then recovers (it answered 402 under ten parallel calls). A network error (timeout, dropped connection) is retried the same way
 +TRIES = 4
 +
 +
@@ -23,26 +23,36 @@ index 4ba5c58..8d6a4fd 100644
 +
 +
 +def post_retry(client: httpx.Client, body: dict) -> httpx.Response:
-+    """POST one /messages request, waiting and asking again (1.5 s, 3 s, 4.5 s) while the provider says it is busy."""
++    """POST one /messages request, waiting and asking again (1.5 s, 3 s, 4.5 s) while the provider says it is busy or the connection fails."""
 +    for n in range(TRIES):
-+        resp = client.post(f"{ANTHROPIC_BASE}/messages", headers=_headers(), json=body)
-+        if resp.status_code not in BUSY or n == TRIES - 1:
-+            return resp
++        try:
++            resp = client.post(f"{ANTHROPIC_BASE}/messages", headers=_headers(), json=body)
++        except httpx.TransportError:
++            if n == TRIES - 1:
++                raise
++        else:
++            if resp.status_code not in BUSY or n == TRIES - 1:
++                return resp
 +        time.sleep(backoff(n))
 +
 +
 +async def apost_retry(client: httpx.AsyncClient, body: dict, tries: int = TRIES) -> httpx.Response:
 +    """post_retry for an async client; tries=1 makes a single attempt."""
 +    for n in range(tries):
-+        resp = await client.post(f"{ANTHROPIC_BASE}/messages", headers=_headers(), json=body)
-+        if resp.status_code not in BUSY or n == tries - 1:
-+            return resp
++        try:
++            resp = await client.post(f"{ANTHROPIC_BASE}/messages", headers=_headers(), json=body)
++        except httpx.TransportError:
++            if n == tries - 1:
++                raise
++        else:
++            if resp.status_code not in BUSY or n == tries - 1:
++                return resp
 +        await asyncio.sleep(backoff(n))
 +
-@@ -45,0 +78,2 @@ def complete(model: str, system: str, user: str, max_tokens: int = 1024, *, thin
+@@ -45,0 +88,2 @@ def complete(model: str, system: str, user: str, max_tokens: int = 1024, *, thin
 +    if blocked := over_limit(current_user()):  # the plan's token cap, counted from usage whatever the model
 +        raise RuntimeError(blocked)
-@@ -55,13 +89 @@ def complete(model: str, system: str, user: str, max_tokens: int = 1024, *, thin
+@@ -55,13 +99 @@ def complete(model: str, system: str, user: str, max_tokens: int = 1024, *, thin
 -        for busy_try in range(4):  # 402/429/5xx mean "busy for a moment"; wait and ask again
 -            resp = client.post(
 -                f"{ANTHROPIC_BASE}/messages",
@@ -57,7 +67,7 @@ index 4ba5c58..8d6a4fd 100644
 -                break
 -            time.sleep(1.5 * (busy_try + 1))
 +        resp = post_retry(client, payload)
-@@ -99,18 +121,10 @@ def continue_text(model: str, system: str, prompt: str, partial: str) -> str:
+@@ -99,18 +131,10 @@ def continue_text(model: str, system: str, prompt: str, partial: str) -> str:
 -            resp = client.post(
 -                f"{ANTHROPIC_BASE}/messages",
 -                headers={
