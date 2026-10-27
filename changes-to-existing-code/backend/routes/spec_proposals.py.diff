@@ -1,9 +1,9 @@
 diff --git a/backend/routes/spec_proposals.py b/backend/routes/spec_proposals.py
-index af8d741..c9d888b 100644
+index af8d741..67519d2 100644
 --- a/backend/routes/spec_proposals.py
 +++ b/backend/routes/spec_proposals.py
 @@ -38 +37,0 @@ def _read(row: AgentSpecProposal, parent: str, db: Session) -> dict:
 -        "model": row.model,
 @@ -67 +66 @@ def approve_spec(proposal_id: str, user: User = Depends(get_current_user), proje
 -    child = create_child(parent, row.name, row.system_prompt, row.model or parent.model, row.label, db, row.turn_id)
-+    child = create_child(parent, row.name, row.system_prompt, row.label, db, row.turn_id)
++    child = create_child(parent, row.name, row.system_prompt, label=row.label, db=db, turn_id=row.turn_id)

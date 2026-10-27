@@ -1,5 +1,5 @@
 diff --git a/backend/routes/agents.py b/backend/routes/agents.py
-index 394b967..4f5a2bd 100644
+index 394b967..936e71b 100644
 --- a/backend/routes/agents.py
 +++ b/backend/routes/agents.py
 @@ -17 +17 @@ from agents.roster import field_from_name, names_by_agent, project_roster
@@ -20,3 +20,14 @@ index 394b967..4f5a2bd 100644
 -    if body.model is not None:
 -        _check_model(user, body.model, project, db)
 -        agent.model = body.model.strip()
+@@ -219 +208 @@ def build_goals(agent_id: str, user: User = Depends(get_current_user), project:
+-def build_memory(agent_id: str, body: MemoryBuild, project: Project = Depends(get_project), db: Session = Depends(get_db)):
++def build_memory(agent_id: str, body: MemoryBuild, user: User = Depends(get_current_user), project: Project = Depends(get_project), db: Session = Depends(get_db)):
+@@ -221,0 +211,4 @@ def build_memory(agent_id: str, body: MemoryBuild, project: Project = Depends(ge
++    blocked = over_limit(user.id, project.id)
++    if blocked:
++        raise HTTPException(status_code=429, detail=blocked)
++    token = set_usage_user(user.id, project.id)
+@@ -225,0 +219,2 @@ def build_memory(agent_id: str, body: MemoryBuild, project: Project = Depends(ge
++    finally:
++        reset_usage_user(token)

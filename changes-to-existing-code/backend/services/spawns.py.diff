@@ -1,5 +1,5 @@
 diff --git a/backend/services/spawns.py b/backend/services/spawns.py
-index 54268a6..33ed00c 100644
+index 54268a6..7b1b9df 100644
 --- a/backend/services/spawns.py
 +++ b/backend/services/spawns.py
 @@ -12 +11,0 @@ from core import jsonl
@@ -36,7 +36,7 @@ index 54268a6..33ed00c 100644
 -
 @@ -51 +21 @@ def short_label(label: str | None, fallback: str) -> str:
 -def create_child(parent: Agent, name: str, system_prompt: str, model: str, label: str, db: Session, turn_id: str = "") -> Agent:
-+def create_child(parent: Agent, name: str, system_prompt: str, label: str, db: Session, turn_id: str = "") -> Agent:
++def create_child(parent: Agent, name: str, system_prompt: str, *, label: str, db: Session, turn_id: str = "") -> Agent:
 @@ -56 +25,0 @@ def create_child(parent: Agent, name: str, system_prompt: str, model: str, label
 -        model=model,
 @@ -68 +37 @@ def create_child(parent: Agent, name: str, system_prompt: str, model: str, label
