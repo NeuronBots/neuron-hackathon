@@ -1,15 +1,38 @@
 diff --git a/backend/core/limits.py b/backend/core/limits.py
-index ba6770d..c3ce4d5 100644
+index ba6770d..0f4004c 100644
 --- a/backend/core/limits.py
 +++ b/backend/core/limits.py
-@@ -5,0 +6 @@ from sqlalchemy import func
-+from core.tiers import TIERS
-@@ -123 +124 @@ def over_limit(user_id: str, project_id: str | None = None) -> str:
+@@ -122,2 +122 @@ def over_limit(user_id: str, project_id: str | None = None) -> str:
+-# ── Which models a plan may use ──
 -FREE_FALLBACK = "claude-sonnet-5-5"
-+FREE_FALLBACK = TIERS["WORKHORSE"]
-@@ -135 +136 @@ def free_model_ok(model: str) -> bool:
++# ── Plan lookup ──
+@@ -134,22 +132,0 @@ def invalidate_plan(user_id: str) -> None:
+-def free_model_ok(model: str) -> bool:
 -    """The Free plan runs Haiku and Sonnet only."""
-+    """The Free plan runs the Fast and Workhorse tiers only (and Haiku and Sonnet ids saved before the tiers)."""
-@@ -137 +138 @@ def free_model_ok(model: str) -> bool:
+-    low = (model or "").lower()
 -    return "haiku" in low or "sonnet" in low
-+    return low in (TIERS["FAST"], TIERS["WORKHORSE"]) or "haiku" in low or "sonnet" in low
+-
+-
+-def clamp_model(model: str, user_id: str | None = None) -> str:
+-    """The model this person may actually use: Free users get Sonnet in place of anything bigger. Admins and paid plans are unchanged."""
+-    from core.usage import current_user
+-
+-    uid = current_user() if user_id is None else user_id
+-    if not uid:
+-        return model
+-    bound = _bind(model, uid)
+-    from core import jsonl
+-    from core.tiers import tier_of
+-
+-    jsonl.emit("spawn.tier.bound", agent_id=jsonl.turn_info().get("agent_id"), requested_model=model, bound_model=bound, tier=tier_of(bound), clamped=bound != model,
+-               **({"reason_code": "TIER_BIND_CLAMPED"} if bound != model else {}))  # one line per model call is the audit trail
+-    return bound
+-
+-
+@@ -178,6 +154,0 @@ def invited_project(uid: str, project_id: str) -> str | None:
+-
+-def _bind(model: str, uid: str) -> str:
+-    from core.usage import current_project
+-
+-    _, plan, admin, _ = _lookup(uid, current_project())
+-    return model if admin or plan != "free" or free_model_ok(model) else FREE_FALLBACK

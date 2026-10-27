@@ -1,7 +1,13 @@
 diff --git a/backend/routes/chat.py b/backend/routes/chat.py
-index df62b39..44b490f 100644
+index df62b39..e9a8559 100644
 --- a/backend/routes/chat.py
 +++ b/backend/routes/chat.py
+@@ -28 +28 @@ from board.tasks import begin_agent_work, finish_agent_work, record_exchange
+-from llm.client import cached
++from llm.client import BUSY, TRIES, apost_retry, backoff, cached
+@@ -62 +62 @@ from core.timing import log_span
+-from core.limits import allowance, clamp_model, over_limit, plan_in
++from core.limits import allowance, over_limit, plan_in
 @@ -182,2 +182,2 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
 -    # One model for every bot's chat turn, set by CHAT_MODEL; agent.model still applies to teammates' replies (peer_run, followup).
 -    model = body.model_override.strip() if body.model_override else CHAT_MODEL
@@ -10,6 +16,45 @@ index df62b39..44b490f 100644
 @@ -236 +236 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
 -        if ROUTER_MODEL and not kickoff and not body.model_override and not files:
 +        if ROUTER_MODEL and not kickoff and not files:
-@@ -628 +628 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
+@@ -327,2 +327 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
+-            # Free accounts run Haiku and Sonnet only, whatever model the bot is set to.
+-            request_json = {**request_json, "model": await asyncio.to_thread(clamp_model, request_json.get("model") or model)}
++            request_json = {**request_json, "model": request_json.get("model") or model}
+@@ -383 +382 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
+-                                if response.status_code in (402, 429, 502, 503, 529) and busy_retries < 3:
++                                if response.status_code in BUSY and busy_retries < TRIES - 1:
+@@ -386 +385 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
+-                                    await asyncio.sleep(1.5 * busy_retries)
++                                    await asyncio.sleep(backoff(busy_retries - 1))
+@@ -568,13 +567 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
+-                            resp = await follow_client.post(
+-                                f"{ANTHROPIC_BASE}/messages",
+-                                headers={
+-                                    "x-api-key": ANTHROPIC_API_KEY,
+-                                    "anthropic-version": "2023-06-01",
+-                                    "content-type": "application/json",
+-                                },
+-                                json={
+-                                    "model": model,
+-                                    "max_tokens": CHAT_MAX_TOKENS,
+-                                    **cached(system, tool_defs, api_messages),
+-                                },
+-                            )
++                            resp = await apost_retry(follow_client, {"model": model, "max_tokens": CHAT_MAX_TOKENS, **cached(system, tool_defs, api_messages)}, tries=1)  # the turn goes on without it, so no waiting
+@@ -628 +615 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
 -                    log_span("chat.peer", peer_started, agent=agent.name, model=ASK_MODEL or "own", to=target.name)
 +                    log_span("chat.peer", peer_started, agent=agent.name, model=ASK_MODEL or CHAT_MODEL, to=target.name)
+@@ -805 +791,0 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
+-                    force_headers = {"x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json"}
+@@ -808 +794 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
+-                        resp = await follow_client.post(f"{ANTHROPIC_BASE}/messages", headers=force_headers, json={
++                        resp = await apost_retry(follow_client, {
+@@ -811,2 +797,2 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
+-                            resp = await follow_client.post(f"{ANTHROPIC_BASE}/messages", headers=force_headers, json={
+-                                "model": model, "max_tokens": CHAT_MAX_TOKENS, **cached(system, tool_defs, final_ask)})
++                            resp = await apost_retry(follow_client, {  # one try: the first call already waited out a busy provider
++                                "model": model, "max_tokens": CHAT_MAX_TOKENS, **cached(system, tool_defs, final_ask)}, tries=1)
+@@ -916,0 +903,3 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
++                elif kind == "notice":
++                    notice = "Couldn't write the follow-up: " + value  # "couldn't" is what makes the chat keep the banner after the turn
++                    yield f"data: {json.dumps({'type': 'status', 'message': notice})}\n\n"

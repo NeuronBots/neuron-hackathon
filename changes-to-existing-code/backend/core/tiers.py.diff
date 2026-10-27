@@ -1,5 +1,5 @@
 diff --git a/backend/core/tiers.py b/backend/core/tiers.py
-index 26c2d6f..9772372 100644
+index 26c2d6f..4200d24 100644
 --- a/backend/core/tiers.py
 +++ b/backend/core/tiers.py
 @@ -1 +1,2 @@
@@ -15,10 +15,7 @@ index 26c2d6f..9772372 100644
 +    "WORKHORSE": "workhorse",
 +    "JUDGEMENT": "judgement",
 +    "REASONING": "reasoning",
-@@ -9,0 +11,3 @@ TIERS = {
-+_LEGACY = {"haiku": "FAST", "sonnet": "WORKHORSE", "opus": "JUDGEMENT", "fable": "REASONING"}  # Claude ids saved on bots before the tiers
-+
-+
-@@ -11 +15 @@ def tier_of(model: str | None) -> str | None:
+@@ -9,3 +9,0 @@ TIERS = {
+-
+-def tier_of(model: str | None) -> str | None:
 -    return next((t for t, m in TIERS.items() if m == model), None)
-+    return next((t for t, m in TIERS.items() if m == model), None) or next((t for f, t in _LEGACY.items() if f in (model or "").lower()), None)

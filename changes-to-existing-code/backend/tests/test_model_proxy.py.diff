@@ -1,5 +1,5 @@
 diff --git a/backend/tests/test_model_proxy.py b/backend/tests/test_model_proxy.py
-index bbd7a86..4887e04 100644
+index bbd7a86..5305ad2 100644
 --- a/backend/tests/test_model_proxy.py
 +++ b/backend/tests/test_model_proxy.py
 @@ -1 +1,2 @@
@@ -9,9 +9,11 @@ index bbd7a86..4887e04 100644
 @@ -4,0 +6,2 @@ import sys
 +import pytest
 +
-@@ -8 +11 @@ from routes import model_proxy as mp
+@@ -8,2 +11,2 @@ from routes import model_proxy as mp
 -body = {
+-    "model": "claude-opus-5-5",
 +BODY = {
++    "model": "judgement",
 @@ -14,4 +16,0 @@ body = {
 -deep, real, shown = mp.prepare(body, mp._PROVIDERS["deepseek"])
 -assert (real, shown) == ("deepseek-v4-pro", "claude-opus-5-5") and deep["model"] == real
@@ -20,7 +22,7 @@ index bbd7a86..4887e04 100644
 @@ -19,2 +18,79 @@ assert "Never say you are DeepSeek" in deep["system"][0]["text"] and deep["syste
 -assert mp.prepare({**body, "model": "claude-haiku-5-5"}, mp._PROVIDERS["deepseek"])[1] == "deepseek-flash"
 -assert mp.prepare({**body, "model": "something-else"}, mp._PROVIDERS["deepseek"])[1] == "deepseek-flash", "unknown ids fall back to the sonnet tier"
-+def prep(provider: str, model: str = "claude-opus-5-5"):
++def prep(provider: str, model: str = "judgement"):
 +    return mp.prepare({**copy.deepcopy(BODY), "model": model}, mp._PROVIDERS[provider])
 +
 +
@@ -37,7 +39,7 @@ index bbd7a86..4887e04 100644
 +    got = [prep("meta", t) for t in mp.TIERS]  # callers may ask for a tier by name
 +    assert [r for _, r, _ in got] == ["muse-spark-1.3"] * 3 + ["muse-wonder-1.0"]
 +    assert [b.get("output_config", {}).get("effort") for b, _, _ in got] == ["low", "medium", "high", "high"]
-+    assert [prep("meta", f"claude-{m}")[1] for m in ("haiku-5-5", "sonnet-5-5", "opus-5-5", "fable-5-1")] == [r for _, r, _ in got], "Claude ids land on the same tiers"
++    assert prep("meta", "claude-opus-5-5")[1] == "muse-spark-1.3", "only tier names pick a tier; any other id is the workhorse"
 +    assert prep("meta", "something-else")[1] == "muse-spark-1.3", "unknown ids fall back to the workhorse tier"
 +
 +
