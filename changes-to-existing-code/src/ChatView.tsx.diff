@@ -1,5 +1,5 @@
 diff --git a/src/ChatView.tsx b/src/ChatView.tsx
-index 5d6e699..7d41ae4 100644
+index 5d6e699..e2d4743 100644
 --- a/src/ChatView.tsx
 +++ b/src/ChatView.tsx
 @@ -1 +1 @@
@@ -7,7 +7,7 @@ index 5d6e699..7d41ae4 100644
 +import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 @@ -6 +6 @@ import remarkGfm from "remark-gfm"
 -import type { ChatMessage, AgentRecord, Attachment, UsageBucket, UsageReport } from "./types"
-+import { VOICE_FACTOR, VOICE_TOKENS_PER_SEC, type ChatMessage, type AgentRecord, type Attachment, type UsageBucket, type UsageReport } from "./types"
++import { usageUnits, type ChatMessage, type AgentRecord, type Attachment, type UsageReport } from "./types"
 @@ -9 +9 @@ import { TeamButton } from "./Sidebar"
 -import { changeSlide, documentExists, fetchDocumentText, fetchUsage, saveDocument, splitFiles, uploadFile } from "./api"
 +import { changeSlide, documentExists, fetchDocumentText, fetchSheets, fetchUsage, saveDocument, splitFiles, uploadFile } from "./api"
@@ -541,18 +541,16 @@ index 5d6e699..7d41ae4 100644
 +            )}
 +          </div>
 +        </article>
-@@ -440,2 +818,3 @@ const WARN_STEP = 5 // percent: a dismissed warning comes back each time usage c
+@@ -440,2 +818 @@ const WARN_STEP = 5 // percent: a dismissed warning comes back each time usage c
 -// The enforced count in limits.py: input + output + cache read + cache write.
 -const tokens = (b: UsageBucket) => b.input_tokens + b.output_tokens + b.cache_read_tokens + b.cache_write_tokens
-+// The enforced count in limits.py: input + output + cache read + cache write + (voice characters * 1.5).
-+const tokens = (b: UsageBucket) =>
-+  b.input_tokens + b.output_tokens + b.cache_read_tokens + b.cache_write_tokens + Math.round((b.voice_characters ?? 0) * VOICE_FACTOR) + Math.round((b.voice_seconds ?? 0) * VOICE_TOKENS_PER_SEC)
-@@ -469,0 +849 @@ export function ChatView({
++const tokens = usageUnits
+@@ -469,0 +847 @@ export function ChatView({
 +  agentTyping,
-@@ -475,2 +854,0 @@ export function ChatView({
+@@ -475,2 +852,0 @@ export function ChatView({
 -  onOpenCalendar,
 -  onOpenBoard,
-@@ -513,16 +890,0 @@ export function ChatView({
+@@ -513,16 +888,0 @@ export function ChatView({
 -  // The board icon glows when a bot adds a task.
 -  const [boardGlow, setBoardGlow] = useState(false)
 -  useEffect(() => {
@@ -569,19 +567,19 @@ index 5d6e699..7d41ae4 100644
 -      window.clearTimeout(timer)
 -    }
 -  }, [])
-@@ -804 +1166 @@ export function ChatView({
+@@ -804 +1164 @@ export function ChatView({
 -        if (piece.card.kind === "call") {  // a call sits in the middle of the chat, between the two sides
 +        if (piece.card.kind === "call" || piece.card.kind === "pr") {  // a call or a PR review sits in the middle of the chat, between the two sides
-@@ -841 +1203,2 @@ export function ChatView({
+@@ -841 +1201,2 @@ export function ChatView({
 -  if (!peerThread && streaming && (lastMsg?.role !== "assistant" || replyText)) {
 +  // A bot working in the background (a PR it was told about) is typing even though no turn of mine is streaming.
 +  if (!peerThread && ((streaming && (lastMsg?.role !== "assistant" || replyText)) || (!streaming && agentTyping))) {
-@@ -1013,0 +1377 @@ export function ChatView({
+@@ -1013,0 +1375 @@ export function ChatView({
 +                            const { text: fwdClean, files: fwdDocs } = splitDocs(openableDocs(forwarded[3]))
-@@ -1018 +1382 @@ export function ChatView({
+@@ -1018 +1380 @@ export function ChatView({
 -                                  <b>Forwarded from {forwarded[2]}</b>{forwarded[3]}
 +                                  <b>Forwarded from {forwarded[2]}</b>{fwdClean}
-@@ -1019,0 +1384,12 @@ export function ChatView({
+@@ -1019,0 +1382,12 @@ export function ChatView({
 +                                {fwdDocs.map((f) => <FileCard key={f.path} path={f.path} label={f.label} />)}
 +                                {chips}
 +                              </>
@@ -594,25 +592,25 @@ index 5d6e699..7d41ae4 100644
 +                                <blockquote className="msg-quote"><b>{quoted[1]}</b>{quoted[2]}</blockquote>
 +                                {replyClean}
 +                                {replyDocs.map((f) => <FileCard key={f.path} path={f.path} label={f.label} />)}
-@@ -1024 +1400,2 @@ export function ChatView({
+@@ -1024 +1398,2 @@ export function ChatView({
 -                          return quoted ? (
 +                          const { text: textClean, files: textDocs } = splitDocs(openableDocs(shownText))
 +                          return (
-@@ -1026,2 +1403,2 @@ export function ChatView({
+@@ -1026,2 +1401,2 @@ export function ChatView({
 -                              <blockquote className="msg-quote"><b>{quoted[1]}</b>{quoted[2]}</blockquote>
 -                              {quoted[3]}
 +                              {textClean}
 +                              {textDocs.map((f) => <FileCard key={f.path} path={f.path} label={f.label} />)}
-@@ -1030 +1407 @@ export function ChatView({
+@@ -1030 +1405 @@ export function ChatView({
 -                          ) : <>{shownText}{chips}</>
 +                          )
-@@ -1042 +1419 @@ export function ChatView({
+@@ -1042 +1417 @@ export function ChatView({
 -                                    <a href={openableDocs(href || "")} target="_blank" rel="noopener noreferrer">{children}</a>
 +                                    <a href={safeHref(href)} target="_blank" rel="noopener noreferrer">{children}</a>
-@@ -1047 +1424 @@ export function ChatView({
+@@ -1047 +1422 @@ export function ChatView({
 -                            {files.map((path) => <FileCard key={path} path={path} bot={incoming} />)}
 +                            {files.map((f) => <FileCard key={f.path} path={f.path} label={f.label} bot={incoming} />)}
-@@ -1311,10 +1687,0 @@ export function ChatView({
+@@ -1311,10 +1685,0 @@ export function ChatView({
 -                {onOpenCalendar && (
 -                  <button type="button" className="chat-attach" aria-label="Open calendar" title="Calendar" onClick={onOpenCalendar}>
 -                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>

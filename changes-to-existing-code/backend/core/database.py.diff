@@ -1,5 +1,5 @@
 diff --git a/backend/core/database.py b/backend/core/database.py
-index 20e3807..71f3bd4 100644
+index 20e3807..54b2601 100644
 --- a/backend/core/database.py
 +++ b/backend/core/database.py
 @@ -65,0 +66,8 @@ BACKFILL_CHILD_ID = f"""
@@ -87,3 +87,5 @@ index 20e3807..71f3bd4 100644
 +            ):
 +                if name not in doc_rec_cols:
 +                    conn.execute(text(ddl))
+@@ -314,0 +394 @@ USER_CASCADE_FKS = (
++    ("voice_calls", "user_id", "voice_calls_user_id_fkey"),
