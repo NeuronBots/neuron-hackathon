@@ -1,32 +1,30 @@
 diff --git a/src/Sidebar.tsx b/src/Sidebar.tsx
-index c1bfb19..ef7250a 100644
+index c1bfb19..d317cfe 100644
 --- a/src/Sidebar.tsx
 +++ b/src/Sidebar.tsx
 @@ -2 +2 @@ import { Fragment, useEffect, useRef, useState, type FormEvent } from "react"
 -import type { AgentRecord, ConnectionRecord, ProjectMember, ProjectRecord, UsageReport } from "./types"
-+import type { AgentRecord, ConnectionRecord, ProjectMember, ProjectRecord, UsageBucket, UsageReport } from "./types"
++import { VOICE_FACTOR, type AgentRecord, type ConnectionRecord, type ProjectMember, type ProjectRecord, type UsageBucket, type UsageReport } from "./types"
 @@ -30,0 +31,2 @@ type Props = {
 +  onOpenCalendar?: () => void
 +  onOpenBoard?: () => void
-@@ -79,0 +82,5 @@ function resetWhen(iso: string): string {
-+const VOICE_FACTOR = 1.5
-+
+@@ -79,0 +82,3 @@ function resetWhen(iso: string): string {
 +const bucketUnits = (b: UsageBucket) =>
 +  b.input_tokens + b.output_tokens + b.cache_read_tokens + b.cache_write_tokens + Math.round((b.voice_characters ?? 0) * VOICE_FACTOR)
 +
-@@ -82,0 +90,2 @@ function UsageMeter({ label, used, cap, resets }: { label: string; used: number;
+@@ -82,0 +88,2 @@ function UsageMeter({ label, used, cap, resets }: { label: string; used: number;
 +  const percentLabel = open ? "—" : percent === 0 && used > 0 ? "< 1%" : `${percent}%`
 +  const progressValue = !open && used > 0 && percent === 0 ? 1 : percent
-@@ -87 +96 @@ function UsageMeter({ label, used, cap, resets }: { label: string; used: number;
+@@ -87 +94 @@ function UsageMeter({ label, used, cap, resets }: { label: string; used: number;
 -        <span>{open ? "—" : `${percent}%`}</span>
 +        <span>{percentLabel}</span>
-@@ -89 +98 @@ function UsageMeter({ label, used, cap, resets }: { label: string; used: number;
+@@ -89 +96 @@ function UsageMeter({ label, used, cap, resets }: { label: string; used: number;
 -      {!open && <progress value={percent} max={100} aria-label={`${label}, ${percent}% used`} />}
 +      {!open && <progress value={progressValue} max={100} aria-label={`${label}, ${percentLabel} used`} />}
-@@ -132,0 +142,2 @@ export function Sidebar({
+@@ -132,0 +140,2 @@ export function Sidebar({
 +  onOpenCalendar,
 +  onOpenBoard,
-@@ -155,0 +167,16 @@ export function Sidebar({
+@@ -155,0 +165,16 @@ export function Sidebar({
 +  // The board button glows when a bot adds a task.
 +  const [boardGlow, setBoardGlow] = useState(false)
 +  useEffect(() => {
@@ -43,7 +41,7 @@ index c1bfb19..ef7250a 100644
 +      window.clearTimeout(timer)
 +    }
 +  }, [])
-@@ -226,0 +254,9 @@ export function Sidebar({
+@@ -226,0 +252,9 @@ export function Sidebar({
 +  useEffect(() => {
 +    if (!settingsOpen) return
 +    const onVoiceSaved = () => {
@@ -53,7 +51,7 @@ index c1bfb19..ef7250a 100644
 +    return () => window.removeEventListener("voice-saved", onVoiceSaved)
 +  }, [settingsOpen])
 +
-@@ -514,4 +550,18 @@ export function Sidebar({
+@@ -514,4 +548,18 @@ export function Sidebar({
 -        {onOpenDocuments && (
 -          <button className="sidebar-board-btn sidebar-board-btn-full" onClick={onOpenDocuments} type="button">
 -            Documents
@@ -76,9 +74,9 @@ index c1bfb19..ef7250a 100644
 +              </button>
 +            )}
 +          </div>
-@@ -612 +662 @@ export function Sidebar({
+@@ -612 +660 @@ export function Sidebar({
 -                    used={usage.six_hour.input_tokens + usage.six_hour.output_tokens + usage.six_hour.cache_read_tokens + usage.six_hour.cache_write_tokens}
 +                    used={bucketUnits(usage.six_hour)}
-@@ -618 +668 @@ export function Sidebar({
+@@ -618 +666 @@ export function Sidebar({
 -                    used={usage.week.input_tokens + usage.week.output_tokens + usage.week.cache_read_tokens + usage.week.cache_write_tokens}
 +                    used={bucketUnits(usage.week)}

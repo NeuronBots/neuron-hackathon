@@ -1,12 +1,17 @@
 diff --git a/backend/core/limits.py b/backend/core/limits.py
-index ba6770d..431dfe9 100644
+index ba6770d..a1143dd 100644
 --- a/backend/core/limits.py
 +++ b/backend/core/limits.py
-@@ -12,0 +13,3 @@ def week_start(now: datetime) -> datetime:
+@@ -12,0 +13,8 @@ def week_start(now: datetime) -> datetime:
 +VOICE_FACTOR = 1.5
 +
 +
-@@ -14 +17,26 @@ def tokens_used(db, since: datetime, user_ids: list[str] | None = None, narrow=N
++def voice_to_tokens(characters: int) -> int:
++    """Standard half-up rounding (matching frontend Math.round) for voice character weighting."""
++    return int(characters * VOICE_FACTOR + 0.5) if characters > 0 else 0
++
++
+@@ -14 +22,26 @@ def tokens_used(db, since: datetime, user_ids: list[str] | None = None, narrow=N
 -    """Input + output + cache read + cache write tokens per user since a moment. Users with no events are absent."""
 +    """Input + output + cache read + cache write tokens + (voice characters * 1.5) per user since a moment. Users with no events are absent."""
 +    from core.models import UsageEvent
@@ -27,14 +32,14 @@ index ba6770d..431dfe9 100644
 +    if narrow:
 +        query = narrow(query)
 +    return {
-+        uid: int(sum(int(n) for n in totals) + round(int(chars) * VOICE_FACTOR))
++        uid: int(sum(int(n) for n in totals) + voice_to_tokens(int(chars)))
 +        for uid, *totals, chars in query.group_by(UsageEvent.user_id).all()
 +    }
 +
 +
 +def voice_units_used(db, since: datetime, user_ids: list[str] | None = None, narrow=None) -> dict[str, dict]:
 +    """Voice usage (characters, audio_seconds, calls) per user since a moment. Users with no voice events are absent."""
-@@ -17,2 +45,9 @@ def tokens_used(db, since: datetime, user_ids: list[str] | None = None, narrow=N
+@@ -17,2 +50,9 @@ def tokens_used(db, since: datetime, user_ids: list[str] | None = None, narrow=N
 -    cols = (UsageEvent.input_tokens, UsageEvent.output_tokens, UsageEvent.cache_read_tokens, UsageEvent.cache_write_tokens)
 -    query = db.query(UsageEvent.user_id, *(func.coalesce(func.sum(c), 0) for c in cols)).filter(UsageEvent.created_at >= since)
 +    query = db.query(
@@ -46,7 +51,7 @@ index ba6770d..431dfe9 100644
 +        UsageEvent.created_at >= since,
 +        UsageEvent.kind.in_(("tts", "stt", "voice")),
 +    )
-@@ -23 +58,8 @@ def tokens_used(db, since: datetime, user_ids: list[str] | None = None, narrow=N
+@@ -23 +63,8 @@ def tokens_used(db, since: datetime, user_ids: list[str] | None = None, narrow=N
 -    return {uid: sum(int(n) for n in totals) for uid, *totals in query.group_by(UsageEvent.user_id).all()}
 +    return {
 +        uid: {
@@ -56,11 +61,11 @@ index ba6770d..431dfe9 100644
 +        }
 +        for uid, chars, secs, calls in query.group_by(UsageEvent.user_id).all()
 +    }
-@@ -122,2 +164 @@ def over_limit(user_id: str, project_id: str | None = None) -> str:
+@@ -122,2 +169 @@ def over_limit(user_id: str, project_id: str | None = None) -> str:
 -# ── Which models a plan may use ──
 -FREE_FALLBACK = "claude-sonnet-5-5"
 +# ── Plan lookup ──
-@@ -134,22 +174,0 @@ def invalidate_plan(user_id: str) -> None:
+@@ -134,22 +179,0 @@ def invalidate_plan(user_id: str) -> None:
 -def free_model_ok(model: str) -> bool:
 -    """The Free plan runs Haiku and Sonnet only."""
 -    low = (model or "").lower()
@@ -83,7 +88,7 @@ index ba6770d..431dfe9 100644
 -    return bound
 -
 -
-@@ -178,6 +196,0 @@ def invited_project(uid: str, project_id: str) -> str | None:
+@@ -178,6 +201,0 @@ def invited_project(uid: str, project_id: str) -> str | None:
 -
 -def _bind(model: str, uid: str) -> str:
 -    from core.usage import current_project

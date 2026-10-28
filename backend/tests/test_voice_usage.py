@@ -265,12 +265,21 @@ def test_voice_usage_api_endpoints(db, client):
             "model": "eleven_multilingual_v2",
             "audio_seconds": 6.4,
             "request_id": "api_tts_1",
-            "apply_minimum": False,
         },
     )
     assert res_tts.status_code == 200
     assert res_tts.json()["ok"] is True
     assert res_tts.json()["characters"] == 320
+
+    # Test empty request_id is rejected (Finding 3)
+    res_bad = client.post(
+        "/api/voice/usage/tts",
+        json={
+            "characters": 100,
+            "request_id": "",
+        },
+    )
+    assert res_bad.status_code == 422
 
     # Test STT usage endpoint
     res_stt = client.post(
@@ -293,3 +302,34 @@ def test_voice_usage_api_endpoints(db, client):
     assert "voice_characters" in data["today"]
     assert data["today"]["voice_characters"] == 500  # 320 + 180
     assert pytest.approx(data["today"]["voice_seconds"], 0.1) == 51.4  # 6.4 + 45.0
+
+
+def test_save_voice_call_partitions_seconds_and_caps(db):
+    """save_voice_call must not double-bill seconds to both TTS and STT, and caps line counts."""
+    from routes.agents import CallLine, CallTranscript, save_voice_call
+    user = make_user(db, "call_part_user")
+    proj = Project(id="proj_call_part", name="Call Part Project")
+    db.add(proj)
+    db.commit()
+    db.add(ProjectMember(project_id=proj.id, user_id=user.id, role="owner"))
+    agent = Agent(id="agent_call_part", name="PartBot", system_prompt="test", project_id=proj.id)
+    db.add(agent)
+    db.commit()
+
+    # 100 seconds total, 75 bot chars, 25 user chars -> 75% bot (75s), 25% user (25s)
+    body = CallTranscript(
+        secs=100,
+        lines=[
+            CallLine(who="bot", text="A" * 75),
+            CallLine(who="you", text="B" * 25),
+        ],
+    )
+    save_voice_call(agent.id, body, user=user, project=proj, db=db)
+
+    events = db.query(UsageEvent).filter(UsageEvent.user_id == user.id).all()
+    assert len(events) == 2
+    tts = next(e for e in events if e.kind == "tts")
+    stt = next(e for e in events if e.kind == "stt")
+    assert pytest.approx(tts.audio_seconds + stt.audio_seconds, 0.1) == 100.0
+    assert pytest.approx(tts.audio_seconds, 0.1) == 75.0
+    assert pytest.approx(stt.audio_seconds, 0.1) == 25.0

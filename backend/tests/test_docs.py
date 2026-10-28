@@ -110,6 +110,9 @@ def test_get_docs_list_contains_created_doc_ordered_newest_first(db, client):
     assert res1.status_code == 201
     doc1 = res1.json()
 
+    import time
+    time.sleep(0.02)
+
     res2 = client.post("/api/docs", json={"title": "Second Doc", "content": "Second content"})
     assert res2.status_code == 201
     doc2 = res2.json()

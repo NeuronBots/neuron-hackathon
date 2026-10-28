@@ -1,10 +1,10 @@
 diff --git a/backend/core/usage.py b/backend/core/usage.py
-index 2ca3b1d..ff12403 100644
+index 2ca3b1d..83ba604 100644
 --- a/backend/core/usage.py
 +++ b/backend/core/usage.py
 @@ -2,0 +3 @@ from contextvars import ContextVar, Token
 +from datetime import datetime
-@@ -107,0 +109,262 @@ def record_usage(model: str, usage: dict, user_id: str | None = None, *, agent_i
+@@ -107,0 +109,268 @@ def record_usage(model: str, usage: dict, user_id: str | None = None, *, agent_i
 +def record_tts_usage(
 +    user_id: str | None = None,
 +    *,
@@ -28,6 +28,11 @@ index 2ca3b1d..ff12403 100644
 +    billed_characters = max(int(characters or 0), min_characters) if (apply_minimum and min_characters > 0) else int(characters or 0)
 +    audio_secs = float(audio_seconds or 0.0)
 +
++    req_id = (request_id or "").strip()[:64]
++    if not req_id:
++        import hashlib
++        req_id = f"gen:{hashlib.sha256(f'tts:{uid}:{aid}:{model}:{voice_id}:{billed_characters}:{audio_secs}'.encode()).hexdigest()[:28]}"
++
 +    from core import jsonl
 +    jsonl.emit(
 +        "voice.tts.usage",
@@ -38,7 +43,7 @@ index 2ca3b1d..ff12403 100644
 +        characters=billed_characters,
 +        raw_characters=characters,
 +        audio_seconds=audio_secs,
-+        request_id=request_id or None,
++        request_id=req_id,
 +    )
 +
 +    if not uid:
@@ -51,13 +56,12 @@ index 2ca3b1d..ff12403 100644
 +    own_session = db is None
 +    session = db or SessionLocal()
 +    try:
-+        if request_id:
-+            existing = session.query(UsageEvent).filter(
-+                UsageEvent.request_id == request_id,
-+                UsageEvent.kind == "tts",
-+            ).first()
-+            if existing:
-+                return existing
++        existing = session.query(UsageEvent).filter(
++            UsageEvent.request_id == req_id,
++            UsageEvent.kind == "tts",
++        ).first()
++        if existing:
++            return existing
 +
 +        event = UsageEvent(
 +            user_id=uid,
@@ -67,7 +71,7 @@ index 2ca3b1d..ff12403 100644
 +            audio_seconds=audio_secs,
 +            agent_id=aid[:36],
 +            kind="tts",
-+            request_id=(request_id or "")[:64],
++            request_id=req_id,
 +            project_id=invited_project(uid, proj_id),
 +            created_at=datetime.utcnow(),
 +        )
@@ -77,13 +81,12 @@ index 2ca3b1d..ff12403 100644
 +        return event
 +    except Exception:
 +        session.rollback()
-+        if request_id:
-+            existing = session.query(UsageEvent).filter(
-+                UsageEvent.request_id == request_id,
-+                UsageEvent.kind == "tts",
-+            ).first()
-+            if existing:
-+                return existing
++        existing = session.query(UsageEvent).filter(
++            UsageEvent.request_id == req_id,
++            UsageEvent.kind == "tts",
++        ).first()
++        if existing:
++            return existing
 +        return None
 +    finally:
 +        if own_session:
@@ -116,6 +119,11 @@ index 2ca3b1d..ff12403 100644
 +    calc_minutes = audio_secs / 60.0 if audio_secs > 0 else (float(minutes) if minutes is not None else 0.0)
 +    chars = int(characters or 0)
 +
++    req_id = (request_id or "").strip()[:64]
++    if not req_id:
++        import hashlib
++        req_id = f"gen:{hashlib.sha256(f'stt:{uid}:{aid}:{model}:{chars}:{audio_secs}'.encode()).hexdigest()[:28]}"
++
 +    from core import jsonl
 +    jsonl.emit(
 +        "voice.stt.usage",
@@ -125,7 +133,7 @@ index 2ca3b1d..ff12403 100644
 +        characters=chars,
 +        audio_seconds=audio_secs,
 +        minutes=calc_minutes,
-+        request_id=request_id or None,
++        request_id=req_id,
 +    )
 +
 +    if not uid:
@@ -138,13 +146,12 @@ index 2ca3b1d..ff12403 100644
 +    own_session = db is None
 +    session = db or SessionLocal()
 +    try:
-+        if request_id:
-+            existing = session.query(UsageEvent).filter(
-+                UsageEvent.request_id == request_id,
-+                UsageEvent.kind == "stt",
-+            ).first()
-+            if existing:
-+                return existing
++        existing = session.query(UsageEvent).filter(
++            UsageEvent.request_id == req_id,
++            UsageEvent.kind == "stt",
++        ).first()
++        if existing:
++            return existing
 +
 +        event = UsageEvent(
 +            user_id=uid,
@@ -153,7 +160,7 @@ index 2ca3b1d..ff12403 100644
 +            audio_seconds=audio_secs,
 +            agent_id=aid[:36],
 +            kind="stt",
-+            request_id=(request_id or "")[:64],
++            request_id=req_id,
 +            project_id=invited_project(uid, proj_id),
 +            created_at=datetime.utcnow(),
 +        )
@@ -163,13 +170,12 @@ index 2ca3b1d..ff12403 100644
 +        return event
 +    except Exception:
 +        session.rollback()
-+        if request_id:
-+            existing = session.query(UsageEvent).filter(
-+                UsageEvent.request_id == request_id,
-+                UsageEvent.kind == "stt",
-+            ).first()
-+            if existing:
-+                return existing
++        existing = session.query(UsageEvent).filter(
++            UsageEvent.request_id == req_id,
++            UsageEvent.kind == "stt",
++        ).first()
++        if existing:
++            return existing
 +        return None
 +    finally:
 +        if own_session:

@@ -1,5 +1,5 @@
 diff --git a/src/types.ts b/src/types.ts
-index adc5714..a4884cf 100644
+index adc5714..95ddec7 100644
 --- a/src/types.ts
 +++ b/src/types.ts
 @@ -80 +79,0 @@ export type AgentRecord = {
@@ -8,9 +8,12 @@ index adc5714..a4884cf 100644
 -  model: string
 @@ -126 +123,0 @@ export type SpawnedAgent = {
 -  model: string
-@@ -171,0 +169,2 @@ export type UsageBucket = {
+@@ -165,0 +163,2 @@ export type ConnectionRecord = {
++export const VOICE_FACTOR = 1.5
++
+@@ -171,0 +171,2 @@ export type UsageBucket = {
 +  voice_characters?: number
 +  voice_seconds?: number
-@@ -187 +186 @@ export type UsageReport = {
+@@ -187 +188 @@ export type UsageReport = {
 -  models: { model: string; input_tokens: number; output_tokens: number; calls: number }[]
 +  models: { model: string; input_tokens: number; output_tokens: number; calls: number; voice_characters?: number; voice_seconds?: number }[]

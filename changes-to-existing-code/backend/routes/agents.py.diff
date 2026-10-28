@@ -1,5 +1,5 @@
 diff --git a/backend/routes/agents.py b/backend/routes/agents.py
-index 394b967..838ab87 100644
+index 394b967..17a6e3c 100644
 --- a/backend/routes/agents.py
 +++ b/backend/routes/agents.py
 @@ -1,0 +2 @@
@@ -21,12 +21,22 @@ index 394b967..838ab87 100644
 -
 @@ -65 +58,0 @@ def create_agent(body: AgentCreate, user: User = Depends(get_current_user), proj
 -        model=body.model.strip(),
-@@ -128,0 +122,28 @@ def save_voice_call(agent_id: str, body: CallTranscript, user: User = Depends(ge
+@@ -128,0 +122,38 @@ def save_voice_call(agent_id: str, body: CallTranscript, user: User = Depends(ge
 +
 +        # Count spoken voice characters in central usage ledger
-+        bot_chars = sum(len(l.text) for l in body.lines if l.who == "bot")
-+        user_chars = sum(len(l.text) for l in body.lines if l.who == "you")
-+        call_hash = hashlib.sha256(f"{agent.id}:{user.id}:{int(body.secs)}:{tuple(l.text for l in body.lines)}".encode()).hexdigest()[:24]
++        capped_lines = body.lines[:CALL_LINES_MAX]
++        bot_chars = sum(len(l.text[:CALL_TEXT_MAX]) for l in capped_lines if l.who == "bot")
++        user_chars = sum(len(l.text[:CALL_TEXT_MAX]) for l in capped_lines if l.who == "you")
++        total_chars = bot_chars + user_chars
++        total_secs = float(max(0, min(body.secs, 24 * 3600)))
++        if total_chars > 0 and total_secs > 0:
++            bot_secs = round(total_secs * (bot_chars / total_chars), 1)
++            user_secs = round(total_secs - bot_secs, 1)
++        else:
++            bot_secs = total_secs if bot_chars > 0 else 0.0
++            user_secs = 0.0 if bot_chars > 0 else total_secs
++
++        call_hash = hashlib.sha256(f"{agent.id}:{user.id}:{int(total_secs)}:{tuple(l.text for l in capped_lines)}".encode()).hexdigest()[:24]
 +        call_req_id = f"call:{call_hash}"
 +        voice_id, _, _ = voice.voice_for(agent)
 +        if bot_chars > 0:
@@ -34,7 +44,7 @@ index 394b967..838ab87 100644
 +                user_id=user.id,
 +                characters=bot_chars,
 +                voice_id=voice_id,
-+                audio_seconds=float(body.secs),
++                audio_seconds=bot_secs,
 +                agent_id=agent.id,
 +                request_id=f"{call_req_id}:tts",
 +                project_id=project.id,
@@ -44,22 +54,20 @@ index 394b967..838ab87 100644
 +            voice.record_stt_usage(
 +                user_id=user.id,
 +                characters=user_chars,
-+                audio_seconds=float(body.secs),
++                audio_seconds=user_secs,
 +                agent_id=agent.id,
 +                request_id=f"{call_req_id}:stt",
 +                project_id=project.id,
 +                db=db,
 +            )
-@@ -132,0 +154,79 @@ def save_voice_call(agent_id: str, body: CallTranscript, user: User = Depends(ge
+@@ -132,0 +164,77 @@ def save_voice_call(agent_id: str, body: CallTranscript, user: User = Depends(ge
 +class VoiceTTSUsageIn(BaseModel):
 +    characters: int = Field(ge=0)
 +    voice_id: str = Field(default="", max_length=64)
 +    model: str = Field(default="eleven_multilingual_v2", max_length=120)
 +    audio_seconds: float = Field(default=0.0, ge=0.0)
 +    agent_id: str = Field(default="", max_length=36)
-+    request_id: str = Field(default="", max_length=64)
-+    apply_minimum: bool = True
-+    min_characters: int = 250
++    request_id: str = Field(min_length=1, max_length=64)
 +
 +
 +class VoiceSTTUsageIn(BaseModel):
@@ -68,7 +76,7 @@ index 394b967..838ab87 100644
 +    characters: int = Field(default=0, ge=0)
 +    model: str = Field(default="scribe_v1", max_length=120)
 +    agent_id: str = Field(default="", max_length=36)
-+    request_id: str = Field(default="", max_length=64)
++    request_id: str = Field(min_length=1, max_length=64)
 +
 +
 +@router.post("/api/voice/usage/tts", status_code=200)
@@ -89,8 +97,8 @@ index 394b967..838ab87 100644
 +        agent_id=body.agent_id,
 +        request_id=body.request_id,
 +        project_id=project.id if project else None,
-+        apply_minimum=body.apply_minimum,
-+        min_characters=body.min_characters,
++        apply_minimum=True,
++        min_characters=voice.ELEVENLABS_TTS_MIN_CHARS,
 +        db=db,
 +    )
 +    return {
@@ -130,11 +138,11 @@ index 394b967..838ab87 100644
 +    }
 +
 +
-@@ -141,3 +240,0 @@ def update_agent(agent_id: str, body: AgentUpdate, user: User = Depends(get_curr
+@@ -141,3 +248,0 @@ def update_agent(agent_id: str, body: AgentUpdate, user: User = Depends(get_curr
 -    if body.model is not None:
 -        _check_model(user, body.model, project, db)
 -        agent.model = body.model.strip()
-@@ -184,0 +282,10 @@ def _document_rows(rows, names: dict[str, str] | None = None) -> list[dict]:
+@@ -184,0 +290,10 @@ def _document_rows(rows, names: dict[str, str] | None = None) -> list[dict]:
 +def _can_see_doc_record(row, user, project_id: str = "", db: Session | None = None) -> bool:
 +    if not isinstance(user, User):
 +        return False
@@ -145,27 +153,27 @@ index 394b967..838ab87 100644
 +    proj_set = {project_id} if project_id else None
 +    return can_read(row, user.id, user_idents, project_ids=proj_set, db=db)
 +
-@@ -186 +293 @@ def _document_rows(rows, names: dict[str, str] | None = None) -> list[dict]:
+@@ -186 +301 @@ def _document_rows(rows, names: dict[str, str] | None = None) -> list[dict]:
 -def agent_documents(agent_id: str, project: Project = Depends(get_project), db: Session = Depends(get_db)):
 +def agent_documents(agent_id: str, user = Depends(get_current_user_optional), project: Project = Depends(get_project), db: Session = Depends(get_db)):
-@@ -191 +298,3 @@ def agent_documents(agent_id: str, project: Project = Depends(get_project), db:
+@@ -191 +306,3 @@ def agent_documents(agent_id: str, project: Project = Depends(get_project), db:
 -    return _document_rows(db.query(DocumentRecord).filter(DocumentRecord.agent_id == agent_id).order_by(DocumentRecord.created_at.desc()).all())
 +    rows = db.query(DocumentRecord).filter(DocumentRecord.agent_id == agent_id).order_by(DocumentRecord.created_at.desc()).all()
 +    rows = [r for r in rows if _can_see_doc_record(r, user, project.id, db)]
 +    return _document_rows(rows)
-@@ -195 +304 @@ def agent_documents(agent_id: str, project: Project = Depends(get_project), db:
+@@ -195 +312 @@ def agent_documents(agent_id: str, project: Project = Depends(get_project), db:
 -def project_documents(project: Project = Depends(get_project), db: Session = Depends(get_db)):
 +def project_documents(user = Depends(get_current_user_optional), project: Project = Depends(get_project), db: Session = Depends(get_db)):
-@@ -200,0 +310 @@ def project_documents(project: Project = Depends(get_project), db: Session = Dep
+@@ -200,0 +318 @@ def project_documents(project: Project = Depends(get_project), db: Session = Dep
 +    rows = [r for r in rows if _can_see_doc_record(r, user, project.id, db)]
-@@ -219 +329 @@ def build_goals(agent_id: str, user: User = Depends(get_current_user), project:
+@@ -219 +337 @@ def build_goals(agent_id: str, user: User = Depends(get_current_user), project:
 -def build_memory(agent_id: str, body: MemoryBuild, project: Project = Depends(get_project), db: Session = Depends(get_db)):
 +def build_memory(agent_id: str, body: MemoryBuild, user: User = Depends(get_current_user), project: Project = Depends(get_project), db: Session = Depends(get_db)):
-@@ -221,0 +332,4 @@ def build_memory(agent_id: str, body: MemoryBuild, project: Project = Depends(ge
+@@ -221,0 +340,4 @@ def build_memory(agent_id: str, body: MemoryBuild, project: Project = Depends(ge
 +    blocked = over_limit(user.id, project.id)
 +    if blocked:
 +        raise HTTPException(status_code=429, detail=blocked)
 +    token = set_usage_user(user.id, project.id)
-@@ -225,0 +340,2 @@ def build_memory(agent_id: str, body: MemoryBuild, project: Project = Depends(ge
+@@ -225,0 +348,2 @@ def build_memory(agent_id: str, body: MemoryBuild, project: Project = Depends(ge
 +    finally:
 +        reset_usage_user(token)

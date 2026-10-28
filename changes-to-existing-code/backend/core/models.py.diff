@@ -1,12 +1,12 @@
 diff --git a/backend/core/models.py b/backend/core/models.py
-index 38a5312..0d50176 100644
+index 38a5312..74647bc 100644
 --- a/backend/core/models.py
 +++ b/backend/core/models.py
 @@ -0,0 +1 @@
 +from datetime import datetime, timezone
 @@ -3 +4 @@ import uuid
 -from sqlalchemy import BigInteger, Boolean, Column, DateTime, Float, ForeignKey, Identity, Index, Integer, String, Text, func, text
-+from sqlalchemy import BigInteger, Boolean, Column, DateTime, Float, ForeignKey, Identity, Index, Integer, JSON, String, Text, func, text
++from sqlalchemy import BigInteger, Boolean, Column, DateTime, Float, ForeignKey, Identity, Index, Integer, JSON, String, Text, UniqueConstraint, func, text
 @@ -30 +31 @@ class Agent(Base):
 -    model = Column(String(120), nullable=False, default="claude-sonnet-5-5")
 +    model = Column(String(120), nullable=False, default="workhorse")  # unused: models are set at the source. Kept so existing databases need no migration
@@ -14,7 +14,7 @@ index 38a5312..0d50176 100644
 -    created_at = Column(DateTime, server_default=text("(now() at time zone 'utc')"))
 -
 -    __table_args__ = (Index("usage_events_user_created_idx", "user_id", "created_at"),)
-+    request_id = Column(String(64), nullable=False, default="", server_default="", index=True)
++    request_id = Column(String(64), nullable=True, default=None, server_default=None, index=True)
 +    characters = Column(Integer, nullable=False, default=0, server_default="0")
 +    audio_seconds = Column(Float, nullable=False, default=0.0, server_default="0.0")
 +    voice_id = Column(String(64), nullable=False, default="", server_default="")
@@ -22,7 +22,7 @@ index 38a5312..0d50176 100644
 +
 +    __table_args__ = (
 +        Index("usage_events_user_created_idx", "user_id", "created_at"),
-+        Index("usage_events_request_id_idx", "request_id"),
++        UniqueConstraint("request_id", "kind", name="uq_usage_events_request_id_kind"),
 +    )
 @@ -294,0 +303,3 @@ class DocumentRecord(Base):
 +    user_id = Column(String(36), nullable=True, index=True)  # who asked the bot to generate it

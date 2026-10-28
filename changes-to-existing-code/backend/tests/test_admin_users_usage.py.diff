@@ -1,7 +1,7 @@
 diff --git a/backend/tests/test_admin_users_usage.py b/backend/tests/test_admin_users_usage.py
-index 89177dd..ea09bf8 100644
+index 89177dd..7ffa797 100644
 --- a/backend/tests/test_admin_users_usage.py
 +++ b/backend/tests/test_admin_users_usage.py
 @@ -21 +21 @@ USAGE_DDL = """CREATE TABLE usage_events (id INTEGER PRIMARY KEY, user_id VARCHA
 -output_tokens BIGINT, cache_read_tokens BIGINT, cache_write_tokens BIGINT, agent_id VARCHAR(36), kind VARCHAR(24), tool_count INTEGER, project_id VARCHAR(36), created_at DATETIME)"""
-+output_tokens BIGINT, cache_read_tokens BIGINT, cache_write_tokens BIGINT, agent_id VARCHAR(36), kind VARCHAR(24), tool_count INTEGER, project_id VARCHAR(36), request_id VARCHAR(64) DEFAULT '', characters INTEGER DEFAULT 0, audio_seconds FLOAT DEFAULT 0.0, voice_id VARCHAR(64) DEFAULT '', created_at DATETIME)"""
++output_tokens BIGINT, cache_read_tokens BIGINT, cache_write_tokens BIGINT, agent_id VARCHAR(36), kind VARCHAR(24), tool_count INTEGER, project_id VARCHAR(36), request_id VARCHAR(64) DEFAULT NULL, characters INTEGER DEFAULT 0, audio_seconds FLOAT DEFAULT 0.0, voice_id VARCHAR(64) DEFAULT '', created_at DATETIME, CONSTRAINT uq_usage_events_request_id_kind UNIQUE (request_id, kind))"""

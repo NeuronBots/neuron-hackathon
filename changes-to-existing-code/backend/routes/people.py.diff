@@ -1,5 +1,5 @@
 diff --git a/backend/routes/people.py b/backend/routes/people.py
-index 57c04cf..aa09025 100644
+index 57c04cf..32d3498 100644
 --- a/backend/routes/people.py
 +++ b/backend/routes/people.py
 @@ -12,0 +13,2 @@ from sqlalchemy.orm import Session
@@ -90,7 +90,7 @@ index 57c04cf..aa09025 100644
 @@ -323 +370 @@ def react(other_id: str, message_id: int, body: ReactIn, user: User = Depends(ge
 -    row = db.query(DirectMessage).filter(DirectMessage.id == message_id, _between(project.id, user.id, other.id)).with_for_update().first()
 +    row = _row(db, project.id, user, other.id, message_id, lock=True)
-@@ -335,0 +383,217 @@ def react(other_id: str, message_id: int, body: ReactIn, user: User = Depends(ge
+@@ -335,0 +383,218 @@ def react(other_id: str, message_id: int, body: ReactIn, user: User = Depends(ge
 +class ShareIn(BaseModel):
 +    share: bool
 +
@@ -273,7 +273,7 @@ index 57c04cf..aa09025 100644
 +        if doc_rec:
 +            if not user_may_read(sender_id, doc_rec.filename, db=db):
 +                continue
-+            is_owner = (doc_rec.user_id and doc_rec.user_id == sender_id) or (doc_rec.created_by and doc_rec.created_by == sender_id) or (not doc_rec.user_id and not doc_rec.created_by)
++            is_owner = (doc_rec.user_id and doc_rec.user_id == sender_id) or (doc_rec.created_by and doc_rec.created_by == sender_id)
 +            if not is_owner:
 +                continue
 +
@@ -288,10 +288,14 @@ index 57c04cf..aa09025 100644
 +                flag_modified(doc_rec, "shared_with")
 +
 +        if doc_model:
-+            is_m_owner = (doc_model.user_id and doc_model.user_id == sender_id) or (doc_model.created_by and doc_model.created_by == sender_id) or (not doc_model.user_id and not doc_model.created_by)
++            is_m_owner = (doc_model.user_id and doc_model.user_id == sender_id) or (doc_model.created_by and doc_model.created_by == sender_id)
 +            if not is_m_owner and not doc_rec:
 +                continue
-+            if not can_read(doc_model, sender_id, db=db):
++            sender_idents = {sender_id.lower()}
++            sender_user = db.get(User, sender_id)
++            if sender_user and sender_user.email:
++                sender_idents.add(sender_user.email.lower())
++            if not can_read(doc_model, sender_id, sender_idents, db=db):
 +                continue
 +
 +            current_shared_model = _as_list(doc_model.shared_with)
@@ -304,23 +308,19 @@ index 57c04cf..aa09025 100644
 +                doc_model.shared_with = current_shared_model
 +                flag_modified(doc_model, "shared_with")
 +
-+    try:
-+        db.commit()
-+    except Exception:
-+        db.rollback()
-@@ -341,2 +605,2 @@ async def send(other_id: str, body: DirectIn, user: User = Depends(get_current_u
++    db.flush()
+@@ -341,2 +606,2 @@ async def send(other_id: str, body: DirectIn, user: User = Depends(get_current_u
 -        target = db.query(DirectMessage).filter(DirectMessage.id == body.reply_to, _between(project.id, user.id, other.id)).first()
 -        root = db.get(DirectMessage, target.reply_to or target.id) if target else None
 +        target = _row(db, project.id, user, other.id, body.reply_to)
 +        root = _row(db, project.id, user, other.id, target.reply_to or target.id) if target else None
-@@ -350,0 +615 @@ async def send(other_id: str, body: DirectIn, user: User = Depends(get_current_u
+@@ -350,0 +616,2 @@ async def send(other_id: str, body: DirectIn, user: User = Depends(get_current_u
 +    _share_forwarded_documents(row.content, user.id, other, db)
-@@ -380,0 +646,5 @@ def split_people(args: dict, agent: Agent, asker_id: str, db: Session) -> tuple[
-+    sender = asker_id
++    db.commit()
+@@ -380,0 +648,3 @@ def split_people(args: dict, agent: Agent, asker_id: str, db: Session) -> tuple[
++    sender = (asker_id or "").strip()
 +    if not sender:
-+        pm = db.query(ProjectMember).filter(ProjectMember.project_id == agent.project_id).first()
-+        if pm:
-+            sender = pm.user_id
++        return [], args
 @@ -390,0 +661 @@ def split_people(args: dict, agent: Agent, asker_id: str, db: Session) -> tuple[
 +            msg_content = f"**{subject}**\n\n{body}" if subject and not subject.lower().startswith("re:") else body
 @@ -394 +665 @@ def split_people(args: dict, agent: Agent, asker_id: str, db: Session) -> tuple[

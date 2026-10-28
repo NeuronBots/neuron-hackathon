@@ -1,14 +1,29 @@
 diff --git a/backend/core/database.py b/backend/core/database.py
-index 20e3807..107bf2e 100644
+index 20e3807..1de533a 100644
 --- a/backend/core/database.py
 +++ b/backend/core/database.py
 @@ -93,0 +94,5 @@ def migrate() -> None:
 +                ("project_id", "ALTER TABLE usage_events ADD COLUMN project_id VARCHAR(36)"),
-+                ("request_id", "ALTER TABLE usage_events ADD COLUMN request_id VARCHAR(64) NOT NULL DEFAULT ''"),
++                ("request_id", "ALTER TABLE usage_events ADD COLUMN request_id VARCHAR(64) DEFAULT NULL"),
 +                ("characters", "ALTER TABLE usage_events ADD COLUMN characters INTEGER NOT NULL DEFAULT 0"),
 +                ("audio_seconds", "ALTER TABLE usage_events ADD COLUMN audio_seconds FLOAT NOT NULL DEFAULT 0.0"),
 +                ("voice_id", "ALTER TABLE usage_events ADD COLUMN voice_id VARCHAR(64) NOT NULL DEFAULT ''"),
-@@ -96,0 +102,21 @@ def migrate() -> None:
+@@ -96,0 +102,36 @@ def migrate() -> None:
++            if engine.dialect.name == "postgresql":
++                conn.execute(text("UPDATE usage_events SET request_id = NULL WHERE request_id = ''"))
++                conn.execute(text("ALTER TABLE usage_events ALTER COLUMN request_id DROP NOT NULL"))
++                conn.execute(text("ALTER TABLE usage_events ALTER COLUMN request_id SET DEFAULT NULL"))
++                conn.execute(text("""
++                    DO $$ BEGIN
++                        ALTER TABLE usage_events
++                            ADD CONSTRAINT uq_usage_events_request_id_kind
++                            UNIQUE (request_id, kind);
++                    EXCEPTION WHEN duplicate_object THEN NULL;
++                    END $$
++                """))
++            else:
++                _index(conn, "usage_events", "uq_usage_events_request_id_kind",
++                       "CREATE UNIQUE INDEX IF NOT EXISTS uq_usage_events_request_id_kind ON usage_events (request_id, kind) WHERE request_id IS NOT NULL AND request_id != ''")
 +        if "docs" in existing:
 +            doc_cols = {c["name"] for c in insp.get_columns("docs")}
 +            shared_ddl = (
@@ -30,7 +45,7 @@ index 20e3807..107bf2e 100644
 +                sw_col = next((c for c in insp.get_columns("docs") if c["name"] == "shared_with"), None)
 +                if sw_col and ("TEXT" in str(sw_col.get("type")).upper() or "VARCHAR" in str(sw_col.get("type")).upper()):
 +                    conn.execute(text("ALTER TABLE docs ALTER COLUMN shared_with TYPE JSON USING (CASE WHEN shared_with IS NULL OR shared_with = '' THEN '[]'::json ELSE shared_with::json END)"))
-@@ -112,0 +139,9 @@ def migrate() -> None:
+@@ -112,0 +154,9 @@ def migrate() -> None:
 +        if "direct_messages" in existing and "withheld" not in {c["name"] for c in insp.get_columns("direct_messages")}:
 +            conn.execute(text("ALTER TABLE direct_messages ADD COLUMN withheld VARCHAR(60) NOT NULL DEFAULT ''"))
 +        if "direct_messages" in existing and "share" not in {c["name"] for c in insp.get_columns("direct_messages")}:
@@ -40,7 +55,7 @@ index 20e3807..107bf2e 100644
 +        if "direct_messages" in existing:  # a summary or a write in progress when the server stopped never finishes; let its asker send it again
 +            conn.execute(text("UPDATE direct_messages SET share = 'pending' WHERE share = 'sharing'"))
 +            conn.execute(text("UPDATE direct_messages SET share = 'proceed' WHERE share = 'running' AND action <> ''"))
-@@ -239,0 +275,10 @@ def migrate() -> None:
+@@ -239,0 +290,10 @@ def migrate() -> None:
 +        if "documents" in existing:
 +            doc_rec_cols = {c["name"] for c in insp.get_columns("documents")}
 +            shared_ddl = "ALTER TABLE documents ADD COLUMN shared_with JSON DEFAULT '[]'::json" if engine.dialect.name == "postgresql" else "ALTER TABLE documents ADD COLUMN shared_with TEXT DEFAULT '[]'"
