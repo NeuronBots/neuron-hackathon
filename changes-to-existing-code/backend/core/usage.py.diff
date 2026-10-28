@@ -1,10 +1,10 @@
 diff --git a/backend/core/usage.py b/backend/core/usage.py
-index 2ca3b1d..83ba604 100644
+index 2ca3b1d..0ff17f0 100644
 --- a/backend/core/usage.py
 +++ b/backend/core/usage.py
 @@ -2,0 +3 @@ from contextvars import ContextVar, Token
 +from datetime import datetime
-@@ -107,0 +109,268 @@ def record_usage(model: str, usage: dict, user_id: str | None = None, *, agent_i
+@@ -107,0 +109,296 @@ def record_usage(model: str, usage: dict, user_id: str | None = None, *, agent_i
 +def record_tts_usage(
 +    user_id: str | None = None,
 +    *,
@@ -88,6 +88,34 @@ index 2ca3b1d..83ba604 100644
 +        if existing:
 +            return existing
 +        return None
++    finally:
++        if own_session:
++            session.close()
++
++
++def record_call_usage(user_id: str, *, seconds: float, agent_id: str, request_id: str, project_id: str | None = None, db=None):
++    """One live voice call, billed by its length in seconds. kind "call" is the only voice kind whose seconds count toward the caps.
++    request_id makes a retried save a no-op."""
++    from core import jsonl
++    from core.database import SessionLocal
++    from core.limits import invited_project
++    from core.models import UsageEvent
++
++    jsonl.emit("voice.call.usage", user_id=user_id, agent_id=agent_id, audio_seconds=seconds, request_id=request_id)
++    own_session = db is None
++    session = db or SessionLocal()
++    try:
++        existing = session.query(UsageEvent).filter(UsageEvent.request_id == request_id, UsageEvent.kind == "call").first()
++        if existing:
++            return existing
++        event = UsageEvent(user_id=user_id, model="elevenlabs-agent", audio_seconds=float(seconds), agent_id=agent_id[:36], kind="call",
++                           request_id=request_id[:64], project_id=invited_project(user_id, project_id), created_at=datetime.utcnow())
++        session.add(event)
++        session.commit()
++        return event
++    except Exception:
++        session.rollback()  # a concurrent save of the same call won the unique (request_id, kind)
++        return session.query(UsageEvent).filter(UsageEvent.request_id == request_id, UsageEvent.kind == "call").first()
 +    finally:
 +        if own_session:
 +            session.close()

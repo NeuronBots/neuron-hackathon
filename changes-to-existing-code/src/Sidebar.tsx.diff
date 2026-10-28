@@ -1,10 +1,10 @@
 diff --git a/src/Sidebar.tsx b/src/Sidebar.tsx
-index c1bfb19..f0c5d66 100644
+index c1bfb19..faf6aed 100644
 --- a/src/Sidebar.tsx
 +++ b/src/Sidebar.tsx
 @@ -2 +2 @@ import { Fragment, useEffect, useRef, useState, type FormEvent } from "react"
 -import type { AgentRecord, ConnectionRecord, ProjectMember, ProjectRecord, UsageReport } from "./types"
-+import { VOICE_FACTOR, type AgentRecord, type ConnectionRecord, type ProjectMember, type ProjectRecord, type UsageBucket, type UsageReport } from "./types"
++import { VOICE_FACTOR, VOICE_TOKENS_PER_SEC, type AgentRecord, type ConnectionRecord, type ProjectMember, type ProjectRecord, type UsageBucket, type UsageReport } from "./types"
 @@ -30,0 +31,2 @@ type Props = {
 +  onOpenCalendar?: () => void
 +  onOpenBoard?: () => void
@@ -13,7 +13,7 @@ index c1bfb19..f0c5d66 100644
 +  onSetPrReviews: (enabled: boolean) => Promise<void>
 @@ -79,0 +84,3 @@ function resetWhen(iso: string): string {
 +const bucketUnits = (b: UsageBucket) =>
-+  b.input_tokens + b.output_tokens + b.cache_read_tokens + b.cache_write_tokens + Math.round((b.voice_characters ?? 0) * VOICE_FACTOR)
++  b.input_tokens + b.output_tokens + b.cache_read_tokens + b.cache_write_tokens + Math.round((b.voice_characters ?? 0) * VOICE_FACTOR) + Math.round((b.voice_seconds ?? 0) * VOICE_TOKENS_PER_SEC)
 +
 @@ -82,0 +90,2 @@ function UsageMeter({ label, used, cap, resets }: { label: string; used: number;
 +  const percentLabel = open ? "—" : percent === 0 && used > 0 ? "< 1%" : `${percent}%`

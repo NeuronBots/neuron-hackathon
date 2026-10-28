@@ -301,35 +301,68 @@ def test_voice_usage_api_endpoints(db, client):
     data = res_usage.json()
     assert "voice_characters" in data["today"]
     assert data["today"]["voice_characters"] == 500  # 320 + 180
-    assert pytest.approx(data["today"]["voice_seconds"], 0.1) == 51.4  # 6.4 + 45.0
+    assert data["today"]["voice_seconds"] == 0  # only live-call events carry billed seconds; these are legacy transcript events
 
 
-def test_save_voice_call_partitions_seconds_and_caps(db):
-    """save_voice_call must not double-bill seconds to both TTS and STT, and caps line counts."""
-    from routes.agents import CallLine, CallTranscript, save_voice_call
-    user = make_user(db, "call_part_user")
-    proj = Project(id="proj_call_part", name="Call Part Project")
+def _call_setup(db, name):
+    from services import voice  # noqa: F401
+    user = make_user(db, name)
+    proj = Project(id=f"proj_{name}", name="Call Project")
     db.add(proj)
     db.commit()
     db.add(ProjectMember(project_id=proj.id, user_id=user.id, role="owner"))
-    agent = Agent(id="agent_call_part", name="PartBot", system_prompt="test", project_id=proj.id)
+    agent = Agent(id=f"agent_{name}", name="CallBot", system_prompt="test", project_id=proj.id)
     db.add(agent)
     db.commit()
+    return user, proj, agent
 
-    # 100 seconds total, 75 bot chars, 25 user chars -> 75% bot (75s), 25% user (25s)
-    body = CallTranscript(
-        secs=100,
-        lines=[
-            CallLine(who="bot", text="A" * 75),
-            CallLine(who="you", text="B" * 25),
-        ],
-    )
+
+def _save(db, user, proj, agent, **fields):
+    from routes.agents import CallLine, CallTranscript, save_voice_call
+    body = CallTranscript(secs=fields.pop("secs", 5), lines=[CallLine(who="bot", text="hi")], **fields)
     save_voice_call(agent.id, body, user=user, project=proj, db=db)
 
+
+def test_call_is_billed_by_elevenlabs_duration_once(db, monkeypatch):
+    """A confirmed call is one event at ElevenLabs' length, whatever the browser says, and saving it again adds nothing."""
+    from services import voice
+    user, proj, agent = _call_setup(db, "call_conf")
+    monkeypatch.setattr(voice, "call_seconds", lambda cid, uid: 90.0 if (cid, uid) == ("conv_abcdef12", user.id) else None)
+
+    _save(db, user, proj, agent, secs=3, conversation_id="conv_abcdef12")
+    _save(db, user, proj, agent, secs=3, conversation_id="conv_abcdef12")
+
     events = db.query(UsageEvent).filter(UsageEvent.user_id == user.id).all()
-    assert len(events) == 2
-    tts = next(e for e in events if e.kind == "tts")
-    stt = next(e for e in events if e.kind == "stt")
-    assert pytest.approx(tts.audio_seconds + stt.audio_seconds, 0.1) == 100.0
-    assert pytest.approx(tts.audio_seconds, 0.1) == 75.0
-    assert pytest.approx(stt.audio_seconds, 0.1) == 25.0
+    assert [(e.kind, e.audio_seconds, e.characters, e.request_id) for e in events] == [("call", 90.0, 0, "conv:conv_abcdef12")]
+    assert tokens_used(db, week_start(datetime.utcnow()), [user.id])[user.id] == 90 * 30
+
+
+def test_unconfirmed_call_uses_server_clock_not_the_browser(db, monkeypatch):
+    """With no ElevenLabs answer, the length is the time since the server minted the call's token; a claimed 1 second does not make it free."""
+    import time
+    from services import voice
+    user, proj, agent = _call_setup(db, "call_clock")
+    monkeypatch.setattr(voice, "call_seconds", lambda cid, uid: None)
+    token = voice.call_token(user.id, agent.id)
+    real = time.time()
+    monkeypatch.setattr(time, "time", lambda: real + 120)
+
+    _save(db, user, proj, agent, secs=1, voice_token=token, conversation_id="whatever")
+
+    (event,) = db.query(UsageEvent).filter(UsageEvent.user_id == user.id).all()
+    assert event.kind == "call" and 119 <= event.audio_seconds <= 121
+    assert event.request_id.startswith("call:")  # an unconfirmed claim never takes a conversation's key
+
+
+def test_call_seconds_rejects_another_users_conversation(monkeypatch):
+    from services import voice
+    monkeypatch.setenv("ELEVENLABS_API_KEY", "k")
+    monkeypatch.setenv("ELEVENLABS_AGENT_ID", "agent_x")
+    reply = lambda user_id, agent_id="agent_x": type("R", (), {"raise_for_status": lambda s: None, "json": lambda s: {
+        "agent_id": agent_id, "user_id": user_id, "status": "done", "metadata": {"call_duration_secs": 42}}})()
+    monkeypatch.setattr(voice.httpx, "get", lambda *a, **k: reply("me"))
+    assert voice.call_seconds("conv_abcdef12", "me") == 42.0
+    assert voice.call_seconds("conv_abcdef12", "someone_else") is None
+    monkeypatch.setattr(voice.httpx, "get", lambda *a, **k: reply("me", agent_id="other_agent"))
+    assert voice.call_seconds("conv_abcdef12", "me") is None
+    assert voice.call_seconds("../x", "me") is None

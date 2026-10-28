@@ -1,5 +1,5 @@
 diff --git a/src/api.ts b/src/api.ts
-index c214349..4986b9b 100644
+index c214349..6301233 100644
 --- a/src/api.ts
 +++ b/src/api.ts
 @@ -56 +56 @@ export async function fetchAgents(): Promise<
@@ -24,6 +24,15 @@ index c214349..4986b9b 100644
 @@ -102 +100 @@ export async function updateAgent(
 -  return handleResponse(res) as Promise<{ id: string; name: string; system_prompt: string; model: string; parent_id: string | null; is_master: boolean; field: string; label: string; color: string; peer_partner_ids?: string[]; memory?: string; created_at: string; last_active?: number | null }>
 +  return handleResponse(res) as Promise<{ id: string; name: string; system_prompt: string; parent_id: string | null; is_master: boolean; field: string; label: string; color: string; peer_partner_ids?: string[]; memory?: string; created_at: string; last_active?: number | null }>
+@@ -169 +167 @@ export async function clearAgentHistory(agentId: string): Promise<void> {
+-type VoiceSession = { signed_url: string; prompt: string; first_message: string; voice_id: string; llm: string; voice_token: string }
++type VoiceSession = { signed_url: string; prompt: string; first_message: string; voice_id: string; llm: string; voice_token: string; user_id: string }
+@@ -184 +182 @@ const CALL_LINES_MAX = 200
+-export async function saveVoiceCall(agentId: string, secs: number, lines: VoiceLine[]): Promise<void> {
++export async function saveVoiceCall(agentId: string, secs: number, lines: VoiceLine[], voiceToken: string, conversationId: string): Promise<void> {
+@@ -187 +185 @@ export async function saveVoiceCall(agentId: string, secs: number, lines: VoiceL
+-  const body = JSON.stringify({ secs, lines: kept })
++  const body = JSON.stringify({ secs, lines: kept, voice_token: voiceToken, conversation_id: conversationId })
 @@ -287,2 +285,8 @@ export async function fetchDocumentText(path: string): Promise<string> {
 -export async function saveDocument(path: string, html: string): Promise<void> {
 -  await handleResponse(await apiFetch(path.replace(/^\/api/, ""), { method: "PUT", body: html, headers: { "Content-Type": "text/html; charset=utf-8" } }))

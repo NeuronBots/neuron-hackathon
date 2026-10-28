@@ -1,5 +1,5 @@
 diff --git a/src/ChatView.tsx b/src/ChatView.tsx
-index 5d6e699..ed8aeb7 100644
+index 5d6e699..7d41ae4 100644
 --- a/src/ChatView.tsx
 +++ b/src/ChatView.tsx
 @@ -1 +1 @@
@@ -7,7 +7,7 @@ index 5d6e699..ed8aeb7 100644
 +import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 @@ -6 +6 @@ import remarkGfm from "remark-gfm"
 -import type { ChatMessage, AgentRecord, Attachment, UsageBucket, UsageReport } from "./types"
-+import { VOICE_FACTOR, type ChatMessage, type AgentRecord, type Attachment, type UsageBucket, type UsageReport } from "./types"
++import { VOICE_FACTOR, VOICE_TOKENS_PER_SEC, type ChatMessage, type AgentRecord, type Attachment, type UsageBucket, type UsageReport } from "./types"
 @@ -9 +9 @@ import { TeamButton } from "./Sidebar"
 -import { changeSlide, documentExists, fetchDocumentText, fetchUsage, saveDocument, splitFiles, uploadFile } from "./api"
 +import { changeSlide, documentExists, fetchDocumentText, fetchSheets, fetchUsage, saveDocument, splitFiles, uploadFile } from "./api"
@@ -546,7 +546,7 @@ index 5d6e699..ed8aeb7 100644
 -const tokens = (b: UsageBucket) => b.input_tokens + b.output_tokens + b.cache_read_tokens + b.cache_write_tokens
 +// The enforced count in limits.py: input + output + cache read + cache write + (voice characters * 1.5).
 +const tokens = (b: UsageBucket) =>
-+  b.input_tokens + b.output_tokens + b.cache_read_tokens + b.cache_write_tokens + Math.round((b.voice_characters ?? 0) * VOICE_FACTOR)
++  b.input_tokens + b.output_tokens + b.cache_read_tokens + b.cache_write_tokens + Math.round((b.voice_characters ?? 0) * VOICE_FACTOR) + Math.round((b.voice_seconds ?? 0) * VOICE_TOKENS_PER_SEC)
 @@ -469,0 +849 @@ export function ChatView({
 +  agentTyping,
 @@ -475,2 +854,0 @@ export function ChatView({

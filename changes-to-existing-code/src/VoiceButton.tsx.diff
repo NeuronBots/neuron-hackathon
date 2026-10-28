@@ -1,0 +1,11 @@
+diff --git a/src/VoiceButton.tsx b/src/VoiceButton.tsx
+index 7e90a12..f13d51a 100644
+--- a/src/VoiceButton.tsx
++++ b/src/VoiceButton.tsx
+@@ -56,0 +57 @@ export default function VoiceButton({ agentId, name }: { agentId: string; name:
++    const conversationId = call.current.getId() // the server asks ElevenLabs how long this call really was
+@@ -58 +59 @@ export default function VoiceButton({ agentId, name }: { agentId: string; name:
+-      saveVoiceCall(agentId, Math.round((Date.now() - startedAt.current) / 1000), said)
++      saveVoiceCall(agentId, Math.round((Date.now() - startedAt.current) / 1000), said, token.current, conversationId)
+@@ -88,0 +90 @@ export default function VoiceButton({ agentId, name }: { agentId: string; name:
++        userId: v.user_id, // lets the server confirm this conversation is this person's

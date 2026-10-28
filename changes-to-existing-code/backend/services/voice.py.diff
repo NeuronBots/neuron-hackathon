@@ -1,14 +1,46 @@
 diff --git a/backend/services/voice.py b/backend/services/voice.py
-index 9caf295..121286b 100644
+index 9caf295..83d90cc 100644
 --- a/backend/services/voice.py
 +++ b/backend/services/voice.py
 @@ -60,2 +60 @@ def session_config(agent: Agent, user_name: str) -> dict:
 -        # Voice needs a fast model; Opus is too slow to talk with.
 -        "llm": "claude-haiku-4-5" if "haiku" in (agent.model or "") else "claude-sonnet-5-5",
 +        "llm": "claude-sonnet-5-5",  # ElevenLabs hosts this model, not the model proxy; bots carry no model of their own. The token cap is checked when a call starts (routes/agents.py start_voice)
-@@ -120,0 +120,9 @@ def signed_url() -> str:
+@@ -107,0 +107,30 @@ def token_ok(token: str, user_id: str, agent_id: str) -> bool:
++def call_started(token: str, user_id: str, agent_id: str) -> float | None:
++    """When the call this token was minted for began (the server's clock), or None for a bad or expired token."""
++    return int(token.split(".", 1)[0]) - _TOKEN_SECS if token_ok(token, user_id, agent_id) else None
++
++
++_DONE = "done"
++
++
++def call_seconds(conversation_id: str, user_id: str) -> float | None:
++    """The call's length as ElevenLabs recorded it, or None when it cannot be confirmed: not configured, not this person's call,
++    or no duration yet. ElevenLabs finishes a conversation a few seconds after hang-up, so this waits briefly for that."""
++    key, agent_id = os.getenv("ELEVENLABS_API_KEY"), os.getenv("ELEVENLABS_AGENT_ID")
++    if not key or not agent_id or not re.fullmatch(r"[A-Za-z0-9_-]{8,128}", conversation_id or ""):
++        return None
++    for attempt in range(4):
++        try:
++            resp = httpx.get(f"https://api.elevenlabs.io/v1/convai/conversations/{conversation_id}", headers={"xi-api-key": key}, timeout=10)
++            resp.raise_for_status()
++            data = resp.json()
++        except (httpx.HTTPError, ValueError):
++            return None
++        if data.get("agent_id") != agent_id or data.get("user_id") != user_id:
++            return None  # someone else's call, or one that did not start here
++        secs = (data.get("metadata") or {}).get("call_duration_secs")
++        if isinstance(secs, (int, float)) and secs > 0 and (data.get("status") == _DONE or attempt == 3):
++            return float(secs)
++        time.sleep(1.5)
++    return None
++
++
+@@ -120,0 +150,10 @@ def signed_url() -> str:
 +# ── ElevenLabs Voice Usage Accounting ──
 +from core.usage import (
++    record_call_usage,
 +    record_tts_usage,
 +    record_stt_usage,
 +    settle_streamed_synthesis,
