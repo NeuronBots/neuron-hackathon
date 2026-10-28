@@ -1,5 +1,5 @@
 diff --git a/src/DocumentsView.tsx b/src/DocumentsView.tsx
-index 3c81d11..f8d3f93 100644
+index 3c81d11..7fc90d4 100644
 --- a/src/DocumentsView.tsx
 +++ b/src/DocumentsView.tsx
 @@ -2 +2 @@ import { useEffect, useState } from "react"
@@ -102,113 +102,52 @@ index 3c81d11..f8d3f93 100644
 @@ -41 +123 @@ export function DocumentsView({ onClose, onOpenTeam, teamOpen }: { onClose: () =
 -          <h2 className="cal-title">Documents</h2>
 +          <h2 className="cal-title">Files</h2>
-@@ -45,0 +128,105 @@ export function DocumentsView({ onClose, onOpenTeam, teamOpen }: { onClose: () =
+@@ -45,0 +128,44 @@ export function DocumentsView({ onClose, onOpenTeam, teamOpen }: { onClose: () =
 +
 +      {shareDoc && (
-+        <div className="doc-overlay" onClick={() => setShareDoc(null)}>
-+          <div className="doc-col" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440, margin: "auto", background: "var(--field)", padding: 24, borderRadius: 16, border: "1px solid var(--line)" }}>
-+            <h3 style={{ margin: "0 0 12px", fontFamily: "var(--serif)", color: "var(--ink)" }}>Share {shareDoc.title}</h3>
-+            <form onSubmit={(e) => void handleShare(e)}>
-+              <label style={{ display: "block", fontSize: "0.85rem", color: "var(--soft)", marginBottom: 6 }}>Share with teammate:</label>
-+              {members.length > 0 ? (
-+                <select
-+                  value={shareTarget}
-+                  onChange={(e) => setShareTarget(e.target.value)}
-+                  className="task-filter-select"
-+                  style={{ width: "100%", marginBottom: 12, padding: "8px 10px" }}
-+                  required
-+                >
-+                  <option value="">Select a teammate…</option>
-+                  {members.map((m) => (
-+                    <option key={m.id} value={m.id}>{m.name} ({m.email})</option>
-+                  ))}
-+                </select>
-+              ) : (
-+                <input
-+                  type="text"
-+                  placeholder="User ID or Email"
-+                  value={shareTarget}
-+                  onChange={(e) => setShareTarget(e.target.value)}
-+                  style={{ width: "100%", marginBottom: 12, padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--field)", color: "var(--ink)" }}
-+                  required
-+                />
-+              )}
-+              <textarea
-+                placeholder="Optional note for the recipient…"
-+                value={shareNote}
-+                onChange={(e) => setShareNote(e.target.value)}
-+                rows={2}
-+                style={{ width: "100%", boxSizing: "border-box", marginBottom: 12, padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--field)", color: "var(--ink)", resize: "vertical" }}
-+              />
-+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center" }}>
-+                {shareStatus && (
-+                  <span style={{ marginRight: "auto", fontSize: "0.82rem", color: shareStatus.startsWith("Failed") ? "var(--danger)" : "var(--pine)" }}>
-+                    {shareStatus}
-+                  </span>
-+                )}
-+                <button className="btn btn-quiet btn-sm" type="button" onClick={() => setShareDoc(null)}>Cancel</button>
-+                <button className="btn btn-primary btn-sm" type="submit" disabled={shareSending || !shareTarget}>
-+                  {shareSending ? "Sharing…" : "Share"}
-+                </button>
-+              </div>
-+            </form>
-+          </div>
++        <div className="profile-overlay" onClick={() => setShareDoc(null)}>
++          <form className="profile-modal doc-dialog" role="dialog" aria-modal="true" aria-label={`Share ${shareDoc.title}`} onClick={(e) => e.stopPropagation()} onSubmit={(e) => void handleShare(e)}>
++            <div className="doc-dialog-head">
++              <h2>Share file</h2>
++              <p><b>{shareDoc.title}</b></p>
++            </div>
++            {members.length > 0 ? (
++              <select className="doc-dialog-field" value={shareTarget} onChange={(e) => setShareTarget(e.target.value)} required autoFocus>
++                <option value="">Select a teammate…</option>
++                {members.map((m) => (
++                  <option key={m.id} value={m.id}>{m.name} ({m.email})</option>
++                ))}
++              </select>
++            ) : (
++              <input className="doc-dialog-field" type="text" placeholder="User ID or email" value={shareTarget} onChange={(e) => setShareTarget(e.target.value)} required autoFocus />
++            )}
++            <textarea className="doc-dialog-field" placeholder="Add a note (optional)" value={shareNote} onChange={(e) => setShareNote(e.target.value)} rows={3} />
++            <div className="doc-dialog-actions">
++              {shareStatus && <span className={shareStatus.startsWith("Failed") ? "doc-dialog-status is-error" : "doc-dialog-status"}>{shareStatus}</span>}
++              <button className="btn btn-quiet btn-sm" type="button" onClick={() => setShareDoc(null)}>Cancel</button>
++              <button className="btn btn-primary btn-sm" type="submit" disabled={shareSending || !shareTarget}>{shareSending ? "Sharing…" : "Share"}</button>
++            </div>
++          </form>
 +        </div>
 +      )}
 +
 +      {deleteTarget && (
-+        <div className="doc-overlay" onClick={() => !deleting && setDeleteTarget(null)}>
-+          <div
-+            className="doc-col"
-+            onClick={(e) => e.stopPropagation()}
-+            style={{
-+              maxWidth: 420,
-+              margin: "auto",
-+              background: "var(--field)",
-+              padding: 24,
-+              borderRadius: 16,
-+              border: "1px solid var(--line)",
-+              boxShadow: "0 20px 40px rgba(0, 0, 0, 0.4)",
-+            }}
-+          >
-+            <h3 style={{ margin: "0 0 10px", fontFamily: "var(--serif)", color: "var(--ink)", fontSize: "1.2rem" }}>
-+              Delete File
-+            </h3>
-+            <p style={{ margin: "0 0 16px", fontSize: "0.92rem", color: "var(--soft)", lineHeight: 1.5 }}>
-+              Are you sure you want to delete <b style={{ color: "var(--ink)" }}>{deleteTarget.title}</b>? This action cannot be undone.
-+            </p>
-+            {deleteError && (
-+              <p style={{ margin: "0 0 12px", fontSize: "0.85rem", color: "var(--danger, #ff6b6b)" }}>
-+                {deleteError}
-+              </p>
-+            )}
-+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", alignItems: "center" }}>
-+              <button
-+                className="btn btn-quiet btn-sm"
-+                type="button"
-+                disabled={deleting}
-+                onClick={() => {
-+                  setDeleteTarget(null)
-+                  setDeleteError("")
-+                }}
-+              >
-+                Cancel
-+              </button>
-+              <button
-+                className="btn btn-sm btn-primary"
-+                type="button"
-+                disabled={deleting}
-+                style={{ background: "#dc2626", borderColor: "#dc2626", color: "#fff" }}
-+                onClick={() => void confirmDelete()}
-+              >
-+                {deleting ? "Deleting…" : "Delete"}
-+              </button>
++        <div className="profile-overlay" onClick={() => !deleting && setDeleteTarget(null)}>
++          <div className="profile-modal doc-dialog" role="alertdialog" aria-modal="true" aria-label={`Delete ${deleteTarget.title}`} onClick={(e) => e.stopPropagation()}>
++            <div className="doc-dialog-head">
++              <h2>Delete file?</h2>
++              <p><b>{deleteTarget.title}</b> will be removed for everyone it was shared with. This can’t be undone.</p>
++            </div>
++            {deleteError && <p className="doc-dialog-status is-error">{deleteError}</p>}
++            <div className="doc-dialog-actions">
++              <button className="btn btn-quiet btn-sm" type="button" disabled={deleting} autoFocus onClick={() => { setDeleteTarget(null); setDeleteError("") }}>Cancel</button>
++              <button className="btn btn-danger btn-sm" type="button" disabled={deleting} onClick={() => void confirmDelete()}>{deleting ? "Deleting…" : "Delete"}</button>
 +            </div>
 +          </div>
 +        </div>
 +      )}
 +
-@@ -56,2 +243,14 @@ export function DocumentsView({ onClose, onOpenTeam, teamOpen }: { onClose: () =
+@@ -56,2 +182,14 @@ export function DocumentsView({ onClose, onOpenTeam, teamOpen }: { onClose: () =
 -        {docs && docs.length === 0 && (
 -          <p className="agent-docs-empty">{failed ? `Could not load documents: ${failed}` : "Your bots have not made any documents yet."}</p>
 +        {loading && docs === null && (
@@ -225,9 +164,9 @@ index 3c81d11..f8d3f93 100644
 +        )}
 +        {!loading && !failed && docs && docs.length > 0 && shown.length === 0 && (
 +          <p className="agent-docs-empty">No {KINDS.find(([id]) => id === kind)?.[1]} files yet.</p>
-@@ -59 +257,0 @@ export function DocumentsView({ onClose, onOpenTeam, teamOpen }: { onClose: () =
+@@ -59 +196,0 @@ export function DocumentsView({ onClose, onOpenTeam, teamOpen }: { onClose: () =
 -        {docs && docs.length > 0 && shown.length === 0 && <p className="agent-docs-empty">No {KINDS.find(([id]) => id === kind)?.[1]} documents yet.</p>}
-@@ -61 +259,15 @@ export function DocumentsView({ onClose, onOpenTeam, teamOpen }: { onClose: () =
+@@ -61 +198,15 @@ export function DocumentsView({ onClose, onOpenTeam, teamOpen }: { onClose: () =
 -          <FileCard key={doc.filename} path={doc.url} label={doc.title} detail={[doc.agent_name, made(doc.created_at)].filter(Boolean).join(" · ")} bot={doc.agent_id ? { id: doc.agent_id, name: doc.agent_name } : undefined} />
 +          <FileCard
 +            key={doc.filename}
