@@ -1,0 +1,7 @@
+diff --git a/backend/tests/test_core/test_access.py b/backend/tests/test_core/test_access.py
+index 0b68d05..541eb0e 100644
+--- a/backend/tests/test_core/test_access.py
++++ b/backend/tests/test_core/test_access.py
+@@ -163 +163 @@ def test_projects_for_lists_only_my_projects_with_my_role(db):
+-    assert first == {"id": "p1", "name": "One", "role": "owner", "jira_project_key": "ONE", "repo": "a/b"}
++    assert first == {"id": "p1", "name": "One", "role": "owner", "jira_project_key": "ONE", "repo": "a/b", "coding_bot_id": "", "pr_reviews": True}

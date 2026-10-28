@@ -1,19 +1,57 @@
 diff --git a/src/App.tsx b/src/App.tsx
-index 5d89efb..a6b207d 100644
+index 5d89efb..d8709dc 100644
 --- a/src/App.tsx
 +++ b/src/App.tsx
-@@ -343 +343 @@ export function App() {
+@@ -42,0 +43,2 @@ import {
++  setCodingBot,
++  setPrReviews,
+@@ -343 +345 @@ export function App() {
 -  async function handleEditSave(draft: { id: string; name: string; system_prompt: string; model: string; field: string; label: string }): Promise<boolean> {
 +  async function handleEditSave(draft: { id: string; name: string; system_prompt: string; field: string; label: string }): Promise<boolean> {
-@@ -345 +345 @@ export function App() {
+@@ -345 +347 @@ export function App() {
 -      const updated = await updateAgent(draft.id, { name: draft.name, system_prompt: draft.system_prompt, model: draft.model, field: draft.field, label: draft.label })
 +      const updated = await updateAgent(draft.id, { name: draft.name, system_prompt: draft.system_prompt, field: draft.field, label: draft.label })
-@@ -1262,0 +1263,2 @@ export function App() {
+@@ -885,0 +888,14 @@ export function App() {
++  // When a bot stops typing in the background, show what it wrote.
++  const wasTyping = useRef(false)
++  useEffect(() => {
++    const now = !!selectedAgentId && activeTyping.agents.includes(selectedAgentId)
++    const was = wasTyping.current
++    wasTyping.current = now
++    if (!was || now || !selectedAgentId || streamsRef.current.has(selectedAgentId)) return
++    const agentId = selectedAgentId
++    fetchAgentHistory(agentId).then((history) => {
++      if (selectedRef.current !== agentId || streamsRef.current.has(agentId)) return
++      setMessages(history.map((m, i) => ({ ...m, id: `hist-${agentId}-${i}` })))
++    }).catch(() => {})
++  }, [selectedAgentId, activeTyping])
++
+@@ -1171,0 +1188,14 @@ export function App() {
++  async function handleSetCodingBot(agentId: string) {
++    const saved = await setCodingBot(projectId, agentId)
++    const withBot = (list: ProjectRecord[]) => list.map((item) => (item.id === projectId ? { ...item, coding_bot_id: saved } : item))
++    setAccount((current) => current && { ...current, projects: withBot(current.projects) })
++    setProjects(withBot)
++  }
++
++  async function handleSetPrReviews(enabled: boolean) {
++    const saved = await setPrReviews(projectId, enabled)
++    const withFlag = (list: ProjectRecord[]) => list.map((item) => (item.id === projectId ? { ...item, pr_reviews: saved } : item))
++    setAccount((current) => current && { ...current, projects: withFlag(current.projects) })
++    setProjects(withFlag)
++  }
++
+@@ -1262,0 +1293,2 @@ export function App() {
 +        onOpenCalendar={handleOpenCalendar}
 +        onOpenBoard={handleOpenBoard}
-@@ -1322 +1324 @@ export function App() {
+@@ -1293,0 +1326,2 @@ export function App() {
++        onSetCodingBot={handleSetCodingBot}
++        onSetPrReviews={handleSetPrReviews}
+@@ -1322 +1356 @@ export function App() {
 -        <DocumentsView onClose={handleCloseCalendar} onOpenTeam={() => setNavOpen(true)} teamOpen={navOpen} />
 +        <DocumentsView onClose={handleCloseCalendar} onOpenTeam={() => setNavOpen(true)} teamOpen={navOpen} members={members} />
-@@ -1349,2 +1350,0 @@ export function App() {
+@@ -1335,0 +1370 @@ export function App() {
++          agentTyping={!!selectedAgentId && activeTyping.agents.includes(selectedAgentId)}
+@@ -1349,2 +1383,0 @@ export function App() {
 -          onOpenCalendar={handleOpenCalendar}
 -          onOpenBoard={handleOpenBoard}

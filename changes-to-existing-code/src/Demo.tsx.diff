@@ -1,5 +1,5 @@
 diff --git a/src/Demo.tsx b/src/Demo.tsx
-index d1a98f0..d30e24e 100644
+index d1a98f0..9f47cb7 100644
 --- a/src/Demo.tsx
 +++ b/src/Demo.tsx
 @@ -244 +244 @@ const bot = (id: string, name: string, label: string, is_master = false): AgentR
@@ -8,6 +8,21 @@ index d1a98f0..d30e24e 100644
 @@ -375 +375 @@ function ChatScene({ onLive, ready = true }: { onLive: () => void; ready?: boole
 -        onSelectAgent={(id) => { setSelected(id); setPeer(null) }} onCreateBot={async () => {}} onDeleteAgent={nothing} onOpenProfile={nothing}
 +        onSelectAgent={(id) => { setSelected(id); setPeer(null) }} onCreateBot={async () => {}} onDeleteAgent={nothing} onOpenProfile={nothing} onOpenBoard={() => setBoardOpen(true)}
+@@ -380 +380 @@ function ChatScene({ onLive, ready = true }: { onLive: () => void; ready?: boole
+-        onAddMember={async () => {}} onDeleteInvite={async () => {}} onDeleteProject={async () => {}} onLinkJira={async () => {}} onLinkRepo={async () => {}} onLogout={nothing} onCancelSubscription={async () => {}} onDeleteAccount={async () => {}} onSendDeleteCode={async () => {}}
++        onAddMember={async () => {}} onDeleteInvite={async () => {}} onDeleteProject={async () => {}} onLinkJira={async () => {}} onLinkRepo={async () => {}} onSetCodingBot={async () => {}} onSetPrReviews={async () => {}} onLogout={nothing} onCancelSubscription={async () => {}} onDeleteAccount={async () => {}} onSendDeleteCode={async () => {}}
 @@ -389 +389 @@ function ChatScene({ onLive, ready = true }: { onLive: () => void; ready?: boole
 -        onClearMemory={nothing} onOpenProfile={nothing} onOpenBoard={() => setBoardOpen(true)} statusMsg=""
 +        onClearMemory={nothing} onOpenProfile={nothing} statusMsg=""
+@@ -532 +532 @@ function MembersScene({ onLive }: { onLive: () => void }) {
+-          onAddMember={addMember} onDeleteInvite={async () => {}} onDeleteProject={async () => {}} onLinkJira={async () => {}} onLinkRepo={async () => {}} onLogout={nothing} onCancelSubscription={async () => {}} onDeleteAccount={async () => {}} onSendDeleteCode={async () => {}}
++          onAddMember={addMember} onDeleteInvite={async () => {}} onDeleteProject={async () => {}} onLinkJira={async () => {}} onLinkRepo={async () => {}} onSetCodingBot={async () => {}} onSetPrReviews={async () => {}} onLogout={nothing} onCancelSubscription={async () => {}} onDeleteAccount={async () => {}} onSendDeleteCode={async () => {}}
+@@ -629 +629 @@ function TeamChatDemo() {
+-          onAddMember={async () => {}} onDeleteInvite={async () => {}} onDeleteProject={async () => {}} onLinkJira={async () => {}} onLinkRepo={async () => {}} onLogout={nothing} onCancelSubscription={async () => {}} onDeleteAccount={async () => {}} onSendDeleteCode={async () => {}}
++          onAddMember={async () => {}} onDeleteInvite={async () => {}} onDeleteProject={async () => {}} onLinkJira={async () => {}} onLinkRepo={async () => {}} onSetCodingBot={async () => {}} onSetPrReviews={async () => {}} onLogout={nothing} onCancelSubscription={async () => {}} onDeleteAccount={async () => {}} onSendDeleteCode={async () => {}}
+@@ -709 +709 @@ function GithubDemo() {
+-          onAddMember={async () => {}} onDeleteInvite={async () => {}} onDeleteProject={async () => {}} onLinkJira={async () => {}} onLinkRepo={async () => {}} onLogout={nothing} onCancelSubscription={async () => {}} onDeleteAccount={async () => {}} onSendDeleteCode={async () => {}}
++          onAddMember={async () => {}} onDeleteInvite={async () => {}} onDeleteProject={async () => {}} onLinkJira={async () => {}} onLinkRepo={async () => {}} onSetCodingBot={async () => {}} onSetPrReviews={async () => {}} onLogout={nothing} onCancelSubscription={async () => {}} onDeleteAccount={async () => {}} onSendDeleteCode={async () => {}}
+@@ -811 +811 @@ function PitchDemo() {
+-          onAddMember={async () => {}} onDeleteInvite={async () => {}} onDeleteProject={async () => {}} onLinkJira={async () => {}} onLinkRepo={async () => {}} onLogout={nothing} onCancelSubscription={async () => {}} onDeleteAccount={async () => {}} onSendDeleteCode={async () => {}}
++          onAddMember={async () => {}} onDeleteInvite={async () => {}} onDeleteProject={async () => {}} onLinkJira={async () => {}} onLinkRepo={async () => {}} onSetCodingBot={async () => {}} onSetPrReviews={async () => {}} onLogout={nothing} onCancelSubscription={async () => {}} onDeleteAccount={async () => {}} onSendDeleteCode={async () => {}}
