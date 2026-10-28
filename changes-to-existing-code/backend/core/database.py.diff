@@ -1,5 +1,5 @@
 diff --git a/backend/core/database.py b/backend/core/database.py
-index 20e3807..5ef3447 100644
+index 20e3807..71f3bd4 100644
 --- a/backend/core/database.py
 +++ b/backend/core/database.py
 @@ -65,0 +66,8 @@ BACKFILL_CHILD_ID = f"""
@@ -28,7 +28,7 @@ index 20e3807..5ef3447 100644
 +                        ALTER TABLE usage_events
 +                            ADD CONSTRAINT uq_usage_events_request_id_kind
 +                            UNIQUE (request_id, kind);
-+                    EXCEPTION WHEN duplicate_object THEN NULL;
++                    EXCEPTION WHEN duplicate_object OR duplicate_table THEN NULL;
 +                    END $$
 +                """))
 +            else:

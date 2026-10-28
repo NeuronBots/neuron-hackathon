@@ -1,5 +1,5 @@
 diff --git a/backend/routes/misc.py b/backend/routes/misc.py
-index 64721c9..6462c1d 100644
+index 64721c9..dcc7ebd 100644
 --- a/backend/routes/misc.py
 +++ b/backend/routes/misc.py
 @@ -9 +9 @@ from pydantic import BaseModel, Field
@@ -69,8 +69,25 @@ index 64721c9..6462c1d 100644
 @@ -239 +271 @@ def download_document(filename: str, user: User = Depends(get_current_user)):
 -    if path is None or not path.is_file() or not user_may_read(user.id, filename):
 +    if path is None or not path.is_file() or not user_may_read(user.id, filename, db=db):
-@@ -245,0 +278,93 @@ def download_document(filename: str, user: User = Depends(get_current_user)):
+@@ -245,0 +278,110 @@ def download_document(filename: str, user: User = Depends(get_current_user)):
 +
++
++
++@router.get("/api/documents/{filename}/sheets")
++def document_sheets(filename: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
++    """An Excel file as rows per sheet, for the in-app viewer."""
++    path = document_path(filename)
++    if path is None or path.suffix.lower() != ".xlsx" or not path.is_file() or not user_may_read(user.id, filename, db=db):
++        raise HTTPException(status_code=404, detail="Document not found")
++    from contextlib import closing
++
++    from openpyxl import load_workbook
++
++    try:
++        with closing(load_workbook(path, read_only=True, data_only=True)) as book:
++            return [{"name": s.title, "rows": [["" if c is None else str(c) for c in row] for row in s.iter_rows(values_only=True, max_row=2000)]} for s in book]
++    except Exception:
++        raise HTTPException(status_code=422, detail="This spreadsheet could not be read.")
 +
 +
 +class ShareDocIn(BaseModel):

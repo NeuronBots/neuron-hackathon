@@ -1,5 +1,5 @@
 diff --git a/src/styles.css b/src/styles.css
-index 764ceee..58e569e 100644
+index 764ceee..0384d5b 100644
 --- a/src/styles.css
 +++ b/src/styles.css
 @@ -1131,0 +1132,41 @@ button:disabled {
@@ -149,7 +149,7 @@ index 764ceee..58e569e 100644
 +.src-spinner { width: 14px; height: 14px; flex: none; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: src-spin 0.9s linear infinite; }
 +@keyframes src-spin { to { transform: rotate(360deg); } }
 +@media (prefers-reduced-motion: reduce) { .src-spinner { animation-duration: 3s; } }
-@@ -8261,0 +8391,319 @@ button.landing-plan-cta {
+@@ -8261,0 +8391,347 @@ button.landing-plan-cta {
 +
 +
 +/* Document Store & List Panel (NURN-152) */
@@ -469,3 +469,31 @@ index 764ceee..58e569e 100644
 +    min-height: 400px;
 +  }
 +}
++
++/* Excel-style spreadsheet viewer: always light, like a worksheet */
++.sheet-col { width: min(1180px, 100%); }
++.doc-page.sheet { background: #fff; color: #1f1f1f; font: 13px/1 var(--sans); display: flex; flex-direction: column; border-radius: 10px; }
++.sheet-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 14px; background: #217346; color: #fff; }
++.sheet-title .btn-quiet { color: #fff; }
++.sheet-file { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
++.sheet-formula { display: flex; align-items: center; border-bottom: 1px solid #d4d4d4; background: #f3f3f3; }
++.sheet-formula > * { padding: 7px 10px; }
++.sheet-ref { flex: 0 0 72px; text-align: center; font-weight: 600; border-right: 1px solid #d4d4d4; background: #fff; }
++.sheet-fx { color: #217346; font-style: italic; font-family: serif; border-right: 1px solid #d4d4d4; }
++.sheet-value { flex: 1; min-width: 0; background: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; align-self: stretch; display: flex; align-items: center; }
++.sheet-scroll { overflow: auto; max-height: min(66vh, 640px); }
++.sheet-grid { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; }
++.sheet-grid th, .sheet-grid td { height: 24px; padding: 0 8px; border-right: 1px solid #e1e1e1; border-bottom: 1px solid #e1e1e1; white-space: nowrap; max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
++.sheet-grid td { min-width: 96px; background: #fff; cursor: cell; }
++.sheet-grid td.is-num { text-align: right; font-variant-numeric: tabular-nums; }
++.sheet-grid td.is-sel { outline: 2px solid #217346; outline-offset: -2px; }
++.sheet-grid tr.is-head td { font-weight: 700; background: #f7faf8; }
++.sheet-grid thead th { position: sticky; top: 0; z-index: 2; background: #efefef; color: #444; font-weight: 500; text-align: center; border-bottom: 1px solid #bdbdbd; }
++.sheet-grid tbody th { position: sticky; left: 0; z-index: 1; background: #efefef; color: #444; font-weight: 500; text-align: center; min-width: 40px; border-right: 1px solid #bdbdbd; }
++.sheet-grid .sheet-corner { left: 0; z-index: 3; min-width: 40px; }
++.sheet-grid th.is-active { background: #d3e7da; color: #14532d; font-weight: 700; }
++.sheet-tabs { display: flex; align-items: center; gap: 2px; padding: 0 8px; background: #f3f3f3; border-top: 1px solid #d4d4d4; overflow-x: auto; }
++.sheet-tabs button { padding: 7px 16px; border: 0; border-bottom: 2px solid transparent; background: none; color: #444; font: inherit; cursor: pointer; white-space: nowrap; }
++.sheet-tabs button.is-on { background: #fff; color: #217346; font-weight: 600; border-bottom-color: #217346; }
++.sheet-count { margin-left: auto; padding-left: 16px; color: #777; font-size: 12px; white-space: nowrap; }
++.sheet-msg { padding: 32px; color: #555; }
