@@ -1,5 +1,5 @@
 diff --git a/backend/core/models.py b/backend/core/models.py
-index 38a5312..d329199 100644
+index 38a5312..c457e6d 100644
 --- a/backend/core/models.py
 +++ b/backend/core/models.py
 @@ -0,0 +1 @@
@@ -27,7 +27,7 @@ index 38a5312..d329199 100644
 +        Index("usage_events_user_created_idx", "user_id", "created_at"),
 +        UniqueConstraint("request_id", "kind", name="uq_usage_events_request_id_kind"),
 +    )
-@@ -238 +252,12 @@ class UsageEvent(Base):
+@@ -238 +252,13 @@ class UsageEvent(Base):
 -    __table_args__ = (Index("usage_events_user_created_idx", "user_id", "created_at"),)
 +
 +class VoiceCall(Base):
@@ -39,13 +39,14 @@ index 38a5312..d329199 100644
 +    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
 +    agent_id = Column(String(36), nullable=False)
 +    project_id = Column(String(36), nullable=True)
++    conversation_id = Column(String(64), nullable=True)  # the ElevenLabs conversation the signed URL was issued for: the only one this call bills
 +    started_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 +    settled = Column(Boolean, nullable=False, default=False, server_default=text("false"))
-@@ -294,0 +320,3 @@ class DocumentRecord(Base):
+@@ -294,0 +321,3 @@ class DocumentRecord(Base):
 +    user_id = Column(String(36), nullable=True, index=True)  # who asked the bot to generate it
 +    created_by = Column(String(120), nullable=True, default="")
 +    shared_with = Column(JSON, nullable=False, default=list)
-@@ -329,0 +358,9 @@ class DirectMessage(Base):
+@@ -329,0 +359,9 @@ class DirectMessage(Base):
 +    # Comma-separated providers (gmail, github, atlassian) whose data the bot saw but the other person cannot access; the text is a summary.
 +    withheld = Column(String(60), nullable=False, default="", server_default="")
 +    # "" = shown to both people. A bot answer holding data the other person cannot access starts "pending", visible to the asker only,
@@ -55,26 +56,26 @@ index 38a5312..d329199 100644
 +    # A write the bot prepared through the asker's account, as JSON {provider, tool, args, ...}. The row is a card only the asker sees:
 +    # share "proceed" until they approve, then "running" and "done" ("cancelled" if they decline). "private" is a bot message only the asker sees.
 +    action = Column(Text, nullable=False, default="", server_default="")
-@@ -400 +436,0 @@ def append_history(agent: Agent, role: str, content: str, max_messages: int = HI
+@@ -400 +437,0 @@ def append_history(agent: Agent, role: str, content: str, max_messages: int = HI
 -        OFFSET :keep
-@@ -401,0 +438 @@ def append_history(agent: Agent, role: str, content: str, max_messages: int = HI
+@@ -401,0 +439 @@ def append_history(agent: Agent, role: str, content: str, max_messages: int = HI
 +        OFFSET :keep
-@@ -460,0 +498 @@ def get_shared_context(agent: Agent, limit: int = 24, user_id: str | None = None
+@@ -460,0 +499 @@ def get_shared_context(agent: Agent, limit: int = 24, user_id: str | None = None
 +    from core.audience import readers, scrub
-@@ -474,0 +513,4 @@ def get_shared_context(agent: Agent, limit: int = 24, user_id: str | None = None
+@@ -474,0 +514,4 @@ def get_shared_context(agent: Agent, limit: int = 24, user_id: str | None = None
 +    # Accepted residual risk (NURN-132): bots keep one memory for the whole team, so other people's chats stay in a shared reply's context.
 +    # Only the name, links, emails and ids are removed; names and free text inside a message can still reach it, and the note below is the rest of the guard.
 +    # To close it, drop these lines when readers() is set, or hold every shared answer for the asker's approval.
 +    anon = {r.user_id for r in rows} - set(readers()) if readers() else set()  # in a chat shared with someone, other people's chats stay knowledge without a name
-@@ -476,2 +518,2 @@ def get_shared_context(agent: Agent, limit: int = 24, user_id: str | None = None
+@@ -476,2 +519,2 @@ def get_shared_context(agent: Agent, limit: int = 24, user_id: str | None = None
 -        who = names.get(r.user_id, "Someone")
 -        text = " ".join((r.content or "").split())[:400]
 +        who = "A teammate" if r.user_id in anon else names.get(r.user_id, "Someone")
 +        text = scrub(r.content or "", 300) if r.user_id in anon else " ".join((r.content or "").split())[:400]  # a private chat's words reach a shared reply without links, emails or ids
-@@ -478,0 +521,2 @@ def get_shared_context(agent: Agent, limit: int = 24, user_id: str | None = None
+@@ -478,0 +522,2 @@ def get_shared_context(agent: Agent, limit: int = 24, user_id: str | None = None
 +    if anon:
 +        lines.insert(0, "(Lines naming 'A teammate' are private chats. Use them as background. Do not quote them or say who said what.)")
-@@ -479,0 +524,19 @@ def get_shared_context(agent: Agent, limit: int = 24, user_id: str | None = None
+@@ -479,0 +525,19 @@ def get_shared_context(agent: Agent, limit: int = 24, user_id: str | None = None
 +
 +
 +class Doc(Base):

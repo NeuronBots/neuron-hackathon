@@ -1,5 +1,5 @@
 diff --git a/backend/routes/agents.py b/backend/routes/agents.py
-index 394b967..ec1d2e2 100644
+index 394b967..c7bdbe3 100644
 --- a/backend/routes/agents.py
 +++ b/backend/routes/agents.py
 @@ -6 +6 @@ from typing import Literal
@@ -32,31 +32,34 @@ index 394b967..ec1d2e2 100644
 -    so it follows the person's usage limits and a per-person start rate."""
 +    so it follows the person's usage limits and a per-person start rate. The call is recorded here, and billed later from
 +    ElevenLabs' own record of it (voice.settle). Calls from earlier, never saved because a tab crashed, are settled now too."""
-@@ -96 +89 @@ def start_voice(agent_id: str, user: User = Depends(get_current_user), project:
+@@ -96 +89,2 @@ def start_voice(agent_id: str, user: User = Depends(get_current_user), project:
 -        return {"voice_token": voice.call_token(user.id, agent.id), "signed_url": voice.signed_url(), **voice.session_config(agent, user.name)}
-+        session = {"voice_token": voice.call_token(user.id, agent.id), "signed_url": voice.signed_url(), **voice.session_config(agent, user.name)}
-@@ -100,0 +94,5 @@ def start_voice(agent_id: str, user: User = Depends(get_current_user), project:
-+    call = VoiceCall(id=uuid.uuid4().hex, user_id=user.id, agent_id=agent.id, project_id=project.id)
++        url, conversation_id = voice.signed_url()
++        session = {"voice_token": voice.call_token(user.id, agent.id), "signed_url": url, **voice.session_config(agent, user.name)}
+@@ -100,0 +95,7 @@ def start_voice(agent_id: str, user: User = Depends(get_current_user), project:
++    if not conversation_id:
++        jsonl.emit("voice.call.unbound", agent_id=agent.id)  # billed through the browser's user id instead: a weaker link
++    call = VoiceCall(id=uuid.uuid4().hex, user_id=user.id, agent_id=agent.id, project_id=project.id, conversation_id=conversation_id)
 +    db.add(call)
 +    db.commit()
 +    background.add_task(voice.settle_soon, user.id)
 +    return {**session, "call_id": call.id}  # the client hands call_id to ElevenLabs as the conversation's user id
-@@ -114 +112,2 @@ class CallTranscript(BaseModel):
+@@ -114 +115,2 @@ class CallTranscript(BaseModel):
 -    secs: int = Field(ge=0, le=24 * 3600)
 +    secs: int = Field(ge=0, le=24 * 3600)  # the browser's own clock: shown on the card only, never billed
 +    call_id: str = Field(min_length=1, max_length=64)  # from start_voice; saving is refused for a call this person did not start
-@@ -119 +118 @@ class CallTranscript(BaseModel):
+@@ -119 +121 @@ class CallTranscript(BaseModel):
 -def save_voice_call(agent_id: str, body: CallTranscript, user: User = Depends(get_current_user), project: Project = Depends(get_project), db: Session = Depends(get_db)):
 +def save_voice_call(agent_id: str, body: CallTranscript, background: BackgroundTasks, user: User = Depends(get_current_user), project: Project = Depends(get_project), db: Session = Depends(get_db)):
-@@ -121 +120,2 @@ def save_voice_call(agent_id: str, body: CallTranscript, user: User = Depends(ge
+@@ -121 +123,2 @@ def save_voice_call(agent_id: str, body: CallTranscript, user: User = Depends(ge
 -    only: is_card() keeps it out of everything the model reads (history, memory, teammate context, recall)."""
 +    only: is_card() keeps it out of everything the model reads (history, memory, teammate context, recall).
 +    Saving does not bill: a call is billed by voice.settle from ElevenLabs' record, whether or not this is ever sent."""
-@@ -122,0 +123,3 @@ def save_voice_call(agent_id: str, body: CallTranscript, user: User = Depends(ge
+@@ -122,0 +126,3 @@ def save_voice_call(agent_id: str, body: CallTranscript, user: User = Depends(ge
 +    call = db.get(VoiceCall, body.call_id)
 +    if call is None or call.user_id != user.id or call.agent_id != agent.id:
 +        raise HTTPException(status_code=404, detail="Call not found")
-@@ -130,0 +134,78 @@ def save_voice_call(agent_id: str, body: CallTranscript, user: User = Depends(ge
+@@ -130,0 +137,78 @@ def save_voice_call(agent_id: str, body: CallTranscript, user: User = Depends(ge
 +    background.add_task(voice.settle_soon, user.id)
 +
 +
@@ -135,11 +138,11 @@ index 394b967..ec1d2e2 100644
 +        "characters": event.characters if event else body.characters,
 +        "request_id": body.request_id,
 +    }
-@@ -141,3 +221,0 @@ def update_agent(agent_id: str, body: AgentUpdate, user: User = Depends(get_curr
+@@ -141,3 +224,0 @@ def update_agent(agent_id: str, body: AgentUpdate, user: User = Depends(get_curr
 -    if body.model is not None:
 -        _check_model(user, body.model, project, db)
 -        agent.model = body.model.strip()
-@@ -184,0 +263,10 @@ def _document_rows(rows, names: dict[str, str] | None = None) -> list[dict]:
+@@ -184,0 +266,10 @@ def _document_rows(rows, names: dict[str, str] | None = None) -> list[dict]:
 +def _can_see_doc_record(row, user, project_id: str = "", db: Session | None = None) -> bool:
 +    if not isinstance(user, User):
 +        return False
@@ -150,27 +153,27 @@ index 394b967..ec1d2e2 100644
 +    proj_set = {project_id} if project_id else None
 +    return can_read(row, user.id, user_idents, project_ids=proj_set, db=db)
 +
-@@ -186 +274 @@ def _document_rows(rows, names: dict[str, str] | None = None) -> list[dict]:
+@@ -186 +277 @@ def _document_rows(rows, names: dict[str, str] | None = None) -> list[dict]:
 -def agent_documents(agent_id: str, project: Project = Depends(get_project), db: Session = Depends(get_db)):
 +def agent_documents(agent_id: str, user = Depends(get_current_user_optional), project: Project = Depends(get_project), db: Session = Depends(get_db)):
-@@ -191 +279,3 @@ def agent_documents(agent_id: str, project: Project = Depends(get_project), db:
+@@ -191 +282,3 @@ def agent_documents(agent_id: str, project: Project = Depends(get_project), db:
 -    return _document_rows(db.query(DocumentRecord).filter(DocumentRecord.agent_id == agent_id).order_by(DocumentRecord.created_at.desc()).all())
 +    rows = db.query(DocumentRecord).filter(DocumentRecord.agent_id == agent_id).order_by(DocumentRecord.created_at.desc()).all()
 +    rows = [r for r in rows if _can_see_doc_record(r, user, project.id, db)]
 +    return _document_rows(rows)
-@@ -195 +285 @@ def agent_documents(agent_id: str, project: Project = Depends(get_project), db:
+@@ -195 +288 @@ def agent_documents(agent_id: str, project: Project = Depends(get_project), db:
 -def project_documents(project: Project = Depends(get_project), db: Session = Depends(get_db)):
 +def project_documents(user = Depends(get_current_user_optional), project: Project = Depends(get_project), db: Session = Depends(get_db)):
-@@ -200,0 +291 @@ def project_documents(project: Project = Depends(get_project), db: Session = Dep
+@@ -200,0 +294 @@ def project_documents(project: Project = Depends(get_project), db: Session = Dep
 +    rows = [r for r in rows if _can_see_doc_record(r, user, project.id, db)]
-@@ -219 +310 @@ def build_goals(agent_id: str, user: User = Depends(get_current_user), project:
+@@ -219 +313 @@ def build_goals(agent_id: str, user: User = Depends(get_current_user), project:
 -def build_memory(agent_id: str, body: MemoryBuild, project: Project = Depends(get_project), db: Session = Depends(get_db)):
 +def build_memory(agent_id: str, body: MemoryBuild, user: User = Depends(get_current_user), project: Project = Depends(get_project), db: Session = Depends(get_db)):
-@@ -221,0 +313,4 @@ def build_memory(agent_id: str, body: MemoryBuild, project: Project = Depends(ge
+@@ -221,0 +316,4 @@ def build_memory(agent_id: str, body: MemoryBuild, project: Project = Depends(ge
 +    blocked = over_limit(user.id, project.id)
 +    if blocked:
 +        raise HTTPException(status_code=429, detail=blocked)
 +    token = set_usage_user(user.id, project.id)
-@@ -225,0 +321,2 @@ def build_memory(agent_id: str, body: MemoryBuild, project: Project = Depends(ge
+@@ -225,0 +324,2 @@ def build_memory(agent_id: str, body: MemoryBuild, project: Project = Depends(ge
 +    finally:
 +        reset_usage_user(token)

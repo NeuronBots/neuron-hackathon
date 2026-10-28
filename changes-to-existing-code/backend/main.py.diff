@@ -1,5 +1,5 @@
 diff --git a/backend/main.py b/backend/main.py
-index fac5732..72c1696 100644
+index fac5732..38e34a5 100644
 --- a/backend/main.py
 +++ b/backend/main.py
 @@ -16,15 +15,0 @@ import_sqlite()
@@ -37,5 +37,13 @@ index fac5732..72c1696 100644
 +async def _check_model_base() -> None:
 +    from llm.config import check_model_base
 +    check_model_base()
++
++
+@@ -88,0 +93,7 @@ async def _start_routines() -> None:
++@app.on_event("startup")
++async def _start_voice_sweep() -> None:
++    from services import voice
++    if background_agents() and not getattr(app.state, "voice_sweep", None):
++        app.state.voice_sweep = asyncio.create_task(voice.sweeper())
 +
 +

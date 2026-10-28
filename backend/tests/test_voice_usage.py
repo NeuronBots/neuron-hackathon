@@ -325,8 +325,9 @@ def _call_setup(db, name):
     return user, proj, agent
 
 
-def _call(db, user, proj, agent, call_id="c1", age_secs=0):
-    call = VoiceCall(id=call_id, user_id=user.id, agent_id=agent.id, project_id=proj.id, started_at=datetime.utcnow() - timedelta(seconds=age_secs))
+def _call(db, user, proj, agent, call_id="c1", age_secs=0, conversation_id=None):
+    call = VoiceCall(id=call_id, user_id=user.id, agent_id=agent.id, project_id=proj.id, conversation_id=conversation_id,
+                     started_at=datetime.utcnow() - timedelta(seconds=age_secs))
     db.add(call)
     db.commit()
     return call
@@ -338,9 +339,11 @@ def _eleven(monkeypatch, *replies):
     monkeypatch.setenv("ELEVENLABS_API_KEY", "k")
     monkeypatch.setenv("ELEVENLABS_AGENT_ID", "agent_x")
     queue, seen = list(replies), []
+    _urls.clear()
 
     def get(url, params=None, headers=None, timeout=None):
         seen.append(params)
+        _urls.append(url)
         reply = queue.pop(0) if len(queue) > 1 else queue[0]
         if isinstance(reply, Exception):
             raise reply
@@ -350,6 +353,9 @@ def _eleven(monkeypatch, *replies):
         return httpx.Response(status, json=body, request=request)
     monkeypatch.setattr(voice.httpx, "get", get)
     return seen
+
+
+_urls: list[str] = []  # every URL the last _eleven() was asked for
 
 
 def _conv(cid="conv_abcdef12", secs=90, status="done"):
@@ -428,11 +434,18 @@ def test_call_that_never_connected_bills_nothing_and_is_dropped(db, monkeypatch)
     assert _events(db, user) == []
 
 
-def test_call_older_than_a_day_is_abandoned_without_asking(db, monkeypatch):
+def test_old_call_is_asked_about_before_it_is_ever_dropped(db, monkeypatch):
+    """A call whose user never came back is still billed days later, and is dropped only after ElevenLabs had its say for a week."""
     user, proj, agent = _call_setup(db, "settle_old")
-    _call(db, user, proj, agent, age_secs=voice._GIVE_UP_SECS + 60)
-    seen = _eleven(monkeypatch, [_conv()])
-    assert voice.settle(user.id, db) == 0 and seen == [] and db.get(VoiceCall, "c1").settled and _events(db, user) == []
+    _call(db, user, proj, agent, "late", age_secs=3 * 24 * 3600)
+    _call(db, user, proj, agent, "gone", age_secs=voice._GIVE_UP_SECS + 60)
+    _call(db, user, proj, agent, "later", age_secs=3 * 24 * 3600 + 5)
+    _eleven(monkeypatch, [_conv("conv_late00001", 600)], 503, 503)  # "late" answers; the other two cannot be asked
+
+    assert voice.settle(user.id, db) == 1  # "later" is still waiting: ElevenLabs was unreachable, which is not an answer
+    assert [e.request_id for e in _events(db, user)] == ["conv:conv_late00001"]
+    assert db.get(VoiceCall, "late").settled and not db.get(VoiceCall, "later").settled
+    assert db.get(VoiceCall, "gone").settled  # past a week and still nothing: dropped, after being asked
 
 
 def test_oversized_or_odd_conversation_ids_are_not_billed(db, monkeypatch):
@@ -479,12 +492,13 @@ def test_settle_soon_retries_then_stops_and_survives_errors(monkeypatch):
 def test_start_voice_records_the_call(db, monkeypatch):
     from routes.agents import start_voice
     user, proj, agent = _call_setup(db, "start_rec")
-    monkeypatch.setattr(voice, "signed_url", lambda: "wss://x")
+    monkeypatch.setattr(voice, "signed_url", lambda: ("wss://x", "conv_start12345"))
     monkeypatch.setenv("CONNECTIONS_KEY", "k")
     background = BackgroundTasks()
     out = start_voice(agent.id, background, user=user, project=proj, db=db)
     call = db.get(VoiceCall, out["call_id"])
     assert (call.user_id, call.agent_id, call.project_id, call.settled) == (user.id, agent.id, proj.id, False)
+    assert call.conversation_id == "conv_start12345"  # recorded at start, so what is billed does not depend on the browser
     assert [t.func for t in background.tasks] == [voice.settle_soon]
 
 
@@ -508,3 +522,109 @@ def test_save_voice_call_needs_the_users_own_call_and_never_bills(db, monkeypatc
 
     save_voice_call(agent.id, CallTranscript(secs=3600, call_id="mine", lines=lines), BackgroundTasks(), user=user, project=proj, db=db)
     assert _events(db, user) == []  # a claimed hour bills nothing: only settle() bills
+
+
+# ── The conversation is bound to the call by the server, at start ──
+
+def test_signed_url_returns_the_conversation_it_was_issued_for(monkeypatch):
+    monkeypatch.setenv("ELEVENLABS_API_KEY", "k")
+    monkeypatch.setenv("ELEVENLABS_AGENT_ID", "agent_x")
+    base = "wss://api.elevenlabs.io/v1/convai/conversation?agent_id=agent_x&conversation_signature=sig"
+    sent = []
+
+    def reply(url):
+        def get(u, params=None, headers=None, timeout=None):
+            sent.append(params)
+            return httpx.Response(200, json={"signed_url": url}, request=httpx.Request("GET", u))
+        return get
+
+    monkeypatch.setattr(voice.httpx, "get", reply(base + "&conversation_id=conv_abc12345"))
+    assert voice.signed_url() == (base + "&conversation_id=conv_abc12345", "conv_abc12345")
+    assert sent[0]["include_conversation_id"] == "true"
+    monkeypatch.setattr(voice.httpx, "get", reply(base))
+    assert voice.signed_url() == (base, None)  # no id in the URL: the call falls back to the browser's user id
+    monkeypatch.setattr(voice.httpx, "get", reply(base + "&conversation_id=" + "x" * 80))
+    assert voice.signed_url()[1] is None
+
+
+def test_bound_call_bills_only_its_own_conversation_whatever_the_browser_did(db, monkeypatch):
+    user, proj, agent = _call_setup(db, "bound_ok")
+    _call(db, user, proj, agent, conversation_id="conv_bound0001")
+    done = {"status": "done", "agent_id": "agent_x", "metadata": {"call_duration_secs": 240}}
+    _eleven(monkeypatch, done)
+
+    assert voice.settle(user.id, db) == 0
+    assert [(e.request_id, e.audio_seconds) for e in _events(db, user)] == [("conv:conv_bound0001", 240.0)]
+    assert _urls == ["https://api.elevenlabs.io/v1/convai/conversations/conv_bound0001"]  # asked by id, never by the browser's user id
+
+
+def test_bound_call_waits_while_the_url_is_unused_then_is_dropped_if_never_used(db, monkeypatch):
+    user, proj, agent = _call_setup(db, "bound_wait")
+    _call(db, user, proj, agent, "fresh", age_secs=10, conversation_id="conv_fresh00001")
+    _call(db, user, proj, agent, "idle", age_secs=voice._NO_CALL_SECS + 60, conversation_id="conv_idle000001")
+    _eleven(monkeypatch, 404)  # ElevenLabs: no such conversation, because nobody connected
+
+    assert voice.settle(user.id, db) == 1
+    assert not db.get(VoiceCall, "fresh").settled and db.get(VoiceCall, "idle").settled and _events(db, user) == []
+
+
+def test_bound_call_ignores_a_conversation_of_another_agent(db, monkeypatch):
+    user, proj, agent = _call_setup(db, "bound_agent")
+    _call(db, user, proj, agent, age_secs=voice._NO_CALL_SECS + 60, conversation_id="conv_other0001")
+    _eleven(monkeypatch, {"status": "done", "agent_id": "somebody_elses", "metadata": {"call_duration_secs": 9999}})
+    voice.settle(user.id, db)
+    assert _events(db, user) == []
+
+
+# ── Billing does not wait for the person's next call ──
+
+def test_sweep_settles_everyones_waiting_calls(db, monkeypatch):
+    a_user, a_proj, a_agent = _call_setup(db, "sweep_a")
+    b_user, b_proj, b_agent = _call_setup(db, "sweep_b")
+    _call(db, a_user, a_proj, a_agent, "ca", conversation_id="conv_sweepa001")
+    _call(db, b_user, b_proj, b_agent, "cb", conversation_id="conv_sweepb001")
+    _eleven(monkeypatch, {"status": "done", "agent_id": "agent_x", "metadata": {"call_duration_secs": 60}})
+
+    assert voice.settle(db=db) == 0  # no user: everyone
+    assert {e.user_id for e in db.query(UsageEvent).filter(UsageEvent.kind == "call").all()} == {a_user.id, b_user.id}
+
+
+def test_sweeper_runs_settle_on_a_timer_and_survives_a_failure(monkeypatch):
+    import asyncio
+    runs = []
+
+    def settle():
+        runs.append(1)
+        if len(runs) == 1:
+            raise RuntimeError("db blip")
+
+    async def sleep(secs):
+        if len(runs) >= 2:
+            raise asyncio.CancelledError
+    monkeypatch.setattr(voice, "settle", settle)
+    monkeypatch.setattr(asyncio, "sleep", sleep)
+    monkeypatch.setenv("VOICE_SETTLE_SECONDS", "300")
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(voice.sweeper())
+    assert len(runs) == 2
+
+    runs.clear()
+    monkeypatch.setenv("VOICE_SETTLE_SECONDS", "0")
+    asyncio.run(voice.sweeper())  # switched off: returns at once
+    assert runs == []
+
+
+# ── One rate, two copies ──
+
+def test_voice_rates_match_between_backend_and_frontend():
+    import re
+    from pathlib import Path
+
+    from core.limits import VOICE_FACTOR, VOICE_TOKENS_PER_SEC
+    types_ts = Path(__file__).resolve().parents[2] / "src" / "types.ts"
+    if not types_ts.is_file():
+        pytest.skip("frontend sources are not next to the backend here")
+    text = types_ts.read_text()
+    for name, value in (("VOICE_FACTOR", VOICE_FACTOR), ("VOICE_TOKENS_PER_SEC", VOICE_TOKENS_PER_SEC)):
+        found = re.search(rf"export const {name} = ([0-9.]+)", text)
+        assert found and float(found.group(1)) == value, f"{name} differs between limits.py and src/types.ts"

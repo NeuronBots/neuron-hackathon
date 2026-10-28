@@ -1,31 +1,53 @@
 diff --git a/backend/services/voice.py b/backend/services/voice.py
-index 9caf295..f4e2ba2 100644
+index 9caf295..071fe52 100644
 --- a/backend/services/voice.py
 +++ b/backend/services/voice.py
-@@ -60,2 +60 @@ def session_config(agent: Agent, user_name: str) -> dict:
+@@ -7,0 +8 @@ import time
++from urllib.parse import parse_qs, urlparse
+@@ -60,2 +61 @@ def session_config(agent: Agent, user_name: str) -> dict:
 -        # Voice needs a fast model; Opus is too slow to talk with.
 -        "llm": "claude-haiku-4-5" if "haiku" in (agent.model or "") else "claude-sonnet-5-5",
 +        "llm": "claude-sonnet-5-5",  # ElevenLabs hosts this model, not the model proxy; bots carry no model of their own. The token cap is checked when a call starts (routes/agents.py start_voice)
-@@ -107,0 +107,101 @@ def token_ok(token: str, user_id: str, agent_id: str) -> bool:
+@@ -108 +108,143 @@ def token_ok(token: str, user_id: str, agent_id: str) -> bool:
+-def signed_url() -> str:
 +# ElevenLabs conversation ids are short; this bound also keeps "conv:<id>" inside the 64-character request_id.
 +_CONV_ID = re.compile(r"[A-Za-z0-9_-]{8,59}")
-+_GIVE_UP_SECS = 24 * 3600  # a call still unsettled after this is dropped
++_GIVE_UP_SECS = 7 * 24 * 3600  # asked about every round until then; a call still unbilled after this is dropped
 +_NO_CALL_SECS = 30 * 60  # a started call with no conversation at all after this never connected, so there is nothing to bill
++_ELEVEN = "https://api.elevenlabs.io/v1/convai"
 +
 +
-+def conversations_for(call_id: str) -> tuple[list[tuple[str, float]], bool] | None:
-+    """(finished conversations as (id, seconds), whether any is still running or being processed) for one call, from ElevenLabs'
-+    record, or None when ElevenLabs could not be asked (not configured, 404/429/5xx, a network error, an odd reply): try again later."""
-+    key, agent_id = os.getenv("ELEVENLABS_API_KEY"), os.getenv("ELEVENLABS_AGENT_ID")
-+    if not key or not agent_id:
++def _ask(path: str, **params) -> dict | None:
++    """One read from ElevenLabs as JSON, or None when it could not be had (not configured, 429/5xx, a network error, an odd reply)."""
++    key = os.getenv("ELEVENLABS_API_KEY")
++    if not key:
 +        return None
 +    try:
-+        resp = httpx.get("https://api.elevenlabs.io/v1/convai/conversations",
-+                         params={"agent_id": agent_id, "user_id": call_id, "page_size": 10}, headers={"xi-api-key": key}, timeout=10)
++        resp = httpx.get(f"{_ELEVEN}/{path}", params=params, headers={"xi-api-key": key}, timeout=10)
++        if resp.status_code == 404:
++            return {}  # nothing there (yet): a conversation whose signed URL has not been used
 +        resp.raise_for_status()
-+        items = resp.json().get("conversations")
-+    except (httpx.HTTPError, ValueError, AttributeError):
++        body = resp.json()
++    except (httpx.HTTPError, ValueError):
 +        return None
++    return body if isinstance(body, dict) else None
++
++
++def conversations_for(call) -> tuple[list[tuple[str, float]], bool] | None:
++    """(finished conversations as (id, seconds), whether any is still running or being processed) for one call, from ElevenLabs'
++    record, or None when ElevenLabs could not be asked: try again later. A call bills only the conversation its signed URL was
++    issued for; one without a recorded conversation (the id was not in the URL) is found by the user id the browser gave it."""
++    agent_id = os.getenv("ELEVENLABS_AGENT_ID")
++    if not agent_id:
++        return None
++    if call.conversation_id:
++        body = _ask(f"conversations/{call.conversation_id}")
++        if body is None:
++            return None
++        items = [{**body, "conversation_id": call.conversation_id, "call_duration_secs": (body.get("metadata") or {}).get("call_duration_secs")}] if body.get("agent_id") == agent_id else []
++    else:
++        body = _ask("conversations", agent_id=agent_id, user_id=call.id, page_size=10)
++        items = None if body is None else body.get("conversations")
 +    if not isinstance(items, list):
 +        return None
 +    done, unfinished = [], False
@@ -42,10 +64,10 @@ index 9caf295..f4e2ba2 100644
 +    return done, unfinished
 +
 +
-+def settle(user_id: str, db=None) -> int:
-+    """Bill this person's finished calls from ElevenLabs' record of them. Returns how many calls are still waiting on it.
-+    The browser has no part in this: it only ever says that a call happened."""
-+    from datetime import datetime, timedelta
++def settle(user_id: str | None = None, db=None) -> int:
++    """Bill finished calls from ElevenLabs' record of them, for one person or (no user_id) for everyone. Returns how many calls are
++    still waiting on it. The browser has no part in this: it only ever says that a call happened."""
++    from datetime import datetime
 +
 +    from core import jsonl
 +    from core.database import SessionLocal
@@ -55,23 +77,25 @@ index 9caf295..f4e2ba2 100644
 +    session = db or SessionLocal()
 +    try:
 +        now, waiting = datetime.utcnow(), 0
-+        for call in session.query(VoiceCall).filter(VoiceCall.user_id == user_id, VoiceCall.settled.is_(False)).all():
++        query = session.query(VoiceCall).filter(VoiceCall.settled.is_(False))
++        for call in (query.filter(VoiceCall.user_id == user_id) if user_id else query.order_by(VoiceCall.started_at).limit(200)).all():
 +            age = (now - call.started_at).total_seconds()
-+            if age > _GIVE_UP_SECS:
++            found = conversations_for(call)
++            if found is not None:
++                done, unfinished = found
++                for cid, secs in done:
++                    record_call_usage(session, call.user_id, seconds=secs, agent_id=call.agent_id, conversation_id=cid, project_id=call.project_id)
++                if done and not unfinished:
++                    call.settled = True
++                    continue
++                if not done and not unfinished and age >= _NO_CALL_SECS:
++                    call.settled = True  # ElevenLabs has nothing for it: it never connected
++                    continue
++            if age > _GIVE_UP_SECS:  # asked above first; only a call ElevenLabs still cannot show us after this long is dropped
 +                call.settled = True
-+                jsonl.emit("voice.call.abandoned", user_id=user_id, call_id=call.id)
++                jsonl.emit("voice.call.abandoned", user_id=call.user_id, call_id=call.id)
 +                continue
-+            found = conversations_for(call.id)
-+            if found is None:
-+                waiting += 1
-+                continue
-+            done, unfinished = found
-+            for cid, secs in done:
-+                record_call_usage(session, user_id, seconds=secs, agent_id=call.agent_id, conversation_id=cid, project_id=call.project_id)
-+            if unfinished or (not done and age < _NO_CALL_SECS):
-+                waiting += 1
-+            else:
-+                call.settled = True
++            waiting += 1
 +        session.commit()
 +        return waiting
 +    except Exception:
@@ -80,6 +104,24 @@ index 9caf295..f4e2ba2 100644
 +    finally:
 +        if db is None:
 +            session.close()
++
++
++async def sweeper() -> None:
++    """Settle every person's waiting calls on a timer, so billing never depends on that person starting another call."""
++    import asyncio
++
++    from core import jsonl
++
++    interval = int(os.getenv("VOICE_SETTLE_SECONDS", "300") or 0)
++    if interval <= 0:
++        return
++    await asyncio.sleep(60)  # let the server finish starting
++    while True:
++        try:
++            await asyncio.to_thread(settle)
++        except Exception as exc:
++            jsonl.emit("voice.sweep_failed", error=type(exc).__name__, message=str(exc)[:200])
++        await asyncio.sleep(interval)
 +
 +
 +_settling: set[str] = set()  # people with a settle loop running: one at a time each, so repeated saves cannot pile up
@@ -108,7 +150,20 @@ index 9caf295..f4e2ba2 100644
 +            _settling.discard(user_id)
 +
 +
-@@ -120,0 +221,9 @@ def signed_url() -> str:
++def signed_url() -> tuple[str, str | None]:
++    """(signed URL, the conversation id it was issued for). ElevenLabs puts that id in the URL's query and makes the signature
++    single-use, so the call can only ever be this conversation: the server knows which one to bill before the browser connects."""
+@@ -114 +256 @@ def signed_url() -> str:
+-        params={"agent_id": agent_id}, headers={"xi-api-key": key}, timeout=10,
++        params={"agent_id": agent_id, "include_conversation_id": "true"}, headers={"xi-api-key": key}, timeout=10,
+@@ -118,2 +260,3 @@ def signed_url() -> str:
+-        return resp.json()["signed_url"]
+-    except (KeyError, ValueError, TypeError) as exc:
++        url = resp.json()["signed_url"]
++        found = parse_qs(urlparse(url).query).get("conversation_id", [""])[0]
++    except (KeyError, ValueError, TypeError, AttributeError) as exc:
+@@ -120,0 +264,10 @@ def signed_url() -> str:
++    return url, found if _CONV_ID.fullmatch(found) else None
 +# ── ElevenLabs Voice Usage Accounting ──
 +from core.usage import (
 +    record_tts_usage,
