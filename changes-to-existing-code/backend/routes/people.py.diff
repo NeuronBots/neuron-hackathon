@@ -1,5 +1,5 @@
 diff --git a/backend/routes/people.py b/backend/routes/people.py
-index 57c04cf..d294f91 100644
+index 57c04cf..32d3498 100644
 --- a/backend/routes/people.py
 +++ b/backend/routes/people.py
 @@ -12,0 +13,2 @@ from sqlalchemy.orm import Session
@@ -34,7 +34,7 @@ index 57c04cf..d294f91 100644
 +            hidden = [p for p in _carried(db, project_id, asker_id, other_id, reply_to) if await blocked(p, project.repo if p == "github" else project.jira_project_key)]
 @@ -168,0 +187 @@ async def _bot_answers(project_id: str, asker_id: str, other_id: str, bot_id: st
 +        reset_audience(scope)
-@@ -172,7 +191,19 @@ async def _bot_answers(project_id: str, asker_id: str, other_id: str, bot_id: st
+@@ -172,7 +191,23 @@ async def _bot_answers(project_id: str, asker_id: str, other_id: str, bot_id: st
 -    if reply.strip():
 -        own = SessionLocal()
 -        try:
@@ -55,13 +55,17 @@ index 57c04cf..d294f91 100644
 +        if reply.strip():
 +            share = "private" if held else "pending" if hidden else ""
 +            own.add(DirectMessage(project_id=project_id, sender_id=asker_id, recipient_id=other_id, bot_id=bot_id, reply_to=reply_to, content=reply.strip(), withheld=",".join(hidden), share=share))
++            if not share:
++                other = own.get(User, other_id)
++                if other:
++                    _share_forwarded_documents(reply.strip(), asker_id, other, own)
 +        for call in held:
 +            own.add(DirectMessage(project_id=project_id, sender_id=asker_id, recipient_id=other_id, bot_id=bot_id, reply_to=reply_to,
 +                                  content=describe(call["tool"], call["args"]), share="proceed", withheld=call["provider"], action=json.dumps(call)))
 +        own.commit()
 +    finally:
 +        own.close()
-@@ -187,0 +219,12 @@ def _same_thread(root: int | None):
+@@ -187,0 +223,12 @@ def _same_thread(root: int | None):
 +def _seen_by(user_id: str):
 +    """An answer waiting on its asker's decision, or one they kept private, is shown to the asker only."""
 +    return or_(DirectMessage.share == "", DirectMessage.sender_id == user_id)
@@ -74,19 +78,19 @@ index 57c04cf..d294f91 100644
 +    return (query.with_for_update() if lock else query).first()
 +
 +
-@@ -203 +246 @@ def latest_per_person(user: User = Depends(get_current_user), project: Project =
+@@ -203 +250 @@ def latest_per_person(user: User = Depends(get_current_user), project: Project =
 -        .filter(DirectMessage.project_id == project.id, or_(DirectMessage.sender_id == user.id, DirectMessage.recipient_id == user.id))
 +        .filter(DirectMessage.project_id == project.id, or_(DirectMessage.sender_id == user.id, DirectMessage.recipient_id == user.id), _seen_by(user.id))
-@@ -230 +273 @@ def unread_counts(body: SeenIn, user: User = Depends(get_current_user), project:
+@@ -230 +277 @@ def unread_counts(body: SeenIn, user: User = Depends(get_current_user), project:
 -                    or_(DirectMessage.sender_id == user.id, DirectMessage.recipient_id == user.id),
 +                    or_(DirectMessage.sender_id == user.id, DirectMessage.recipient_id == user.id), _seen_by(user.id),
-@@ -279 +322 @@ def thread(other_id: str, user: User = Depends(get_current_user), project: Proje
+@@ -279 +326 @@ def thread(other_id: str, user: User = Depends(get_current_user), project: Proje
 -        db.query(DirectMessage).filter(_between(project.id, user.id, other.id))
 +        db.query(DirectMessage).filter(_between(project.id, user.id, other.id), _seen_by(user.id))
-@@ -323 +366 @@ def react(other_id: str, message_id: int, body: ReactIn, user: User = Depends(ge
+@@ -323 +370 @@ def react(other_id: str, message_id: int, body: ReactIn, user: User = Depends(ge
 -    row = db.query(DirectMessage).filter(DirectMessage.id == message_id, _between(project.id, user.id, other.id)).with_for_update().first()
 +    row = _row(db, project.id, user, other.id, message_id, lock=True)
-@@ -335,0 +379,212 @@ def react(other_id: str, message_id: int, body: ReactIn, user: User = Depends(ge
+@@ -335,0 +383,218 @@ def react(other_id: str, message_id: int, body: ReactIn, user: User = Depends(ge
 +class ShareIn(BaseModel):
 +    share: bool
 +
@@ -150,6 +154,8 @@ index 57c04cf..d294f91 100644
 +        raise HTTPException(status_code=409, detail="Already decided")
 +    db.query(DirectMessage).filter(DirectMessage.id == json.loads(row.action)["of"]).update({"share": "shared" if body.send else "declined"}, synchronize_session=False)
 +    db.add(DirectMessage(project_id=project.id, sender_id=user.id, recipient_id=other.id, bot_id=row.bot_id, reply_to=row.reply_to, content=row.content if body.send else SORRY))
++    if body.send:
++        _share_forwarded_documents(row.content, user.id, other, db)
 +    db.commit()
 +    db.refresh(row)
 +    return _read(row)
@@ -238,7 +244,7 @@ index 57c04cf..d294f91 100644
 +        return
 +    import re
 +    from core.models import DocumentRecord, Doc as DocModel
-+    from tools.documents import _as_list, user_may_read
++    from tools.documents import _as_list, user_may_read, can_read
 +    from sqlalchemy.orm.attributes import flag_modified
 +
 +    # Match exact full path references only: /api/documents/{filename} or /api/docs/{id}
@@ -253,7 +259,8 @@ index 57c04cf..d294f91 100644
 +    if recipient.email:
 +        recipient_idents.append(recipient.email)
 +
-+    for target in all_targets:
++    for raw_target in all_targets:
++        target = raw_target.rstrip(".,;:)")
 +        # Match exact DocumentRecord.filename or Doc.id only (no title or bare matching)
 +        doc_rec = db.get(DocumentRecord, target)
 +        doc_model = db.get(DocModel, target)
@@ -284,6 +291,12 @@ index 57c04cf..d294f91 100644
 +            is_m_owner = (doc_model.user_id and doc_model.user_id == sender_id) or (doc_model.created_by and doc_model.created_by == sender_id)
 +            if not is_m_owner and not doc_rec:
 +                continue
++            sender_idents = {sender_id.lower()}
++            sender_user = db.get(User, sender_id)
++            if sender_user and sender_user.email:
++                sender_idents.add(sender_user.email.lower())
++            if not can_read(doc_model, sender_id, sender_idents, db=db):
++                continue
 +
 +            current_shared_model = _as_list(doc_model.shared_with)
 +            changed_m = False
@@ -295,14 +308,32 @@ index 57c04cf..d294f91 100644
 +                doc_model.shared_with = current_shared_model
 +                flag_modified(doc_model, "shared_with")
 +
-+    try:
-+        db.commit()
-+    except Exception:
-+        db.rollback()
-@@ -341,2 +596,2 @@ async def send(other_id: str, body: DirectIn, user: User = Depends(get_current_u
++    db.flush()
+@@ -341,2 +606,2 @@ async def send(other_id: str, body: DirectIn, user: User = Depends(get_current_u
 -        target = db.query(DirectMessage).filter(DirectMessage.id == body.reply_to, _between(project.id, user.id, other.id)).first()
 -        root = db.get(DirectMessage, target.reply_to or target.id) if target else None
 +        target = _row(db, project.id, user, other.id, body.reply_to)
 +        root = _row(db, project.id, user, other.id, target.reply_to or target.id) if target else None
-@@ -350,0 +606 @@ async def send(other_id: str, body: DirectIn, user: User = Depends(get_current_u
+@@ -350,0 +616,2 @@ async def send(other_id: str, body: DirectIn, user: User = Depends(get_current_u
 +    _share_forwarded_documents(row.content, user.id, other, db)
++    db.commit()
+@@ -380,0 +648,3 @@ def split_people(args: dict, agent: Agent, asker_id: str, db: Session) -> tuple[
++    sender = (asker_id or "").strip()
++    if not sender:
++        return [], args
+@@ -390,0 +661 @@ def split_people(args: dict, agent: Agent, asker_id: str, db: Session) -> tuple[
++            msg_content = f"**{subject}**\n\n{body}" if subject and not subject.lower().startswith("re:") else body
+@@ -394 +665 @@ def split_people(args: dict, agent: Agent, asker_id: str, db: Session) -> tuple[
+-                append_history(agent, "assistant", f"**{subject}**\n\n{body}" if subject and not subject.lower().startswith("re:") else body)
++                append_history(agent, "assistant", msg_content)
+@@ -396,0 +668,10 @@ def split_people(args: dict, agent: Agent, asker_id: str, db: Session) -> tuple[
++            if sender and sender != person.id:
++                dm = DirectMessage(
++                    project_id=agent.project_id,
++                    sender_id=sender,
++                    recipient_id=person.id,
++                    bot_id=agent.id,
++                    content=msg_content,
++                )
++                db.add(dm)
++                _share_forwarded_documents(msg_content, sender, person, db)

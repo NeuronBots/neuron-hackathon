@@ -1,8 +1,18 @@
 diff --git a/backend/services/voice.py b/backend/services/voice.py
-index 9caf295..26d128d 100644
+index 9caf295..121286b 100644
 --- a/backend/services/voice.py
 +++ b/backend/services/voice.py
 @@ -60,2 +60 @@ def session_config(agent: Agent, user_name: str) -> dict:
 -        # Voice needs a fast model; Opus is too slow to talk with.
 -        "llm": "claude-haiku-4-5" if "haiku" in (agent.model or "") else "claude-sonnet-5-5",
 +        "llm": "claude-sonnet-5-5",  # ElevenLabs hosts this model, not the model proxy; bots carry no model of their own. The token cap is checked when a call starts (routes/agents.py start_voice)
+@@ -120,0 +120,9 @@ def signed_url() -> str:
++# ── ElevenLabs Voice Usage Accounting ──
++from core.usage import (
++    record_tts_usage,
++    record_stt_usage,
++    settle_streamed_synthesis,
++    StreamedSynthesisAccumulator,
++)
++
++ELEVENLABS_TTS_MIN_CHARS = 250

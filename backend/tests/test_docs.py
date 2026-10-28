@@ -110,6 +110,9 @@ def test_get_docs_list_contains_created_doc_ordered_newest_first(db, client):
     assert res1.status_code == 201
     doc1 = res1.json()
 
+    import time
+    time.sleep(0.02)
+
     res2 = client.post("/api/docs", json={"title": "Second Doc", "content": "Second content"})
     assert res2.status_code == 201
     doc2 = res2.json()
@@ -1262,3 +1265,146 @@ async def test_share_endpoint_with_same_title_doc_owned_by_another_user(db, clie
     db.refresh(alice_doc)
     assert "dave@example.com" not in alice_doc.shared_with
 
+@pytest.mark.anyio
+async def test_message_person_direct_message_delivery_and_doc_sharing(db, client, tmp_path, monkeypatch):
+    """When a bot calls message_person with a doc link, a DirectMessage row is created,
+    the document is shared with the recipient, and the recipient can read it."""
+    import tools.documents as documents
+    from core.models import Agent, DirectMessage, DocumentRecord, Doc as DocModel, Project, ProjectMember, User
+    from routes.people import split_people
+
+    monkeypatch.setattr(documents, "DOC_DIR", tmp_path)
+    monkeypatch.setattr(documents, "_r2", lambda: None)
+
+    proj = Project(id="proj_dm_parity", name="DM Parity Project")
+    db.add(proj)
+    db.commit()
+
+    tanay = make_user(db, "tanay_user", token="tok_tanay")
+    ayushi = make_user(db, "ayushi_user", token="tok_ayushi")
+    bot = Agent(id="bot_messenger", name="HelperBot", system_prompt="helper", project_id=proj.id)
+    db.add_all([
+        ProjectMember(project_id=proj.id, user_id=tanay.id, role="member"),
+        ProjectMember(project_id=proj.id, user_id=ayushi.id, role="member"),
+        bot,
+    ])
+    db.commit()
+
+    # Tanay creates a document
+    doc_file = tmp_path / "architecture_plan.md"
+    doc_file.write_text("# Architecture Plan\nDetailed plan content", encoding="utf-8")
+    doc_rec = DocumentRecord(
+        filename=doc_file.name,
+        agent_id=bot.id,
+        project_id=proj.id,
+        user_id=tanay.id,
+        created_by=tanay.id,
+        shared_with=[],
+        title="Architecture Plan",
+        created_at=datetime.utcnow(),
+    )
+    doc_model = DocModel(
+        id=doc_file.name,
+        title="Architecture Plan",
+        content="# Architecture Plan\nDetailed plan content",
+        created_by=tanay.id,
+        user_id=tanay.id,
+        shared_with=[],
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    db.add_all([doc_rec, doc_model])
+    db.commit()
+
+    # Before message_person, Ayushi cannot read the doc
+    client.cookies.set(COOKIE, "tok_ayushi")
+    res_before = client.get(f"/api/documents/{doc_file.name}")
+    assert res_before.status_code == 404
+
+    # Bot sends doc link to Ayushi on Tanay's behalf via split_people
+    args = {
+        "to": "ayushi_user",
+        "subject": "System Design Doc",
+        "body": f"Please review the doc: /api/documents/{doc_file.name}",
+    }
+    messaged, rest = split_people(args, bot, tanay.id, db)
+    assert messaged == ["ayushi_user"]
+
+    # Verify DirectMessage row created with bot_id
+    dm = db.query(DirectMessage).filter(
+        DirectMessage.project_id == proj.id,
+        DirectMessage.sender_id == tanay.id,
+        DirectMessage.recipient_id == ayushi.id,
+        DirectMessage.bot_id == bot.id,
+    ).first()
+    assert dm is not None
+    assert f"/api/documents/{doc_file.name}" in dm.content
+
+    # Verify Ayushi was added to shared_with on both DocumentRecord and DocModel
+    db.refresh(doc_rec)
+    db.refresh(doc_model)
+    assert ayushi.id in doc_rec.shared_with or ayushi.email in doc_rec.shared_with
+    assert ayushi.id in doc_model.shared_with or ayushi.email in doc_model.shared_with
+
+    # Now Ayushi can read and open the document without expired auth blocking
+    res_after = client.get(f"/api/documents/{doc_file.name}")
+    assert res_after.status_code == 200
+    assert "Detailed plan content" in res_after.text
+
+    # Also HEAD request succeeds (for documentExists check in FileCard)
+    res_head = client.head(f"/api/documents/{doc_file.name}")
+    assert res_head.status_code == 200
+
+
+@pytest.mark.anyio
+async def test_bot_save_reply_shares_documents_with_dm_recipient(db, client, tmp_path, monkeypatch):
+    """When a bot posts a reply in 1:1 direct chat referencing a document,
+    it automatically shares access with the other participant."""
+    import tools.documents as documents
+    from core.models import Agent, DirectMessage, DocumentRecord, Doc as DocModel, Project, ProjectMember, User
+    from routes.people import _save_reply
+
+    monkeypatch.setattr(documents, "DOC_DIR", tmp_path)
+    monkeypatch.setattr(documents, "_r2", lambda: None)
+
+    proj = Project(id="proj_bot_reply", name="Bot Reply Project")
+    db.add(proj)
+    db.commit()
+
+    alice = make_user(db, "alice_dm", token="tok_alice_dm")
+    bob = make_user(db, "bob_dm", token="tok_bob_dm")
+    bot = Agent(id="bot_assistant", name="Assistant", system_prompt="test", project_id=proj.id)
+    db.add_all([
+        ProjectMember(project_id=proj.id, user_id=alice.id, role="member"),
+        ProjectMember(project_id=proj.id, user_id=bob.id, role="member"),
+        bot,
+    ])
+    db.commit()
+
+    # Alice owns a doc
+    doc_file = tmp_path / "alice_summary.md"
+    doc_file.write_text("# Summary\nAll done.", encoding="utf-8")
+    doc_rec = DocumentRecord(
+        filename=doc_file.name,
+        agent_id=bot.id,
+        project_id=proj.id,
+        user_id=alice.id,
+        created_by=alice.id,
+        shared_with=[],
+        title="Summary",
+        created_at=datetime.utcnow(),
+    )
+    db.add(doc_rec)
+    db.commit()
+
+    # Bot replies in DM between Alice and Bob with doc link
+    reply_text = f"Here is the summary: /api/documents/{doc_file.name}."
+    _save_reply(proj.id, alice.id, bob.id, bot.id, None, reply_text, [], [])
+
+    # Bob should now be able to read the doc
+    db.refresh(doc_rec)
+    assert bob.id in doc_rec.shared_with or bob.email in doc_rec.shared_with
+
+    client.cookies.set(COOKIE, "tok_bob_dm")
+    res = client.get(f"/api/documents/{doc_file.name}")
+    assert res.status_code == 200

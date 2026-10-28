@@ -1,0 +1,275 @@
+diff --git a/backend/core/usage.py b/backend/core/usage.py
+index 2ca3b1d..83ba604 100644
+--- a/backend/core/usage.py
++++ b/backend/core/usage.py
+@@ -2,0 +3 @@ from contextvars import ContextVar, Token
++from datetime import datetime
+@@ -107,0 +109,268 @@ def record_usage(model: str, usage: dict, user_id: str | None = None, *, agent_i
++def record_tts_usage(
++    user_id: str | None = None,
++    *,
++    characters: int,
++    voice_id: str = "",
++    model: str = "eleven_multilingual_v2",
++    audio_seconds: float = 0.0,
++    agent_id: str | None = None,
++    request_id: str = "",
++    project_id: str | None = None,
++    apply_minimum: bool = True,
++    min_characters: int = 250,
++    db=None,
++):
++    """Record completed and settled ElevenLabs TTS usage to the central usage ledger with deduplication."""
++    uid = user_id if user_id is not None else _user_id.get()
++    ctx_agent, ctx_kind = _ctx.get()
++    aid = (ctx_agent if agent_id is None else agent_id) or ""
++    proj_id = project_id if project_id is not None else _project_id.get()
++
++    billed_characters = max(int(characters or 0), min_characters) if (apply_minimum and min_characters > 0) else int(characters or 0)
++    audio_secs = float(audio_seconds or 0.0)
++
++    req_id = (request_id or "").strip()[:64]
++    if not req_id:
++        import hashlib
++        req_id = f"gen:{hashlib.sha256(f'tts:{uid}:{aid}:{model}:{voice_id}:{billed_characters}:{audio_secs}'.encode()).hexdigest()[:28]}"
++
++    from core import jsonl
++    jsonl.emit(
++        "voice.tts.usage",
++        user_id=uid or None,
++        agent_id=aid or None,
++        model=model,
++        voice_id=voice_id,
++        characters=billed_characters,
++        raw_characters=characters,
++        audio_seconds=audio_secs,
++        request_id=req_id,
++    )
++
++    if not uid:
++        return None
++
++    from core.database import SessionLocal
++    from core.models import UsageEvent
++    from core.limits import invited_project
++
++    own_session = db is None
++    session = db or SessionLocal()
++    try:
++        existing = session.query(UsageEvent).filter(
++            UsageEvent.request_id == req_id,
++            UsageEvent.kind == "tts",
++        ).first()
++        if existing:
++            return existing
++
++        event = UsageEvent(
++            user_id=uid,
++            model=(model or voice_id or "eleven_multilingual_v2")[:120],
++            voice_id=(voice_id or "")[:64],
++            characters=billed_characters,
++            audio_seconds=audio_secs,
++            agent_id=aid[:36],
++            kind="tts",
++            request_id=req_id,
++            project_id=invited_project(uid, proj_id),
++            created_at=datetime.utcnow(),
++        )
++        session.add(event)
++        session.commit()
++        session.refresh(event)
++        return event
++    except Exception:
++        session.rollback()
++        existing = session.query(UsageEvent).filter(
++            UsageEvent.request_id == req_id,
++            UsageEvent.kind == "tts",
++        ).first()
++        if existing:
++            return existing
++        return None
++    finally:
++        if own_session:
++            session.close()
++
++
++def record_stt_usage(
++    user_id: str | None = None,
++    *,
++    audio_seconds: float = 0.0,
++    minutes: float | None = None,
++    characters: int = 0,
++    model: str = "scribe_v1",
++    agent_id: str | None = None,
++    request_id: str = "",
++    project_id: str | None = None,
++    db=None,
++):
++    """Record completed and settled ElevenLabs STT usage to the central usage ledger with deduplication on retry."""
++    uid = user_id if user_id is not None else _user_id.get()
++    ctx_agent, ctx_kind = _ctx.get()
++    aid = (ctx_agent if agent_id is None else agent_id) or ""
++    proj_id = project_id if project_id is not None else _project_id.get()
++
++    if minutes is not None and (audio_seconds == 0.0 or audio_seconds is None):
++        audio_secs = float(minutes) * 60.0
++    else:
++        audio_secs = float(audio_seconds or 0.0)
++
++    calc_minutes = audio_secs / 60.0 if audio_secs > 0 else (float(minutes) if minutes is not None else 0.0)
++    chars = int(characters or 0)
++
++    req_id = (request_id or "").strip()[:64]
++    if not req_id:
++        import hashlib
++        req_id = f"gen:{hashlib.sha256(f'stt:{uid}:{aid}:{model}:{chars}:{audio_secs}'.encode()).hexdigest()[:28]}"
++
++    from core import jsonl
++    jsonl.emit(
++        "voice.stt.usage",
++        user_id=uid or None,
++        agent_id=aid or None,
++        model=model,
++        characters=chars,
++        audio_seconds=audio_secs,
++        minutes=calc_minutes,
++        request_id=req_id,
++    )
++
++    if not uid:
++        return None
++
++    from core.database import SessionLocal
++    from core.models import UsageEvent
++    from core.limits import invited_project
++
++    own_session = db is None
++    session = db or SessionLocal()
++    try:
++        existing = session.query(UsageEvent).filter(
++            UsageEvent.request_id == req_id,
++            UsageEvent.kind == "stt",
++        ).first()
++        if existing:
++            return existing
++
++        event = UsageEvent(
++            user_id=uid,
++            model=(model or "scribe_v1")[:120],
++            characters=chars,
++            audio_seconds=audio_secs,
++            agent_id=aid[:36],
++            kind="stt",
++            request_id=req_id,
++            project_id=invited_project(uid, proj_id),
++            created_at=datetime.utcnow(),
++        )
++        session.add(event)
++        session.commit()
++        session.refresh(event)
++        return event
++    except Exception:
++        session.rollback()
++        existing = session.query(UsageEvent).filter(
++            UsageEvent.request_id == req_id,
++            UsageEvent.kind == "stt",
++        ).first()
++        if existing:
++            return existing
++        return None
++    finally:
++        if own_session:
++            session.close()
++
++
++class StreamedSynthesisAccumulator:
++    """Tracks streaming synthesis chunks/events with partials and retries.
++    Intermediate partial events accumulate without writing to the ledger;
++    only the final settled usage is counted once."""
++
++    def __init__(
++        self,
++        request_id: str,
++        user_id: str | None = None,
++        agent_id: str | None = None,
++        voice_id: str = "",
++        model: str = "eleven_multilingual_v2",
++        project_id: str | None = None,
++    ):
++        self.request_id = request_id
++        self.user_id = user_id
++        self.agent_id = agent_id
++        self.voice_id = voice_id
++        self.model = model
++        self.project_id = project_id
++        self.total_characters = 0
++        self.total_audio_seconds = 0.0
++        self.settled = False
++        self._settled_event = None
++
++    def emit_partial(self, characters: int = 0, audio_seconds: float = 0.0) -> None:
++        """Receive a partial streamed chunk. Does not write to ledger yet."""
++        if self.settled:
++            return
++        self.total_characters += int(characters or 0)
++        self.total_audio_seconds += float(audio_seconds or 0.0)
++
++    def settle(
++        self,
++        characters: int | None = None,
++        audio_seconds: float | None = None,
++        min_characters: int = 250,
++        apply_minimum: bool = True,
++        db=None,
++    ):
++        """Settle the streamed synthesis. Only final settled usage is counted once."""
++        if self.settled and self._settled_event is not None:
++            return self._settled_event
++
++        chars = self.total_characters if characters is None else int(characters)
++        secs = self.total_audio_seconds if audio_seconds is None else float(audio_seconds)
++        self.settled = True
++        self._settled_event = record_tts_usage(
++            user_id=self.user_id,
++            characters=chars,
++            voice_id=self.voice_id,
++            model=self.model,
++            audio_seconds=secs,
++            agent_id=self.agent_id,
++            request_id=self.request_id,
++            project_id=self.project_id,
++            apply_minimum=apply_minimum,
++            min_characters=min_characters,
++            db=db,
++        )
++        return self._settled_event
++
++
++def settle_streamed_synthesis(
++    request_id: str,
++    characters: int,
++    user_id: str | None = None,
++    *,
++    voice_id: str = "",
++    model: str = "eleven_multilingual_v2",
++    audio_seconds: float = 0.0,
++    agent_id: str | None = None,
++    project_id: str | None = None,
++    min_characters: int = 250,
++    apply_minimum: bool = True,
++    db=None,
++):
++    """Convenience helper to settle streamed synthesis for a request_id in one call, ensuring dedupe."""
++    return record_tts_usage(
++        user_id=user_id,
++        characters=characters,
++        voice_id=voice_id,
++        model=model,
++        audio_seconds=audio_seconds,
++        agent_id=agent_id,
++        request_id=request_id,
++        project_id=project_id,
++        apply_minimum=apply_minimum,
++        min_characters=min_characters,
++        db=db,
++    )

@@ -1,0 +1,34 @@
+diff --git a/backend/routes/auth.py b/backend/routes/auth.py
+index 0a71686..2440d2c 100644
+--- a/backend/routes/auth.py
++++ b/backend/routes/auth.py
+@@ -19 +19 @@ from core.database import get_db
+-from core.limits import _own_usage, allowance, covering_projects, plan_in, tokens_used, week_start
++from core.limits import _own_usage, allowance, covering_projects, plan_in, tokens_used, voice_to_tokens, week_start
+@@ -568 +568 @@ def _usage_bucket(db: Session, user: User, since: datetime, scope: str = "") ->
+-    incoming, outgoing, calls, cache_read, cache_write = _own_usage(db.query(
++    incoming, outgoing, calls, cache_read, cache_write, voice_chars, voice_secs = _own_usage(db.query(
+@@ -573,0 +574,2 @@ def _usage_bucket(db: Session, user: User, since: datetime, scope: str = "") ->
++        func.coalesce(func.sum(UsageEvent.characters), 0),
++        func.coalesce(func.sum(UsageEvent.audio_seconds), 0.0),
+@@ -580,0 +583,2 @@ def _usage_bucket(db: Session, user: User, since: datetime, scope: str = "") ->
++        "voice_characters": int(voice_chars),
++        "voice_seconds": float(voice_secs),
+@@ -600,0 +605,2 @@ def usage(request: Request, user: User = Depends(get_current_user), db: Session
++        func.coalesce(func.sum(UsageEvent.characters), 0),
++        func.coalesce(func.sum(UsageEvent.audio_seconds), 0.0),
+@@ -606,2 +612,9 @@ def usage(request: Request, user: User = Depends(get_current_user), db: Session
+-        {"model": model, "input_tokens": int(incoming), "output_tokens": int(outgoing), "calls": int(calls)}
+-        for model, incoming, outgoing, calls in by_model
++        {
++            "model": model,
++            "input_tokens": int(incoming),
++            "output_tokens": int(outgoing),
++            "calls": int(calls),
++            "voice_characters": int(vchars),
++            "voice_seconds": float(vsecs),
++        }
++        for model, incoming, outgoing, calls, vchars, vsecs in by_model
+@@ -609 +622 @@ def usage(request: Request, user: User = Depends(get_current_user), db: Session
+-    models.sort(key=lambda row: row["input_tokens"] + row["output_tokens"], reverse=True)
++    models.sort(key=lambda row: row["input_tokens"] + row["output_tokens"] + voice_to_tokens(row.get("voice_characters", 0)), reverse=True)

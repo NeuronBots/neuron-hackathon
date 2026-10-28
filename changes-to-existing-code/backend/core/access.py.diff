@@ -1,5 +1,5 @@
 diff --git a/backend/core/access.py b/backend/core/access.py
-index a38bb18..fb431d4 100644
+index a38bb18..dc0b6da 100644
 --- a/backend/core/access.py
 +++ b/backend/core/access.py
 @@ -73,0 +74,18 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
@@ -19,5 +19,24 @@ index a38bb18..fb431d4 100644
 +    if user:
 +        presence.touch(user.id)
 +    return user
++
++
+@@ -105,0 +124,18 @@ def get_project(
++def get_project_optional(
++    request: Request,
++    user = Depends(get_current_user_optional),
++    db: Session = Depends(get_db),
++) -> Project | None:
++    from core.models import User
++    if not isinstance(user, User):
++        return None
++    project_id = (request.headers.get("x-project-id") or "").strip()
++    memberships = projects_for(user, db)
++    if not project_id and len(memberships) == 1:
++        project_id = memberships[0]["id"]
++    match = next((item for item in memberships if item["id"] == project_id), None)
++    if match is None:
++        return None
++    return db.get(Project, project_id)
 +
 +
