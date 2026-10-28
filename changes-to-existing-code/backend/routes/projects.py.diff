@@ -1,12 +1,51 @@
 diff --git a/backend/routes/projects.py b/backend/routes/projects.py
-index 4e0eac0..89127ac 100644
+index 4e0eac0..d5c8b18 100644
 --- a/backend/routes/projects.py
 +++ b/backend/routes/projects.py
 @@ -17,0 +18 @@ from services.project_setup import parse_repo, scan_repo, search_repos, suggest_
 +from core.tiers import TIERS
-@@ -219 +220 @@ def create_project(body: ProjectBody, user: User = Depends(get_current_user), db
+@@ -47,0 +49,8 @@ class JiraBody(BaseModel):
++class PrReviewsBody(BaseModel):
++    enabled: bool
++
++
++class CodingBotBody(BaseModel):
++    agent_id: str = ""  # blank clears it
++
++
+@@ -107 +116 @@ def list_projects(user: User = Depends(get_current_user), db: Session = Depends(
+-        {"id": project.id, "name": project.name, "role": role, "jira_project_key": project.jira_project_key or "", "repo": project.repo or ""}
++        {"id": project.id, "name": project.name, "role": role, "jira_project_key": project.jira_project_key or "", "repo": project.repo or "", "coding_bot_id": project.coding_bot_id or "", "pr_reviews": bool(project.pr_reviews)}
+@@ -219 +228 @@ def create_project(body: ProjectBody, user: User = Depends(get_current_user), db
 -        model="claude-opus-5-5",
 +        model=TIERS["JUDGEMENT"],
-@@ -245 +246 @@ def create_project(body: ProjectBody, user: User = Depends(get_current_user), db
+@@ -245 +254 @@ def create_project(body: ProjectBody, user: User = Depends(get_current_user), db
 -            model="claude-opus-5-5",
 +            model=TIERS["JUDGEMENT"],
+@@ -253 +262 @@ def create_project(body: ProjectBody, user: User = Depends(get_current_user), db
+-    return {"id": project.id, "name": project.name, "role": "owner", "repo": project.repo or "", "jira_project_key": project.jira_project_key or ""}
++    return {"id": project.id, "name": project.name, "role": "owner", "repo": project.repo or "", "jira_project_key": project.jira_project_key or "", "coding_bot_id": "", "pr_reviews": True}
+@@ -302,0 +312,23 @@ async def link_repo(project_id: str, body: RepoBody, user: User = Depends(get_cu
++@router.put("/api/projects/{project_id}/coding-bot")
++def set_coding_bot(project_id: str, body: CodingBotBody, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
++    if _membership(project_id, user, db).role != "owner":
++        raise HTTPException(status_code=403, detail="Only the project owner can choose the coding bot")
++    agent_id = body.agent_id.strip()
++    if agent_id:
++        agent = db.get(Agent, agent_id)
++        if agent is None or agent.project_id != project_id:
++            raise HTTPException(status_code=400, detail="That bot is not on this project")
++    db.get(Project, project_id).coding_bot_id = agent_id
++    db.commit()
++    return {"coding_bot_id": agent_id}
++
++
++@router.put("/api/projects/{project_id}/pr-reviews")
++def set_pr_reviews(project_id: str, body: PrReviewsBody, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
++    if _membership(project_id, user, db).role != "owner":
++        raise HTTPException(status_code=403, detail="Only the project owner can turn pull request reviews on or off")
++    db.get(Project, project_id).pr_reviews = body.enabled
++    db.commit()
++    return {"pr_reviews": body.enabled}
++
++

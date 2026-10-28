@@ -1,0 +1,41 @@
+diff --git a/src/SourceCards.tsx b/src/SourceCards.tsx
+index 5cecb89..ff15cf7 100644
+--- a/src/SourceCards.tsx
++++ b/src/SourceCards.tsx
+@@ -6,0 +7 @@ export type Card =
++  | { kind: "pr"; repo: string; number: number; what: string; title: string; author: string; head: string; base: string; url: string; status?: "running" | "done" | "failed"; verdict?: string; findings?: number; posted?: boolean; uncovered?: number; reason?: string; followup?: boolean; fixed?: number; open?: number }
+@@ -102,0 +104,34 @@ export function SourceCards({ card }: { card: Card }) {
++  if (card.kind === "pr") {
++    const running = !card.status || card.status === "running"
++    const noun = card.followup ? "PR follow-up review" : "PR review"
++    const label = running ? `${noun} started` : card.status === "failed" ? `${noun} failed` : card.followup ? "PR follow-up reviewed" : "PR reviewed"
++    const count = (n: number | undefined, word: string) => `${n} ${word}`
++    const outcome = card.status === "done"
++      ? [card.verdict?.replace("_", " "),
++         card.followup ? `${count(card.fixed, "fixed")}, ${count(card.open, "still open")}, ${count(card.findings, "new")}` : `${card.findings} finding${card.findings === 1 ? "" : "s"}`,
++         card.posted ? "posted on GitHub" : "",
++         card.uncovered ? `${card.uncovered} file${card.uncovered === 1 ? "" : "s"} not covered` : ""].filter(Boolean).join(" · ")
++      : card.status === "failed" ? card.reason || "It could not run." : card.followup ? "Checking the earlier findings and the new commits in the background…" : "Reading the changes in the background…"
++    return (
++      <details className="src-call src-pr">
++        <summary>
++          {running ? (
++            <span className="src-spinner" role="status" aria-label="Review in progress" />
++          ) : (
++            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="6" r="2" /><circle cx="6" cy="18" r="2" /><circle cx="18" cy="18" r="2" /><path d="M6 8v8M18 16V9a3 3 0 0 0-3-3h-2" /></svg>
++          )}
++          {label} · #{card.number}
++        </summary>
++        <ul>
++          <li className="src-call-tool">
++            <b>GitHub</b>
++            <span>{card.repo} #{card.number} was {card.what}.</span>
++            <span>{card.title} · by {card.author}</span>
++            <span>{card.head} → {card.base}</span>
++            <span>{outcome}</span>
++            {card.url && <a href={safe(card.url)} target="_blank" rel="noopener noreferrer">Open on GitHub</a>}
++          </li>
++        </ul>
++      </details>
++    )
++  }

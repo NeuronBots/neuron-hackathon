@@ -1,5 +1,5 @@
 diff --git a/backend/core/access.py b/backend/core/access.py
-index a38bb18..dc0b6da 100644
+index a38bb18..8da2870 100644
 --- a/backend/core/access.py
 +++ b/backend/core/access.py
 @@ -73,0 +74,18 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
@@ -21,6 +21,9 @@ index a38bb18..dc0b6da 100644
 +    return user
 +
 +
+@@ -83 +101 @@ def projects_for(user: User, db: Session) -> list[dict]:
+-        {"id": project.id, "name": project.name, "role": role, "jira_project_key": project.jira_project_key or "", "repo": project.repo or ""}
++        {"id": project.id, "name": project.name, "role": role, "jira_project_key": project.jira_project_key or "", "repo": project.repo or "", "coding_bot_id": project.coding_bot_id or "", "pr_reviews": bool(project.pr_reviews)}
 @@ -105,0 +124,18 @@ def get_project(
 +def get_project_optional(
 +    request: Request,
