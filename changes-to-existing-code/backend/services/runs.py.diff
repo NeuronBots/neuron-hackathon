@@ -1,0 +1,11 @@
+diff --git a/backend/services/runs.py b/backend/services/runs.py
+index d5a993b..5cbb411 100644
+--- a/backend/services/runs.py
++++ b/backend/services/runs.py
+@@ -136,2 +136,2 @@ async def tail(run: Run) -> AsyncGenerator[str, None]:
+-def spawn(coro) -> None:
+-    """Run a coroutine in the background, holding a reference so it is not collected."""
++def spawn(coro) -> "asyncio.Task":
++    """Run a coroutine in the background, holding a reference so it is not collected. The task is returned so a caller can cancel it."""
+@@ -140,0 +141 @@ def spawn(coro) -> None:
++    return task

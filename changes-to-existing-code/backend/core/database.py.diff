@@ -1,18 +1,28 @@
 diff --git a/backend/core/database.py b/backend/core/database.py
-index 20e3807..b6fe30f 100644
+index 20e3807..5ef3447 100644
 --- a/backend/core/database.py
 +++ b/backend/core/database.py
-@@ -93,0 +94,5 @@ def migrate() -> None:
+@@ -65,0 +66,8 @@ BACKFILL_CHILD_ID = f"""
++# Old rows hold a JSON list, a comma-separated list ("a@x.y,b@x.y") or nothing. All of them become a JSON list instead of failing the cast.
++SHARED_WITH_TO_JSON = """ALTER TABLE docs ALTER COLUMN shared_with TYPE JSON USING (CASE
++    WHEN shared_with IS NULL OR btrim(shared_with) = '' THEN '[]'::json
++    WHEN shared_with ~ '^\\s*\\[' THEN shared_with::json
++    ELSE to_json(string_to_array(regexp_replace(regexp_replace(regexp_replace(btrim(shared_with), '\\s*,\\s*', ',', 'g'), ',{2,}', ',', 'g'), '^,|,$', '', 'g'), ','))
++END)"""  # no subquery: Postgres does not allow one in USING
++
++
+@@ -93,0 +102,5 @@ def migrate() -> None:
 +                ("project_id", "ALTER TABLE usage_events ADD COLUMN project_id VARCHAR(36)"),
 +                ("request_id", "ALTER TABLE usage_events ADD COLUMN request_id VARCHAR(64) DEFAULT NULL"),
 +                ("characters", "ALTER TABLE usage_events ADD COLUMN characters INTEGER NOT NULL DEFAULT 0"),
 +                ("audio_seconds", "ALTER TABLE usage_events ADD COLUMN audio_seconds FLOAT NOT NULL DEFAULT 0.0"),
 +                ("voice_id", "ALTER TABLE usage_events ADD COLUMN voice_id VARCHAR(64) NOT NULL DEFAULT ''"),
-@@ -96,0 +102,38 @@ def migrate() -> None:
+@@ -96,0 +110,43 @@ def migrate() -> None:
 +            if engine.dialect.name == "postgresql":
-+                conn.execute(text("UPDATE usage_events SET request_id = NULL WHERE request_id = ''"))
++                # The constraint comes off first: a column made NOT NULL DEFAULT '' by an earlier version refuses the UPDATE to NULL while it is on.
 +                conn.execute(text("ALTER TABLE usage_events ALTER COLUMN request_id DROP NOT NULL"))
 +                conn.execute(text("ALTER TABLE usage_events ALTER COLUMN request_id SET DEFAULT NULL"))
++                conn.execute(text("UPDATE usage_events SET request_id = NULL WHERE request_id = ''"))
 +                conn.execute(text("""
 +                    DO $$ BEGIN
 +                        ALTER TABLE usage_events
@@ -44,10 +54,14 @@ index 20e3807..b6fe30f 100644
 +                    conn.execute(text("ALTER TABLE docs ALTER COLUMN id TYPE VARCHAR(140)"))
 +                sw_col = next((c for c in insp.get_columns("docs") if c["name"] == "shared_with"), None)
 +                if sw_col and ("TEXT" in str(sw_col.get("type")).upper() or "VARCHAR" in str(sw_col.get("type")).upper()):
-+                    conn.execute(text("ALTER TABLE docs ALTER COLUMN shared_with DROP DEFAULT"))  # a TEXT default cannot be cast to json
-+                    conn.execute(text("ALTER TABLE docs ALTER COLUMN shared_with TYPE JSON USING (CASE WHEN shared_with IS NULL OR shared_with = '' THEN '[]'::json ELSE shared_with::json END)"))
-+                    conn.execute(text("ALTER TABLE docs ALTER COLUMN shared_with SET DEFAULT '[]'::json"))
-@@ -112,0 +156,9 @@ def migrate() -> None:
++                    try:  # in a savepoint: a value that will not convert must not stop the app from starting (the code reads either type)
++                        with conn.begin_nested():
++                            conn.execute(text("ALTER TABLE docs ALTER COLUMN shared_with DROP DEFAULT"))  # a TEXT default cannot be cast to json
++                            conn.execute(text(SHARED_WITH_TO_JSON))
++                            conn.execute(text("ALTER TABLE docs ALTER COLUMN shared_with SET DEFAULT '[]'::json"))
++                    except Exception as exc:
++                        print(f"[migrate] docs.shared_with was left as text: {type(exc).__name__}: {str(exc)[:160]}")
+@@ -112,0 +169,9 @@ def migrate() -> None:
 +        if "direct_messages" in existing and "withheld" not in {c["name"] for c in insp.get_columns("direct_messages")}:
 +            conn.execute(text("ALTER TABLE direct_messages ADD COLUMN withheld VARCHAR(60) NOT NULL DEFAULT ''"))
 +        if "direct_messages" in existing and "share" not in {c["name"] for c in insp.get_columns("direct_messages")}:
@@ -57,12 +71,12 @@ index 20e3807..b6fe30f 100644
 +        if "direct_messages" in existing:  # a summary or a write in progress when the server stopped never finishes; let its asker send it again
 +            conn.execute(text("UPDATE direct_messages SET share = 'pending' WHERE share = 'sharing'"))
 +            conn.execute(text("UPDATE direct_messages SET share = 'proceed' WHERE share = 'running' AND action <> ''"))
-@@ -215,0 +268,4 @@ def migrate() -> None:
+@@ -215,0 +281,4 @@ def migrate() -> None:
 +        if "projects" in existing and "coding_bot_id" not in project_cols:
 +            conn.execute(text("ALTER TABLE projects ADD COLUMN coding_bot_id VARCHAR(36) NOT NULL DEFAULT ''"))
 +        if "projects" in existing and "pr_reviews" not in project_cols:
 +            conn.execute(text("ALTER TABLE projects ADD COLUMN pr_reviews BOOLEAN NOT NULL DEFAULT true"))
-@@ -239,0 +296,10 @@ def migrate() -> None:
+@@ -239,0 +309,10 @@ def migrate() -> None:
 +        if "documents" in existing:
 +            doc_rec_cols = {c["name"] for c in insp.get_columns("documents")}
 +            shared_ddl = "ALTER TABLE documents ADD COLUMN shared_with JSON DEFAULT '[]'::json" if engine.dialect.name == "postgresql" else "ALTER TABLE documents ADD COLUMN shared_with TEXT DEFAULT '[]'"

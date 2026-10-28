@@ -5,6 +5,7 @@ import hmac
 import json
 import logging
 import os
+from datetime import datetime, timedelta
 from urllib.parse import parse_qs
 
 import httpx
@@ -80,8 +81,10 @@ async def _pr_emails(repo: str, number: int, login: str, owner: str) -> set[str]
     async with httpx.AsyncClient(timeout=20) as client:
         r = await client.get(f"https://api.github.com/repos/{repo}/pulls/{number}/commits", params={"per_page": 100}, headers=headers)
         for c in (r.json() if r.status_code == 200 else []):
-            if ((c.get("author") or {}).get("login") or "").lower() == login.lower():  # their own commits, not a co-author's
-                found |= {c["commit"][who].get("email") or "" for who in ("author", "committer")}
+            # Only the author email of commits GitHub itself ties to this account (it matches that account's own verified emails). The committer
+            # email is plain git config that anyone can set to a teammate's address, so it is never used.
+            if ((c.get("author") or {}).get("login") or "").lower() == login.lower():
+                found.add((c["commit"].get("author") or {}).get("email") or "")
         r = await client.get(f"https://api.github.com/users/{login}", headers=headers)
         found.add((r.json().get("email") or "") if r.status_code == 200 else "")
     return {e.lower() for e in found if e and "noreply" not in e.lower()}
@@ -106,18 +109,44 @@ async def _author_by_email(repo: str, number: int, login: str, owner: str, membe
     return await asyncio.to_thread(_member_with_email, members, owner, await _pr_emails(repo, number, login, owner))
 
 
+MAX_TRIES = 3  # a commit whose review keeps failing is given up on after this many pills
+
+
+def close_stale_reviews() -> None:
+    """A PR review runs inside this process, so a restart ends it: its pill must stop spinning. Run at startup, however the server is started.
+
+    This service runs as one process (a second worker is refused at startup), so a pill still marked running when it starts belongs to a
+    process that is gone. Only the last day of rows is looked at, so the scan does not grow with the table; a review is never that old."""
+    db = SessionLocal()
+    try:
+        recent = Message.created_at >= datetime.utcnow() - timedelta(days=1)
+        for row in db.query(Message).filter(recent, Message.content.like('[[SOURCES:{"kind": "pr"%"status": "running"%')).all():
+            row.content = row.content.replace('"status": "running"', '"status": "failed", "reason": "Interrupted by a server restart"', 1)
+        db.commit()
+    finally:
+        db.close()
+
+
 def seen_before(db, agent_id: str, owner: str, repo: str, number: int, sha: str) -> bool:
-    """Does the owner's chat with the bot already show a review of this PR at this commit? A pill from before pills carried a commit counts
-    as seen, so turning polling on does not review every PR that was already handled."""
+    """Should the poll leave this PR alone? Yes when the owner's chat shows a finished or running review of this commit. A failed review is
+    tried again, up to MAX_TRIES times. A pill from before pills carried a commit counts as handled, so turning polling on does not
+    review every PR that was already dealt with (or stopped by hand)."""
+    failed = 0
     for (content,) in db.query(Message.content).filter(Message.agent_id == agent_id, Message.user_id == owner,
                                                       Message.content.like('[[SOURCES:{"kind": "pr"%'), Message.content.like(f'%"number": {number},%')):
         try:
             card = json.loads(content[len("[[SOURCES:"):-2])
         except ValueError:
             continue
-        if card.get("number") == number and str(card.get("repo", "")).lower() == repo.lower() and card.get("sha", "") in ("", sha):
+        if card.get("number") != number or str(card.get("repo", "")).lower() != repo.lower():
+            continue
+        if not card.get("sha"):
             return True
-    return False
+        if card["sha"] == sha:
+            if card.get("status") != "failed":
+                return True
+            failed += 1
+    return failed >= MAX_TRIES
 
 
 def last_reviewed_sha(agent_id: str, owner: str, repo: str, number: int) -> str:
@@ -155,22 +184,24 @@ def _write_row(agent_id: str, owner: str, text: str, row_id: int | None = None) 
 
 async def _review_and_tell(agent_id: str, project_id: str, owner: str, repo: str, pr: dict, what: str, card_id: int, bot_name: str, members: list[str], context: str, since: str) -> None:
     """The review, in the background: the pill spins until it ends, then shows the outcome. The review is saved as a document, posted on
-    the PR when that is switched on, and the coding bot tells the owner how it went."""
+    the PR when that is switched on, and the coding bot tells the owner how it went. A newer push cancels this task: the pill then says so."""
     from routes.chat import _start_kickoff
     from tools.documents import document_url
 
-    result, doc_row, doc_rows = None, "", []
-    login = (pr.get("user") or {}).get("login", "")
-    author = await _author(members, owner, login)  # whoever opened the PR gets the same messages in their own chat, found by their GitHub connection
-    if not author:
-        try:
-            author = await _author_by_email(repo, int(pr["number"]), login, owner, members)  # or by the email on their commits
-        except Exception:
-            log.exception("Could not look up who opened %s#%s", repo, pr.get("number"))
-    cards = {owner: card_id}
-    if author:
-        cards[author] = await asyncio.to_thread(_write_row, agent_id, author, _card(repo, pr, what, **({"followup": True} if since else {})))
+    doc_row, doc_rows = "", []
+    number, sha = int(pr["number"]), (pr.get("head") or {}).get("sha", "")
+    flag = {"followup": True} if since else {}
+    cards, author = {owner: card_id}, ""
     try:
+        login = (pr.get("user") or {}).get("login", "")
+        author = await _author(members, owner, login)  # whoever opened the PR gets the same messages in their own chat, found by their GitHub connection
+        if not author:
+            try:
+                author = await _author_by_email(repo, number, login, owner, members)  # or by the email on their commits
+            except Exception:
+                log.exception("Could not look up who opened %s#%s", repo, pr.get("number"))
+        if author:
+            cards[author] = await asyncio.to_thread(_write_row, agent_id, author, _card(repo, pr, what, **flag))
         result = None
         if since:  # new commits after a finished review: check the earlier findings, review what changed
             result = await followup.review(repo, pr, owner, context, since)
@@ -187,9 +218,9 @@ async def _review_and_tell(agent_id: str, project_id: str, owner: str, repo: str
                 doc_rows.append(f"[{fix[0]}]({document_url(fix[1])})")
         except Exception:
             log.exception("Could not save the fix prompt for %s#%s", repo, pr.get("number"))
-        if os.getenv("CODE_REVIEW_POST") == "1" and github_app.configured() and (pr.get("head") or {}).get("sha"):
+        if os.getenv("CODE_REVIEW_POST") == "1" and github_app.configured() and sha:
             try:
-                await (github_app.post_followup if result.get("followup") else github_app.post_review)(repo, int(pr["number"]), pr, result)
+                await (github_app.post_followup if result.get("followup") else github_app.post_review)(repo, number, pr, result)
                 result["posted"] = True
             except Exception:
                 log.exception("Could not post the review of %s#%s", repo, pr.get("number"))
@@ -198,10 +229,16 @@ async def _review_and_tell(agent_id: str, project_id: str, owner: str, repo: str
         if result.get("followup"):
             state.update(followup=True, fixed=len(result["fixed"]), open=len(result["still_open"]))
         text = followup.handover(repo, pr, result) if result.get("followup") else code_review.handover(repo, pr, result)
+    except asyncio.CancelledError:  # a newer push replaced this review (or the server is stopping): say so, free the commit, let the cancel through
+        code_review.release(project_id, repo, number, sha)
+        for user_id, row_id in cards.items():
+            _write_row(agent_id, user_id, _card(repo, pr, what, status="failed", reason="Superseded by a newer push.", **flag), row_id)
+        raise
     except Exception as exc:
         log.exception("Review of %s#%s failed", repo, pr.get("number"))
+        code_review.release(project_id, repo, number, sha)  # so a redelivery or the next poll can try again
         failure = str(exc) if isinstance(exc, RuntimeError) else type(exc).__name__
-        state, text = {"status": "failed", "reason": failure[:200]}, code_review.handover(repo, pr, None, failure)
+        state, text = {"status": "failed", "reason": failure[:200], **flag}, code_review.handover(repo, pr, None, failure)
     for user_id, row_id in cards.items():
         await asyncio.to_thread(_write_row, agent_id, user_id, _card(repo, pr, what, **state), row_id)
         for row in ([doc_row] if doc_row else []) + doc_rows:  # a row of its own, shown as a file card like any document a bot makes; it also makes the open chat refresh
@@ -210,43 +247,62 @@ async def _review_and_tell(agent_id: str, project_id: str, owner: str, repo: str
     def tell_author(reply: str, failure: str) -> None:
         if author and reply.strip():  # the bot's words to the owner, as they were said: one model run, two chats
             _write_row(agent_id, author, reply.strip())
-    _start_kickoff(agent_id, "GitHub", project_id, text, owner, on_done=tell_author)
+    _start_kickoff(agent_id, "GitHub", project_id, text, owner, on_done=tell_author, no_tools=True)  # the text is about a stranger's code: no tools
 
 
-def notify_coding_bots(repo: str, pr: dict, what: str, only_new: bool = False) -> int:
-    """Start the coding bot of every project linked to `repo`. Returns how many were started. With only_new (the poll), a PR that already
-    has a review pill for this commit is left alone; a webhook is an explicit event, so it always reviews."""
-    from integrations import notifications
+_active: dict[tuple, asyncio.Task] = {}  # (project, repo, PR number) -> its running review, so a newer push can replace it
 
+
+def _plan_reviews(repo: str, pr: dict, what: str, only_new: bool) -> list[dict]:
+    """The database half of starting reviews, run in a thread: who reviews this PR, is it already handled, and the pill that shows it started.
+    The claim is made last, just before the first thing that can fail, and given back if that fails."""
     db = SessionLocal()
     try:
-        projects = db.query(Project).filter(func.lower(Project.repo) == repo.lower(), Project.coding_bot_id != "", Project.pr_reviews.is_(True)).all()
-        started = 0
-        for project in projects:
+        plans = []
+        number, sha = int(pr.get("number") or 0), (pr.get("head") or {}).get("sha", "")
+        for project in db.query(Project).filter(func.lower(Project.repo) == repo.lower(), Project.coding_bot_id != "", Project.pr_reviews.is_(True)).all():
             agent = db.get(Agent, project.coding_bot_id)
             if agent is None or agent.project_id != project.id:
                 continue  # the bot was deleted
             members = db.query(ProjectMember).filter(ProjectMember.project_id == project.id).all()
             owner = next((m.user_id for m in members if m.role == "owner"), members[0].user_id if members else "")
-            if not owner:
+            if not owner or (only_new and seen_before(db, agent.id, owner, repo, number, sha)):
                 continue
-            if only_new and seen_before(db, agent.id, owner, repo, int(pr.get("number") or 0), (pr.get("head") or {}).get("sha", "")):
-                continue
-            if not code_review.claim(project.id, repo, int(pr.get("number") or 0), (pr.get("head") or {}).get("sha", "")):
-                continue  # a redelivery of a commit that is already being reviewed
-            sha = (pr.get("head") or {}).get("sha", "")
-            since = last_reviewed_sha(agent.id, owner, repo, int(pr.get("number") or 0))
+            since = last_reviewed_sha(agent.id, owner, repo, number)
             since = since if since != sha else ""  # the same commit again is a fresh review, not a follow-up
-            card_id = _write_row(agent.id, owner, _card(repo, pr, what, **({"followup": True} if since else {})))
-            runs.spawn(_review_and_tell(agent.id, project.id, owner, repo, pr, what, card_id, agent.name, [m.user_id for m in members],
-                                       " ".join(x for x in (project.name, project.goal, project.summary) if x)[:1500], since))
-            asyncio.get_running_loop().run_in_executor(
-                None, notifications.notify, [m.user_id for m in members], f"PR #{pr.get('number')} {what}", str(pr.get("title") or ""), pr.get("html_url") or "/"
-            )
-            started += 1
-        return started
+            if not code_review.claim(project.id, repo, number, sha):
+                continue  # a redelivery of a commit that is already being reviewed
+            try:
+                card_id = _write_row(agent.id, owner, _card(repo, pr, what, **({"followup": True} if since else {})))
+            except Exception:
+                code_review.release(project.id, repo, number, sha)
+                raise
+            plans.append({"key": (project.id, repo.lower(), number), "agent": agent.id, "agent_name": agent.name, "project": project.id, "owner": owner,
+                          "members": [m.user_id for m in members], "card": card_id, "since": since,
+                          "context": " ".join(x for x in (project.name, project.goal, project.summary) if x)[:1500]})
+        return plans
     finally:
         db.close()
+
+
+async def notify_coding_bots(repo: str, pr: dict, what: str, only_new: bool = False) -> int:
+    """Start the coding bot of every project linked to `repo`. Returns how many were started. With only_new (the poll), a PR that already
+    has a review pill for this commit is left alone; a webhook is an explicit event, so it always reviews. A review still running for an
+    older commit of the same PR is cancelled: its answer would be about code that is no longer there."""
+    from integrations import notifications
+
+    plans = await asyncio.to_thread(_plan_reviews, repo, pr, what, only_new)  # database work stays off the event loop
+    for p in plans:
+        old = _active.get(p["key"])
+        if old is not None and not old.done():
+            old.cancel()  # it marks its own pill "superseded" and kills its Muse process
+        task = runs.spawn(_review_and_tell(p["agent"], p["project"], p["owner"], repo, pr, what, p["card"], p["agent_name"], p["members"], p["context"], p["since"]))
+        _active[p["key"]] = task
+        task.add_done_callback(lambda t, k=p["key"]: _active.get(k) is t and _active.pop(k, None))
+        asyncio.get_running_loop().run_in_executor(
+            None, notifications.notify, p["members"], f"PR #{pr.get('number')} {what}", str(pr.get("title") or ""), pr.get("html_url") or "/"
+        )
+    return len(plans)
 
 
 @router.post("/api/webhooks/github")
@@ -269,4 +325,4 @@ async def github_webhook(request: Request):
         return {"ok": True}
     if pr.get("draft") and payload.get("action") != "ready_for_review":
         return {"ok": True, "skipped": "draft"}
-    return {"ok": True, "notified": notify_coding_bots(repo, pr, what)}
+    return {"ok": True, "notified": await notify_coding_bots(repo, pr, what)}

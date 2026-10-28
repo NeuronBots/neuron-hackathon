@@ -1,5 +1,5 @@
 diff --git a/src/App.tsx b/src/App.tsx
-index 5d89efb..d8709dc 100644
+index 5d89efb..700f967 100644
 --- a/src/App.tsx
 +++ b/src/App.tsx
 @@ -42,0 +43,2 @@ import {
@@ -11,13 +11,15 @@ index 5d89efb..d8709dc 100644
 @@ -345 +347 @@ export function App() {
 -      const updated = await updateAgent(draft.id, { name: draft.name, system_prompt: draft.system_prompt, model: draft.model, field: draft.field, label: draft.label })
 +      const updated = await updateAgent(draft.id, { name: draft.name, system_prompt: draft.system_prompt, field: draft.field, label: draft.label })
-@@ -885,0 +888,14 @@ export function App() {
-+  // When a bot stops typing in the background, show what it wrote.
-+  const wasTyping = useRef(false)
+@@ -885,0 +888,16 @@ export function App() {
++  // When the bot I am looking at stops typing in the background, show what it wrote. The flag is kept with the agent it was read for, so
++  // switching from a typing bot to an idle one is not mistaken for "stopped typing" (that would reload the new chat over its own load).
++  const wasTyping = useRef<{ id: string | null; typing: boolean }>({ id: null, typing: false })
 +  useEffect(() => {
 +    const now = !!selectedAgentId && activeTyping.agents.includes(selectedAgentId)
-+    const was = wasTyping.current
-+    wasTyping.current = now
++    const before = wasTyping.current
++    wasTyping.current = { id: selectedAgentId, typing: now }
++    const was = before.id === selectedAgentId && before.typing
 +    if (!was || now || !selectedAgentId || streamsRef.current.has(selectedAgentId)) return
 +    const agentId = selectedAgentId
 +    fetchAgentHistory(agentId).then((history) => {
@@ -26,7 +28,7 @@ index 5d89efb..d8709dc 100644
 +    }).catch(() => {})
 +  }, [selectedAgentId, activeTyping])
 +
-@@ -1171,0 +1188,14 @@ export function App() {
+@@ -1171,0 +1190,14 @@ export function App() {
 +  async function handleSetCodingBot(agentId: string) {
 +    const saved = await setCodingBot(projectId, agentId)
 +    const withBot = (list: ProjectRecord[]) => list.map((item) => (item.id === projectId ? { ...item, coding_bot_id: saved } : item))
@@ -41,17 +43,17 @@ index 5d89efb..d8709dc 100644
 +    setProjects(withFlag)
 +  }
 +
-@@ -1262,0 +1293,2 @@ export function App() {
+@@ -1262,0 +1295,2 @@ export function App() {
 +        onOpenCalendar={handleOpenCalendar}
 +        onOpenBoard={handleOpenBoard}
-@@ -1293,0 +1326,2 @@ export function App() {
+@@ -1293,0 +1328,2 @@ export function App() {
 +        onSetCodingBot={handleSetCodingBot}
 +        onSetPrReviews={handleSetPrReviews}
-@@ -1322 +1356 @@ export function App() {
+@@ -1322 +1358 @@ export function App() {
 -        <DocumentsView onClose={handleCloseCalendar} onOpenTeam={() => setNavOpen(true)} teamOpen={navOpen} />
 +        <DocumentsView onClose={handleCloseCalendar} onOpenTeam={() => setNavOpen(true)} teamOpen={navOpen} members={members} />
-@@ -1335,0 +1370 @@ export function App() {
+@@ -1335,0 +1372 @@ export function App() {
 +          agentTyping={!!selectedAgentId && activeTyping.agents.includes(selectedAgentId)}
-@@ -1349,2 +1383,0 @@ export function App() {
+@@ -1349,2 +1385,0 @@ export function App() {
 -          onOpenCalendar={handleOpenCalendar}
 -          onOpenBoard={handleOpenBoard}

@@ -1,5 +1,5 @@
 diff --git a/backend/routes/chat.py b/backend/routes/chat.py
-index df62b39..e9a8559 100644
+index df62b39..50a26eb 100644
 --- a/backend/routes/chat.py
 +++ b/backend/routes/chat.py
 @@ -28 +28 @@ from board.tasks import begin_agent_work, finish_agent_work, record_exchange
@@ -8,25 +8,48 @@ index df62b39..e9a8559 100644
 @@ -62 +62 @@ from core.timing import log_span
 -from core.limits import allowance, clamp_model, over_limit, plan_in
 +from core.limits import allowance, over_limit, plan_in
-@@ -182,2 +182,2 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
+@@ -86 +86 @@ def run_key(agent_id: str, user_id: str, voice: bool = False) -> str:
+-def _start_kickoff(target_id: str, source_name: str, project_id: str, text: str, user_id: str = "", report_to: str = "", on_done=None) -> None:
++def _start_kickoff(target_id: str, source_name: str, project_id: str, text: str, user_id: str = "", report_to: str = "", on_done=None, no_tools: bool = False) -> None:
+@@ -89 +89,3 @@ def _start_kickoff(target_id: str, source_name: str, project_id: str, text: str,
+-    When it finishes, report_to (the bot that held the discussion) hears the result and tells the user the outcome."""
++    When it finishes, report_to (the bot that held the discussion) hears the result and tells the user the outcome.
++
++    no_tools runs the turn with no tools at all, for a message that carries text written by someone outside the project."""
+@@ -100 +102 @@ def _start_kickoff(target_id: str, source_name: str, project_id: str, text: str,
+-                    _start_kickoff(target_id, source_name, project_id, text, user_id, report_to, on_done)
++                    _start_kickoff(target_id, source_name, project_id, text, user_id, report_to, on_done, no_tools)
+@@ -113 +115 @@ def _start_kickoff(target_id: str, source_name: str, project_id: str, text: str,
+-                own.get(Project, project_id), own, kickoff=True,
++                own.get(Project, project_id), own, kickoff=True, no_tools=no_tools,
+@@ -178 +180 @@ def jsonl_key_check() -> str:
+-def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: Session, kickoff: bool = False) -> AsyncGenerator[str, None]:
++def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: Session, kickoff: bool = False, no_tools: bool = False) -> AsyncGenerator[str, None]:
+@@ -182,2 +184,2 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
 -    # One model for every bot's chat turn, set by CHAT_MODEL; agent.model still applies to teammates' replies (peer_run, followup).
 -    model = body.model_override.strip() if body.model_override else CHAT_MODEL
 +    # One model for every bot, set at the source by CHAT_MODEL; bots do not carry a model of their own.
 +    model = CHAT_MODEL
-@@ -236 +236 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
+@@ -216 +218 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
+-        catalog_task = asyncio.create_task(remote_tools())
++        catalog_task = asyncio.create_task(asyncio.sleep(0, result=[]) if no_tools else remote_tools())  # no tools: no connections to the owner's GitHub or Jira to list them
+@@ -236 +238 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
 -        if ROUTER_MODEL and not kickoff and not body.model_override and not files:
 +        if ROUTER_MODEL and not kickoff and not files:
-@@ -327,2 +327 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
+@@ -304,0 +307,2 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
++            if no_tools:
++                return []
+@@ -327,2 +331 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
 -            # Free accounts run Haiku and Sonnet only, whatever model the bot is set to.
 -            request_json = {**request_json, "model": await asyncio.to_thread(clamp_model, request_json.get("model") or model)}
 +            request_json = {**request_json, "model": request_json.get("model") or model}
-@@ -383 +382 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
+@@ -383 +386 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
 -                                if response.status_code in (402, 429, 502, 503, 529) and busy_retries < 3:
 +                                if response.status_code in BUSY and busy_retries < TRIES - 1:
-@@ -386 +385 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
+@@ -386 +389 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
 -                                    await asyncio.sleep(1.5 * busy_retries)
 +                                    await asyncio.sleep(backoff(busy_retries - 1))
-@@ -568,13 +567 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
+@@ -568,13 +571 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
 -                            resp = await follow_client.post(
 -                                f"{ANTHROPIC_BASE}/messages",
 -                                headers={
@@ -41,20 +64,26 @@ index df62b39..e9a8559 100644
 -                                },
 -                            )
 +                            resp = await apost_retry(follow_client, {"model": model, "max_tokens": CHAT_MAX_TOKENS, **cached(system, tool_defs, api_messages)}, tries=1)  # the turn goes on without it, so no waiting
-@@ -628 +615 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
+@@ -628 +619 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
 -                    log_span("chat.peer", peer_started, agent=agent.name, model=ASK_MODEL or "own", to=target.name)
 +                    log_span("chat.peer", peer_started, agent=agent.name, model=ASK_MODEL or CHAT_MODEL, to=target.name)
-@@ -805 +791,0 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
+@@ -645,0 +637,2 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
++                if no_tools:
++                    return index, "Error: tools are off for this message. Answer in plain words.", None, False
+@@ -770 +763 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
+-            tool_defs = _tools(await remote_tools(), api_messages)
++            tool_defs = _tools([] if no_tools else await remote_tools(), api_messages)
+@@ -805 +797,0 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
 -                    force_headers = {"x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json"}
-@@ -808 +794 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
+@@ -808 +800 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
 -                        resp = await follow_client.post(f"{ANTHROPIC_BASE}/messages", headers=force_headers, json={
 +                        resp = await apost_retry(follow_client, {
-@@ -811,2 +797,2 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
+@@ -811,2 +803,2 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
 -                            resp = await follow_client.post(f"{ANTHROPIC_BASE}/messages", headers=force_headers, json={
 -                                "model": model, "max_tokens": CHAT_MAX_TOKENS, **cached(system, tool_defs, final_ask)})
 +                            resp = await apost_retry(follow_client, {  # one try: the first call already waited out a busy provider
 +                                "model": model, "max_tokens": CHAT_MAX_TOKENS, **cached(system, tool_defs, final_ask)}, tries=1)
-@@ -916,0 +903,3 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
+@@ -916,0 +909,3 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
 +                elif kind == "notice":
 +                    notice = "Couldn't write the follow-up: " + value  # "couldn't" is what makes the chat keep the banner after the turn
 +                    yield f"data: {json.dumps({'type': 'status', 'message': notice})}\n\n"

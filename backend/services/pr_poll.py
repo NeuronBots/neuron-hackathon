@@ -18,6 +18,7 @@ from services import code_review
 log = logging.getLogger(__name__)
 
 INTERVAL = int(os.getenv("REVIEW_POLL_SECONDS", "300"))  # 0 turns polling off
+MAX_STARTS = int(os.getenv("REVIEW_POLL_MAX_STARTS", "3"))  # reviews one round may start: turning a project on does not review every open PR at once
 MAX_AGE = timedelta(hours=int(os.getenv("REVIEW_POLL_MAX_AGE_HOURS", "24")))  # an old PR nobody has touched is not reviewed out of the blue
 
 
@@ -65,7 +66,9 @@ async def poll_once() -> int:
         for pr in prs:
             if pr.get("draft") or not recent(pr):
                 continue
-            started += notify_coding_bots(repo, pr, "opened", only_new=True)
+            if started >= MAX_STARTS:
+                return started  # the rest wait for the next round
+            started += await notify_coding_bots(repo, pr, "opened", only_new=True)
     return started
 
 
