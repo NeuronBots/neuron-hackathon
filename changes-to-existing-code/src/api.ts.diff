@@ -1,5 +1,5 @@
 diff --git a/src/api.ts b/src/api.ts
-index c214349..57f73f3 100644
+index c214349..faaa5b9 100644
 --- a/src/api.ts
 +++ b/src/api.ts
 @@ -56 +56 @@ export async function fetchAgents(): Promise<
@@ -33,7 +33,12 @@ index c214349..57f73f3 100644
 @@ -187 +185 @@ export async function saveVoiceCall(agentId: string, secs: number, lines: VoiceL
 -  const body = JSON.stringify({ secs, lines: kept })
 +  const body = JSON.stringify({ secs, lines: kept, call_id: callId })
-@@ -287,2 +285,8 @@ export async function fetchDocumentText(path: string): Promise<string> {
+@@ -203,0 +202,4 @@ export async function fetchTasks(params?: { status?: string; agentId?: string })
++export async function fetchTask(taskId: string): Promise<import("./types").TaskRead> {
++  return handleResponse(await apiFetch(`/tasks/${encodeURIComponent(taskId)}`)) as Promise<import("./types").TaskRead>
++}
++
+@@ -287,2 +289,8 @@ export async function fetchDocumentText(path: string): Promise<string> {
 -export async function saveDocument(path: string, html: string): Promise<void> {
 -  await handleResponse(await apiFetch(path.replace(/^\/api/, ""), { method: "PUT", body: html, headers: { "Content-Type": "text/html; charset=utf-8" } }))
 +export async function fetchSheets(path: string): Promise<Array<{ name: string; rows: string[][] }>> {
@@ -44,16 +49,34 @@ index c214349..57f73f3 100644
 +  const isHtml = path.endsWith(".html")
 +  const contentType = isHtml ? "text/html; charset=utf-8" : "text/markdown; charset=utf-8"
 +  await handleResponse(await apiFetch(path.replace(/^\/api/, ""), { method: "PUT", body: content, headers: { "Content-Type": contentType } }))
-@@ -324 +328 @@ export async function chatStream(
+@@ -315,0 +324,12 @@ export async function isChatRunning(agentId: string): Promise<boolean> {
++// "Allow in this session" for a bot's outward actions (Jira, mail, GitHub): remembered for this browser tab only, per bot.
++const OUTWARD_KEY = "neuron.allowOutward."
++export function allowedThisSession(agentId: string): boolean {
++  try { return sessionStorage.getItem(OUTWARD_KEY + agentId) === "1" } catch { return false }
++}
++export function allowThisSession(agentId: string): void {
++  try { sessionStorage.setItem(OUTWARD_KEY + agentId, "1") } catch { /* private mode: it asks again next time */ }
++}
++function forgetSessionAllowances(): void {
++  try { Object.keys(sessionStorage).filter((k) => k.startsWith(OUTWARD_KEY)).forEach((k) => sessionStorage.removeItem(k)) } catch { /* nothing stored */ }
++}
++
+@@ -324 +344 @@ export async function chatStream(
 -  body: { content: string; model_override?: string; allow_spawn: boolean; voice?: boolean; voice_token?: string; attachments?: Array<{ id: string; name: string }> } | null,
 +  body: { content: string; allow_spawn: boolean; voice?: boolean; voice_token?: string; attachments?: Array<{ id: string; name: string }> } | null,
-@@ -327 +331 @@ export async function chatStream(
+@@ -327 +347 @@ export async function chatStream(
 -  onSpawn: (agents: Array<{ id: string; name: string; model: string; identity: string }>) => void,
 +  onSpawn: (agents: Array<{ id: string; name: string; identity: string }>) => void,
-@@ -426 +430 @@ export async function chatStream(
+@@ -363 +383 @@ export async function chatStream(
+-        resume ? { signal } : { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), signal },
++        resume ? { signal } : { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...body, outward_ok: allowedThisSession(agentId) }), signal },
+@@ -426 +446 @@ export async function chatStream(
 -              agents?: Array<{ id: string; name: string; model: string; identity: string }>
 +              agents?: Array<{ id: string; name: string; identity: string }>
-@@ -757,0 +762,20 @@ export async function linkRepo(projectId: string, repo: string): Promise<string>
+@@ -653,0 +674 @@ export async function logoutAccount(): Promise<void> {
++  forgetSessionAllowances()
+@@ -757,0 +779,20 @@ export async function linkRepo(projectId: string, repo: string): Promise<string>
 +export async function setCodingBot(projectId: string, agentId: string): Promise<string> {
 +  const res = await apiFetch(`/projects/${encodeURIComponent(projectId)}/coding-bot`, {
 +    method: "PUT",
@@ -74,10 +97,10 @@ index c214349..57f73f3 100644
 +  return data.pr_reviews
 +}
 +
-@@ -784 +808 @@ export async function deleteInvite(projectId: string, email: string): Promise<vo
+@@ -784 +825 @@ export async function deleteInvite(projectId: string, email: string): Promise<vo
 -export type DirectMessage = { id: number; from: string; to: string; content: string; at: string | null; reactions?: Record<string, string>; reply_to?: number | null }
 +export type DirectMessage = { id: number; from: string; to: string; content: string; at: string | null; reactions?: Record<string, string>; reply_to?: number | null; withheld?: string[]; share?: "" | "pending" | "sharing" | "shared" | "declined" | "drafted" | "draft" | "sent" | "dropped" | "proceed" | "running" | "done" | "cancelled" | "private"; action?: boolean }
-@@ -823,0 +848,27 @@ export async function sendDirect(personId: string, content: string, replyTo?: nu
+@@ -823,0 +865,27 @@ export async function sendDirect(personId: string, content: string, replyTo?: nu
 +export async function shareDirect(personId: string, messageId: number, share: boolean): Promise<DirectMessage> {
 +  const res = await apiFetch(`/direct/${encodeURIComponent(personId)}/${messageId}/share`, {
 +    method: "POST",
@@ -105,9 +128,9 @@ index c214349..57f73f3 100644
 +  return handleResponse(res) as Promise<DirectMessage>
 +}
 +
-@@ -932 +982,0 @@ export type SpecProposal = {
+@@ -932 +999,0 @@ export type SpecProposal = {
 -  model: string
-@@ -969,0 +1020,71 @@ export async function savePushSubscription(subscription: PushSubscriptionJSON):
+@@ -969,0 +1037,71 @@ export async function savePushSubscription(subscription: PushSubscriptionJSON):
 +
 +
 +export interface DocItem {

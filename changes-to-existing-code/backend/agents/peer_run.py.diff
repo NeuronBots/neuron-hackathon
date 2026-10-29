@@ -1,18 +1,22 @@
 diff --git a/backend/agents/peer_run.py b/backend/agents/peer_run.py
-index a113e51..4e7b596 100644
+index a113e51..3772fd5 100644
 --- a/backend/agents/peer_run.py
 +++ b/backend/agents/peer_run.py
-@@ -13,3 +13,3 @@ from core.database import SessionLocal
+@@ -11,0 +12 @@ from tools import recall
++from tools.outbox import queue_outward
+@@ -13,3 +14,3 @@ from core.database import SessionLocal
 -from core.limits import clamp_model, over_limit
 -from llm.client import cached, continue_text, looks_cut
 -from llm.config import ANTHROPIC_API_KEY, ANTHROPIC_BASE, CHAT_MAX_TOKENS
 +from core.limits import over_limit
 +from llm.client import apost_retry, cached, continue_text, looks_cut
 +from llm.config import CHAT_MAX_TOKENS, CHAT_MODEL
-@@ -129 +129 @@ async def _run_peer_inner(
+@@ -123,0 +125 @@ async def _run_peer_inner(
++        turn_holds: dict = {}  # outward writes held in this run: they share one approval
+@@ -129 +131 @@ async def _run_peer_inner(
 -                    "model": await asyncio.to_thread(clamp_model, model or target.model),
 +                    "model": model or CHAT_MODEL,
-@@ -134,14 +134 @@ async def _run_peer_inner(
+@@ -134,14 +136 @@ async def _run_peer_inner(
 -                # The provider answers 402/429/5xx for a moment when it is busy, then recovers: wait and ask again.
 -                for busy_try in range(4):
 -                    resp = await client.post(
@@ -28,13 +32,16 @@ index a113e51..4e7b596 100644
 -                        break
 -                    await asyncio.sleep(1.5 * (busy_try + 1))
 +                resp = await apost_retry(client, body)
-@@ -166 +153 @@ async def _run_peer_inner(
+@@ -166 +155 @@ async def _run_peer_inner(
 -                    more = await asyncio.to_thread(continue_text, (model or target.model), target_system, incoming, reply)
 +                    more = await asyncio.to_thread(continue_text, body["model"], target_system, incoming, reply)
-@@ -246 +233 @@ async def _run_peer_inner(
+@@ -202,0 +192,2 @@ async def _run_peer_inner(
++                elif (held := queue_outward(target.id, tname, tu.get("input") or {}, jira_scope, repo_scope, db, turn=turn_holds)) is not None:
++                    result_text, ev = held  # no person is in this teammate's chat: an outward write waits for approval
+@@ -246 +237 @@ async def _run_peer_inner(
 -                        "model": (model or target.model),
 +                        "model": model or CHAT_MODEL,
-@@ -251,9 +238 @@ async def _run_peer_inner(
+@@ -251,9 +242 @@ async def _run_peer_inner(
 -                    resp = await client.post(
 -                        f"{ANTHROPIC_BASE}/messages",
 -                        headers={

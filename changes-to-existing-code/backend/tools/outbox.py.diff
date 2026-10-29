@@ -1,0 +1,167 @@
+diff --git a/backend/tools/outbox.py b/backend/tools/outbox.py
+index 940deda..1366cc7 100644
+--- a/backend/tools/outbox.py
++++ b/backend/tools/outbox.py
+@@ -1 +1 @@
+-"""Mail and pushes a bot wants to send: queued for the user to approve."""
++"""Outward actions a bot wants to take on its own (mail, pushes, Jira and GitHub writes): queued for a person to approve."""
+@@ -7 +7 @@ from sqlalchemy.orm import Session
+-from board.decisions import append_decision, decision_cap_msg
++from board.decisions import append_decision, append_full, decision_cap_msg
+@@ -9,0 +10 @@ from core.models import (
++    Message,
+@@ -10,0 +12,2 @@ from core.models import (
++    TaskEvent,
++    append_history,
+@@ -11,0 +15 @@ from core.models import (
++from tools.writes import describe, is_write
+@@ -25,0 +30,6 @@ PUSH_MAX_FILES, PUSH_MAX_LINES = 3, 150  # ponytail: fixed size limit for "small
++def _told(done: str, interactive: bool, alone: str) -> str:
++    """What the bot is told after parking an action: a person in the chat is asked in a card; a bot on its own waits on the board."""
++    return (f"{done} yet: the person you are talking to must allow it first, and a card in this chat asks them to Allow or Deny. "
++            "Say in one sentence what you prepared. Do not call it again, and do not say it is done.") if interactive else alone
++
++
+@@ -39 +49 @@ def _queue_action(agent_id: str, status: str, title: str, text: str, call: dict
+-    """A board task whose first event explains what is wanted. With a call, an Approved answer runs it exactly as stored."""
++    """A board task whose first event explains what is wanted: a Blocked one, which nobody approves."""
+@@ -45,2 +54,0 @@ def _queue_action(agent_id: str, status: str, title: str, text: str, call: dict
+-    if call:
+-        append_decision(task, "System", MAIL_DRAFT + json.dumps(call))
+@@ -52,3 +60,60 @@ def _queue_action(agent_id: str, status: str, title: str, text: str, call: dict
+-def run_queue_mail(agent_id: str, name: str, args: dict, db: Session) -> tuple[str, Optional[dict]]:
+-    """Autonomous bots never send mail. Park the draft in Decisions pending; the server sends it only on 'Approved'."""
+-    if full := decision_cap_msg(agent_id, db):
++MAX_CALL_CHARS = 200_000  # a parked call is stored whole, so an absurd one is refused instead
++
++
++def _body(parts: list[tuple[str, str]]) -> str:
++    """What the person is shown: a line saying what is asked, one bullet per action, then every action's full details."""
++    n = len(parts)
++    bullets = "\n".join(f"• {headline}" for headline, _ in parts)
++    details = "\n\n———\n\n".join(detail for _, detail in parts)
++    return f"Needs your permission to do {'this' if n == 1 else f'these {n} things'}.\n{bullets}\n\nApprove to run {'it' if n == 1 else 'them'} exactly as written.\n\n{details}"
++
++
++def _card(task: Task, agent_id: str, name: str, parts: list[tuple[str, str]], interactive: bool) -> str:
++    card = {"kind": "approval", "task_id": task.id, "agent_id": agent_id, "name": name, "title": task.title, "detail": _body(parts)[:6000], "interactive": interactive, "count": len(parts)}
++    return "[[SOURCES:" + json.dumps(card).replace("]]", "] ]").replace("[[", "[ [") + "]]"
++
++
++def _park(agent_id: str, headline: str, detail: str, call: dict, db: Session, interactive: bool = False, turn: dict | None = None, title: str = "") -> Task:
++    """Hold one outward call for a person's say-so: a task on the board, and a card in the bot's chat. Calls parked in the same turn
++    (`turn` is that turn's own dict) join the first one's task and card, so a person answers once. Approving runs them all, in order."""
++    agent = db.get(Agent, agent_id)
++    group = (turn or {}).get("group")
++    task = db.get(Task, group["task"]) if group else None
++    if group and task is not None and task.status == "decision":
++        group["parts"].append((headline, detail))
++        group["calls"].append(call)
++        task.title = f"Approve {len(group['parts'])} actions"
++        events = db.query(TaskEvent).filter(TaskEvent.task_id == task.id).order_by(TaskEvent.id).all()
++        events[0].text = _body(group["parts"])
++        next(e for e in reversed(events) if e.text.startswith(MAIL_DRAFT)).text = MAIL_DRAFT + json.dumps({"calls": group["calls"]})
++        if (row := db.get(Message, group["message"])) is not None:
++            row.content = _card(task, agent_id, agent.name if agent else "", group["parts"], interactive)
++        db.commit()
++        return task
++    task = Task(agent_id=agent_id, title=(title or f"Approve: {headline}")[:200], status="decision")
++    db.add(task)
++    db.flush()
++    parts = [(headline, detail)]
++    append_full(task, agent.name if agent else "Bot", _body(parts))
++    append_full(task, "System", MAIL_DRAFT + json.dumps(call))
++    message = None
++    if agent:  # the same decision, as a card in the bot's own chat: answering there answers the task
++        append_history(agent, "assistant", _card(task, agent_id, agent.name, parts, interactive))
++        message = db.query(Message).filter(Message.agent_id == agent.id, Message.role == "assistant").order_by(Message.id.desc()).first()
++    db.commit()
++    if not interactive:  # a person in the chat is looking at the card already
++        notify_pending(agent_id, task.title, db)
++    if turn is not None and message is not None:
++        turn["group"] = {"task": task.id, "message": message.id, "parts": parts, "calls": [call]}
++    return task
++
++
++def _room(agent_id: str, db: Session, interactive: bool, turn: dict | None) -> Optional[str]:
++    """The board's limit on pending decisions, which binds a bot on its own only: a person in the chat is deciding right now, and a call
++    that joins this turn's task adds none."""
++    return None if interactive or (turn or {}).get("group") else decision_cap_msg(agent_id, db)
++
++
++def run_queue_mail(agent_id: str, name: str, args: dict, db: Session, interactive: bool = False, turn: dict | None = None) -> tuple[str, Optional[dict]]:
++    """Bots never send mail unasked. Park the draft in Decisions pending; the server sends it only on 'Approved'."""
++    if full := _room(agent_id, db, interactive, turn):
+@@ -62,6 +127,2 @@ def run_queue_mail(agent_id: str, name: str, args: dict, db: Session) -> tuple[s
+-    task = _queue_action(
+-        agent_id, "decision", f"Send email: {subject}",
+-        f"Needs your permission to send this email. Approve to send it as written.\n\n{draft}",
+-        {"tool": name, "args": args}, db,
+-    )
+-    return (
++    task = _park(agent_id, f"Send email: {subject}", draft, {"tool": name, "args": args}, db, interactive, turn, title=f"Send email: {subject}")
++    return _told("NOT sent", interactive,
+@@ -73,2 +134,3 @@ def run_queue_mail(agent_id: str, name: str, args: dict, db: Session) -> tuple[s
+-def run_queue_push(agent_id: str, name: str, args: dict, db: Session) -> tuple[str, Optional[dict]]:
+-    """Autonomous bots do not push to GitHub on their own. A small change waits for approval, with exactly what it changes; a big one is Blocked."""
++def run_queue_push(agent_id: str, name: str, args: dict, db: Session, interactive: bool = False, turn: dict | None = None) -> tuple[str, Optional[dict]]:
++    """Bots do not push to GitHub unasked. A small change waits for approval, with exactly what it changes. A bot on its own is also
++    stopped at a big one (Blocked); a person in the chat is shown any size and decides."""
+@@ -76 +138 @@ def run_queue_push(agent_id: str, name: str, args: dict, db: Session) -> tuple[s
+-    if full := decision_cap_msg(agent_id, db):
++    if full := _room(agent_id, db, interactive, turn):
+@@ -91 +153 @@ def run_queue_push(agent_id: str, name: str, args: dict, db: Session) -> tuple[s
+-    if big:
++    if big and not interactive:
+@@ -102,6 +164,3 @@ def run_queue_push(agent_id: str, name: str, args: dict, db: Session) -> tuple[s
+-    task = _queue_action(
+-        agent_id, "decision", f"Approve push: {message}",
+-        f"Needs your permission to push to {where}.\nCommit message: {message}\nChanges:\n{detail}\n\n{preview}\n\nApprove to push exactly this.",
+-        {"tool": name, "args": args}, db,
+-    )
+-    return (
++    task = _park(agent_id, f"Push to {where}: {message}", f"Commit message: {message}\nChanges:\n{detail}\n\n{preview}".rstrip(), {"tool": name, "args": args}, db,
++                 interactive, turn, title=f"Approve push: {message}")
++    return _told("NOT pushed", interactive,
+@@ -110,0 +170,41 @@ def run_queue_push(agent_id: str, name: str, args: dict, db: Session) -> tuple[s
++
++
++_LOCAL_JIRA_WRITES = ("manageJiraSprint", "planSprint", "attachDocumentToJiraIssue")  # built on raw Atlassian calls, run in tools/dispatch.py
++
++
++def is_outward(name: str) -> bool:
++    """A write through a connected account (Jira, Confluence, GitHub, Gmail). Like tools.writes.is_write, anything not plainly a read counts,
++    so a tool nobody has classified yet is held instead of run. Local tools (documents, board, calendar, web) are not outward."""
++    from integrations.atlassian_mcp import owns as atlassian_owns
++    from integrations.github_mcp import owns as github_owns
++    from integrations.gmail_mcp import owns as gmail_owns
++
++    return is_write(name) and (gmail_owns(name) or github_owns(name) or atlassian_owns(name) or name in _LOCAL_JIRA_WRITES)
++
++
++def run_queue_write(agent_id: str, name: str, args: dict, jira_key: str, repo: str, db: Session, interactive: bool = False, turn: dict | None = None) -> tuple[str, Optional[dict]]:
++    """Any other outward write by a bot: parked with the whole call, and run only on 'Approved'. The Jira project and repo it was
++    scoped to are kept, so the approved call is limited exactly as the bot's would have been."""
++    if full := _room(agent_id, db, interactive, turn):
++        return full, None
++    head, _, detail = describe(name, args).partition("\n")
++    task = _park(agent_id, head.strip(), detail.strip(), {"tool": name, "args": args, "jira_key": jira_key, "repo": repo}, db, interactive, turn)
++    return _told("NOT done", interactive,
++        "NOT done yet: bots working on their own need permission for this. It is waiting for a human to approve, with exactly what you asked for. "
++        "Carry on with other work; do not call it again, and do not say it is done."
++    ), {"type": "task_decision", "title": task.title}
++
++
++def queue_outward(agent_id: str, name: str, args: dict, jira_key: str, repo: str, db: Session, interactive: bool = False, turn: dict | None = None) -> Optional[tuple[str, Optional[dict]]]:
++    """The (text for the bot, board event) of the approval queued for an outward write, or None when the call is not outward and may
++    simply run. The one gate: for a bot with nobody in its chat, and (interactive) for a person's own chat until they allow it.
++    `turn` is the running turn's own dict: what is parked in one turn is asked of the person once."""
++    if not is_outward(name):
++        return None
++    if len(json.dumps(args, default=str)) > MAX_CALL_CHARS:
++        return "Error: that call is too large to ask a person to approve. Split it into smaller ones.", None
++    if is_mail_send(name):
++        return run_queue_mail(agent_id, name, args, db, interactive, turn)
++    if name in GH_PUSHES:
++        return run_queue_push(agent_id, name, args, db, interactive, turn)
++    return run_queue_write(agent_id, name, args, jira_key, repo, db, interactive, turn)

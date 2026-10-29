@@ -1,10 +1,96 @@
 diff --git a/src/SourceCards.tsx b/src/SourceCards.tsx
-index 5cecb89..ff15cf7 100644
+index 5cecb89..9445a35 100644
 --- a/src/SourceCards.tsx
 +++ b/src/SourceCards.tsx
-@@ -6,0 +7 @@ export type Card =
+@@ -0,0 +1,4 @@
++import { useEffect, useState } from "react"
++import { allowThisSession, decideTask, fetchTask } from "./api"
++import type { TaskRead } from "./types"
++
+@@ -4,0 +9 @@ export type Card =
++  | { kind: "approval"; task_id: string; agent_id?: string; name?: string; title: string; detail: string; interactive?: boolean; count?: number }
+@@ -6,0 +12 @@ export type Card =
 +  | { kind: "pr"; repo: string; number: number; what: string; title: string; author: string; head: string; base: string; url: string; status?: "running" | "done" | "failed"; verdict?: string; findings?: number; posted?: boolean; uncovered?: number; reason?: string; followup?: boolean; fixed?: number; open?: number }
-@@ -102,0 +104,34 @@ export function SourceCards({ card }: { card: Card }) {
+@@ -82,0 +89,76 @@ export function FetchChip({ card }: { card: Extract<Card, { kind: "fetch" }> })
++// What the server wrote for a person to read: a line, one "• action" per request, then every request's full details.
++function readAsk(text: string, fallback: string): { items: string[]; rest: string } {
++  const lines = text.split("\n")
++  const items: string[] = []
++  for (let i = 1; i < lines.length && lines[i].startsWith("• "); i++) items.push(lines[i].slice(2))
++  const rest = text.split(/exactly as written\.\n\n/)[1] ?? ""
++  return items.length ? { items, rest } : { items: [fallback], rest: text }
++}
++
++// A bot may not act outside the app (Jira, mail, GitHub) until a person allows it. The card is that question, in the bot's chat, in the
++// same style as the access question in a shared chat. Several requests from one turn arrive as one card with one answer.
++// With a person in the chat there are three answers; for a bot working on its own, two.
++function ApprovalCard({ card }: { card: Extract<Card, { kind: "approval" }> }) {
++  const [task, setTask] = useState<TaskRead | null | "gone">(null)
++  const [busy, setBusy] = useState(false)
++  const [error, setError] = useState("")
++  useEffect(() => {
++    let live = true
++    fetchTask(card.task_id).then((t) => { if (live) setTask(t) }).catch(() => { if (live) setTask("gone") })
++    return () => { live = false }
++  }, [card.task_id])
++
++  async function answer(text: "Approved" | "Approved for this session" | "Declined") {
++    setBusy(true)
++    setError("")
++    try {
++      const next = await decideTask(card.task_id, text)
++      if (text === "Approved for this session" && card.agent_id) allowThisSession(card.agent_id)
++      setTask(next)
++    } catch (err) {
++      setError(err instanceof Error ? err.message : "Could not send your answer.")
++    } finally {
++      setBusy(false)
++    }
++  }
++
++  const loaded = task !== null && task !== "gone" ? task : null
++  const waiting = loaded?.status === "decision"
++  const said = loaded?.decisions.map((d) => d.text).find((t) => t.startsWith("Decision: ")) ?? ""
++  // What is shown to approve is what the server stored, not what the card says: the card's own text comes from the bot's message.
++  const { items, rest } = readAsk(loaded?.decisions[0]?.text ?? card.detail, loaded?.title ?? card.title)
++  const many = items.length > 1
++  const who = card.name || "The bot"
++  const outcome = task === null ? "Checking…" : !said ? "No longer waiting"
++    : said.startsWith("Decision: Approved for this session") ? "Allowed for this session"
++    : said.startsWith("Decision: Approved") ? (many ? "Allowed, all done" : "Allowed, done") : "Denied, nothing was changed"
++  const list = (
++    <>
++      <ul className="src-approval-list">{items.map((item, i) => <li key={i}>{item}</li>)}</ul>
++      {rest && <details className="src-approval-more"><summary>Show details</summary><pre>{rest}</pre></details>}
++    </>
++  )
++  if (!waiting) {
++    return (
++      <div className="dm-share src-approval" role="group" aria-label="Permission">
++        {list}
++        <span className="dm-share-done">{outcome}{many ? ` · ${items.length} actions` : ""}</span>
++      </div>
++    )
++  }
++  return (
++    <div className="dm-share src-approval" role="group" aria-label="Permission needed">
++      <p className="dm-share-q">{who} wants to do {many ? `these ${items.length} things` : "this"} as you. {card.interactive ? "Allow it?" : "Approve it?"}</p>
++      {list}
++      {error && <p className="src-approval-error">{error}</p>}
++      <div className="dm-share-actions">
++        <button type="button" className="dm-share-no" disabled={busy} onClick={() => void answer("Declined")}>{card.interactive ? "Deny" : "Decline"}</button>
++        {card.interactive && card.agent_id && (
++          <button type="button" className="dm-share-alt" disabled={busy} onClick={() => void answer("Approved for this session")}>Allow in this session</button>
++        )}
++        <button type="button" className="dm-share-yes" disabled={busy} onClick={() => void answer("Approved")}>{busy ? "Working…" : card.interactive ? "Allow" : "Approve"}</button>
++      </div>
++    </div>
++  )
++}
++
+@@ -83,0 +166 @@ export function SourceCards({ card }: { card: Card }) {
++  if (card.kind === "approval") return <ApprovalCard card={card} />
+@@ -102,0 +186,34 @@ export function SourceCards({ card }: { card: Card }) {
 +  if (card.kind === "pr") {
 +    const running = !card.status || card.status === "running"
 +    const noun = card.followup ? "PR follow-up review" : "PR review"

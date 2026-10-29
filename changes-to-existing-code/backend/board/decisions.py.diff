@@ -1,0 +1,12 @@
+diff --git a/backend/board/decisions.py b/backend/board/decisions.py
+index b6b29f3..c57998e 100644
+--- a/backend/board/decisions.py
++++ b/backend/board/decisions.py
+@@ -57,0 +58,7 @@ def append_decision(task: Task, who: str, text: str) -> None:
++def append_full(task: Task, who: str, text: str) -> None:
++    """append_decision without the 5000-character cut and the flattening of line breaks. For text that is read back whole: a parked
++    call is JSON that must parse again when a person approves it, and the details they are shown keep their layout."""
++    made = _decision(who, "")
++    object_session(task).add(TaskEvent(task_id=task.id, at=made["at"], who=made["who"], text=text))
++
++

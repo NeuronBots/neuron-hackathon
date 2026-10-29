@@ -1,12 +1,46 @@
 diff --git a/backend/routes/tasks.py b/backend/routes/tasks.py
-index 91c150a..5d91daf 100644
+index 91c150a..caff23f 100644
 --- a/backend/routes/tasks.py
 +++ b/backend/routes/tasks.py
+@@ -15 +15 @@ from agents.roster import project_roster
+-from board.decisions import append_decision, decisions_by_task
++from board.decisions import append_full, append_decision, decisions_by_task
 @@ -18,0 +19 @@ from pydantic import BaseModel, Field
 +from core.tiers import TIERS
-@@ -148 +149 @@ def _compile_answers(items: list[tuple[Task, str, str]]) -> dict[str, str]:
+@@ -42,0 +44,7 @@ def list_tasks(
++@router.get("/api/tasks/{task_id}", response_model=TaskRead)
++def get_task(task_id: str, project: Project = Depends(get_project), db: Session = Depends(get_db)):
++    """One task with its decisions, for an approval card in a chat to show whether it is still waiting."""
++    task = task_in_project(task_id, project, db)
++    return _task_read(task, decisions_by_task(db, [task.id]).get(task.id, []))
++
++
+@@ -95 +103,2 @@ async def _apply_decision(task: Task, answer: str, user: User, project: Project,
+-            call = json.loads(draft[len(MAIL_DRAFT):])
++            stored = json.loads(draft[len(MAIL_DRAFT):])
++            calls = stored["calls"] if "calls" in stored else [stored]  # one approval can cover several calls from one turn
+@@ -97,7 +106,11 @@ async def _apply_decision(task: Task, answer: str, user: User, project: Project,
+-            changes = {k: norm(v) for k, v in (edit.model_dump() if edit else {}).items() if v is not None and norm(v) != norm(call["args"].get(k))}
+-            if changes:
+-                call["args"].update(changes)
+-                append_decision(task, user.name, "Edited before sending: " + ", ".join(changes))
+-            sent = await run_tool(call["tool"], call["args"], "", "", task.agent_id)
+-            append_decision(task, "System", f"Sent: {sent[:300]}")
+-            note = f"\n\nThe action was approved and done by the system ({sent[:200]}). Do not do it again."
++            if len(calls) == 1:  # only a single mail draft can be edited
++                changes = {k: norm(v) for k, v in (edit.model_dump() if edit else {}).items() if v is not None and norm(v) != norm(calls[0]["args"].get(k))}
++                if changes:
++                    calls[0]["args"].update(changes)
++                    append_decision(task, user.name, "Edited before sending: " + ", ".join(changes))
++            results = []
++            for call in calls:
++                done = await run_tool(call["tool"], call["args"], call.get("jira_key", ""), call.get("repo", ""), task.agent_id)
++                append_full(task, "System", f"Done: {done[:300]}")
++                results.append(f"{call['tool']}: {done[:200]}")
++            note = f"\n\nThe {'actions were' if len(calls) > 1 else 'action was'} approved and done by the system ({'; '.join(results)}). Do not do {'them' if len(calls) > 1 else 'it'} again."
+@@ -148 +161 @@ def _compile_answers(items: list[tuple[Task, str, str]]) -> dict[str, str]:
 -        raw = complete(ASK_MODEL or "claude-haiku-5-5", system, listing, 2048)
 +        raw = complete(ASK_MODEL or TIERS["FAST"], system, listing, 2048)
-@@ -180 +181 @@ def _group_pending(items: list[tuple[Task, str]]) -> list[dict]:
+@@ -180 +193 @@ def _group_pending(items: list[tuple[Task, str]]) -> list[dict]:
 -        raw = complete(ASK_MODEL or "claude-haiku-5-5", system, listing, 8000)
 +        raw = complete(ASK_MODEL or TIERS["FAST"], system, listing, 8000)

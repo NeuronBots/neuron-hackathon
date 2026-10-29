@@ -1,0 +1,13 @@
+diff --git a/src/TaskBoard.tsx b/src/TaskBoard.tsx
+index 0f267f9..08952d3 100644
+--- a/src/TaskBoard.tsx
++++ b/src/TaskBoard.tsx
+@@ -412 +412,7 @@ export function TaskBoard({ agents, onClose, onSelectAgent, onOpenTeam, teamOpen
+-                          {t.status === "decision" && !mailDraft(t) && (
++                          {t.status === "decision" && !mailDraft(t) && (t.decisions ?? []).some((d) => d.text.startsWith("[mail-draft] ")) && (
++                            <div className="decision-answer-actions">
++                              <button className="btn btn-quiet btn-sm" type="button" disabled={answering} onClick={() => { void decideMail(t, false) }}>Decline</button>
++                              <button className="btn btn-primary btn-sm" type="button" disabled={answering} onClick={() => { void decideMail(t, true) }}>Approve</button>
++                            </div>
++                          )}
++                          {t.status === "decision" && !mailDraft(t) && !(t.decisions ?? []).some((d) => d.text.startsWith("[mail-draft] ")) && (

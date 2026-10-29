@@ -1,5 +1,5 @@
 diff --git a/src/styles.css b/src/styles.css
-index 764ceee..8b01e8a 100644
+index 764ceee..35156e8 100644
 --- a/src/styles.css
 +++ b/src/styles.css
 @@ -1131,0 +1132,41 @@ button:disabled {
@@ -149,7 +149,7 @@ index 764ceee..8b01e8a 100644
 +.src-spinner { width: 14px; height: 14px; flex: none; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: src-spin 0.9s linear infinite; }
 +@keyframes src-spin { to { transform: rotate(360deg); } }
 +@media (prefers-reduced-motion: reduce) { .src-spinner { animation-duration: 3s; } }
-@@ -8261,0 +8391,363 @@ button.landing-plan-cta {
+@@ -8261,0 +8391,376 @@ button.landing-plan-cta {
 +
 +
 +/* Document Store & List Panel (NURN-152) */
@@ -513,3 +513,16 @@ index 764ceee..8b01e8a 100644
 +.doc-dialog-status { margin-right: auto; font-size: 0.82rem; color: var(--pine); }
 +.doc-dialog-status.is-error { color: var(--danger); }
 +@media (max-width: 860px) { .doc-dialog-actions .btn { min-height: 44px; } }
++
++/* A bot's outward action waiting for a person (Jira, mail, GitHub): the approval card in its chat, in the style of the shared-chat access question (.dm-share) */
++.dm-share.src-approval { width: min(520px, 100%); min-width: 0; box-sizing: border-box; }
++.src-approval-list { margin: 0 0 10px; padding: 0 0 0 18px; display: flex; flex-direction: column; gap: 4px; font-size: 0.84rem; line-height: 1.4; color: var(--ink); }
++.src-approval-more { margin: 0 0 10px; font-size: 0.78rem; color: var(--soft); }
++.src-approval-more summary { cursor: pointer; width: fit-content; }
++.src-approval-more pre { margin: 8px 0 0; padding: 10px 12px; max-height: 240px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; border-radius: 10px; background: rgba(0, 0, 0, 0.2); font: 0.76rem/1.45 var(--mono, ui-monospace, monospace); color: var(--ink); }
++.src-approval-error { margin: 0 0 8px; font-size: 0.78rem; color: var(--danger); }
++.src-approval .dm-share-actions { flex-wrap: wrap; }
++.src-approval .dm-share-actions button { flex: 1 1 auto; }
++.src-approval .dm-share-actions button:disabled { opacity: 0.6; cursor: default; }
++.dm-share-alt { background: rgba(91, 141, 239, 0.22); color: var(--ink); }
++.src-approval .dm-share-done { margin-top: 2px; }
