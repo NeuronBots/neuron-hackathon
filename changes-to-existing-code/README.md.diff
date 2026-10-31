@@ -1,0 +1,174 @@
+diff --git a/README.md b/README.md
+index 5b6c091..d302079 100644
+--- a/README.md
++++ b/README.md
+@@ -3 +3 @@
+-A chat-style interface where you message agents, and agents can spawn new agents.
++Neuron is a workspace where you run a project with a team of AI bots instead of a single chat. You describe what you want to build or run. A Master bot sets up the rest of the team, plans the work with you, builds the first version, and keeps going after that.
+@@ -5,32 +5 @@ A chat-style interface where you message agents, and agents can spawn new agents
+-## Stack
+-
+-- **Frontend:** React + Vite + TypeScript
+-- **Backend:** FastAPI + SQLite (via SQLAlchemy)
+-- **LLM:** Anthropic Claude (via streaming)
+-
+-## Architecture
+-
+-```
+-┌─────────────────┐       SSE stream       ┌──────────────────┐
+-│   React (5173)  │ ◄──────────────────► │  FastAPI (8000)  │
+-│   - Sidebar     │       REST + SSE       │   - Agents       │
+-│   - Chat view   │                        │   - Conversations│
+-│                 │                        │   - Messages     │
+-│                 │                        │   - Spawn logic  │
+-└─────────────────┘                        └────────┬─────────┘
+-                                                     │
+-                                                     ▼
+-                                            ┌──────────────────┐
+-                                            │  SQLite (data/)  │
+-                                            │  - agents        │
+-                                            │  - conversations │
+-                                            │  - messages      │
+-                                            └──────────────────┘
+-                                                     │
+-                                            ┌────────┴────────┐
+-                                            ▼                  ▼
+-                                  ┌──────────────────┐  ┌──────────────┐
+-                                  │ Anthropic Claude │  │  New agents  │
+-                                  │  (streaming)     │  │  persisted   │
+-                                  └──────────────────┘  └──────────────┘
+-```
++The bots run on Meta's Muse models: `muse-spark-1.3` for the fast, workhorse and judgement tiers and `muse-wonder-1.0` for reasoning.
+@@ -38 +7 @@ A chat-style interface where you message agents, and agents can spawn new agents
+-## Database schema
++## What it does
+@@ -40,3 +9,11 @@ A chat-style interface where you message agents, and agents can spawn new agents
+-- `agents` — id, name, system_prompt, model, parent_id (lineage), created_at
+-- `conversations` — id, agent_id, title, created_at
+-- `messages` — id, conversation_id, role, content, created_at
++- **Projects with a team.** Each project gets a Master bot and teammates with their own role, goal, memory, board and routines. Bots hand work to each other (`ask_teammate`) and to people.
++- **Plan, then build.** The Master writes a first-build plan as a document. Nothing is built until you approve it. The build runs in a Modal sandbox and streams a live preview. While it runs, the team already plans the next phase with you. Muse can also generate images for the app.
++- **Human in the loop.** Add people to a project with the field they are expert in. Bots route decisions to the right person with `request_decision` and carry on from the answer.
++- **Approval before anything leaves the app.** Sending mail, publishing a site, adding a routine and similar actions park behind an Allow/Deny card. Nothing runs until a person allows it.
++- **Memory with versions.** A bot's own notes are saved as drafts. Notes you write and decisions you answer are promoted at once. You can promote, reject or roll back each version from the bot's profile.
++- **Routines.** A routine is a standing instruction on a schedule, or on an event such as an order from the website.
++- **Hosted sites.** A static site built by Muse can be published under `/sites/<slug>/`. A form on the page posts to `_action`, which wakes the project's bots (or its order routines). The page is served sandboxed, and that route is rate limited and size capped.
++- **Documents.** Bots write documents (md, PDF) that open in an app overlay. When you edit a document, the bot is told what changed.
++- **Code review.** Bots review pull requests, optionally in an isolated sandbox, and can write a wiki for a repo.
++- **Voice.** Voice calls with a bot, with usage tracked and billed.
++- **Integrations.** GitHub, Atlassian (Jira and Confluence), Gmail, web search and push notifications.
+@@ -44 +21 @@ A chat-style interface where you message agents, and agents can spawn new agents
+-## Bot spawning
++## Stack
+@@ -46 +23,4 @@ A chat-style interface where you message agents, and agents can spawn new agents
+-An agent can create a new agent at any point during a conversation by emitting a structured marker in its reply:
++- **Frontend:** React, Vite, TypeScript (`src/`)
++- **Backend:** FastAPI and SQLAlchemy (`backend/`). SQLite by default; some tests and production use Postgres.
++- **Models:** raw HTTP to an Anthropic-style `/messages` endpoint. The app asks for a tier (`fast`, `workhorse`, `judgement`, `reasoning`) and the built-in model proxy (`backend/routes/model_proxy.py`) maps it to a model.
++- **Sandboxes:** Modal, for builds, previews and PR reviews.
+@@ -48,3 +28 @@ An agent can create a new agent at any point during a conversation by emitting a
+-```
+-[[SPAWN: agent_name | system_prompt | model_id]]
+-```
++Backend layout:
+@@ -52 +30,8 @@ An agent can create a new agent at any point during a conversation by emitting a
+-The backend parses these markers after the stream completes, creates child agents in the DB (with `parent_id` pointing to the spawning agent), and emits a `spawn` SSE event so the frontend can refresh the agent list.
++| Path | What lives there |
++|---|---|
++| `routes/` | HTTP routes: chat (SSE), agents, projects, docs, routines, sites, billing, webhooks, model proxy |
++| `agents/` | Bot memory, memory versions, teammate runs, follow-ups |
++| `services/` | First plan, first build, next phase, goals, ownership, routines, site hosting, wiki, PR review |
++| `tools/` | Tool definitions, dispatch, and the outbox that holds outward actions for approval |
++| `prompts/` | System prompt assembly |
++| `core/` | Database, models and migrations |
+@@ -55,0 +41,2 @@ The backend parses these markers after the stream completes, creates child agent
++Neuron needs the backend on port 8000. The backend calls its own model proxy at `http://localhost:8000/api/model-proxy/v1`, so a different port breaks every bot's model calls unless `API_BASE_URL` is changed to match.
++
+@@ -58 +45 @@ The backend parses these markers after the stream completes, creates child agent
+-The Atlassian client needs Python 3.10 or newer. Homebrew Python 3.13 is a safe choice; the system Python 3.9 cannot install the MCP package.
++Python 3.10 or newer is required (the MCP package does not install on 3.9).
+@@ -64,2 +51,2 @@ python3.13 -m venv .venv
+-cp .env.example .env  # then edit with your values
+-.venv/bin/python main.py
++cp .env.example .env   # then fill in your values
++.venv/bin/python -m uvicorn main:app --port 8000
+@@ -68 +55,3 @@ cp .env.example .env  # then edit with your values
+-Or override on the command line:
++There is no auto-reload, so restart after changing code. Run a single worker: in-flight runs and locks live in the process.
++
++### Frontend
+@@ -71 +60,2 @@ Or override on the command line:
+-API_BASE_URL=https://brocode.live/v1 API_KEY=sk-ant-... .venv/bin/python main.py
++npm install
++npm run dev
+@@ -74 +64 @@ API_BASE_URL=https://brocode.live/v1 API_KEY=sk-ant-... .venv/bin/python main.py
+-The server listens on `http://localhost:8000`. SQLite DB lives at `data/agents.db`.
++Vite serves `http://localhost:5173` and proxies `/api` to port 8000.
+@@ -76 +66 @@ The server listens on `http://localhost:8000`. SQLite DB lives at `data/agents.d
+-### Environment variables
++### Tests
+@@ -78,9 +68,4 @@ The server listens on `http://localhost:8000`. SQLite DB lives at `data/agents.d
+-| Variable | Default | Description |
+-|---|---|---|
+-| `API_KEY` | (empty) | API key for the upstream LLM provider |
+-| `API_BASE_URL` | `https://api.anthropic.com/v1` | Base URL for the upstream LLM (e.g. `https://brocode.live/v1`) |
+-| `ALLOW_ORIGINS` | `http://localhost:5173,http://localhost:3000` | Comma-separated CORS origins, or `*` for all |
+-| `GITHUB_PAT` | (empty) | GitHub personal access token. Blank disables GitHub tools |
+-| `GITHUB_MCP_URL` | `https://api.githubcopilot.com/mcp/` | Remote GitHub MCP server |
+-| `GITHUB_MCP_TOOLSETS` | (empty) | Optional comma-separated toolsets, such as `repos,issues,pull_requests` |
+-| `GITHUB_MCP_READONLY` | (empty) | Set to `true` to expose read-only GitHub tools |
++```bash
++cd backend
++.venv/bin/python -m pytest tests/test_sites.py -q
++```
+@@ -88 +73 @@ The server listens on `http://localhost:8000`. SQLite DB lives at `data/agents.d
+-The backend reads from a `.env` file in `backend/` (see `.env.example`) and falls back to OS env vars. The service must be deployed with a single worker (`workers=1`), as in-flight agent runs, concurrency locks, and typing indicator stores are process-local.
++Most test files use an in-memory SQLite database. The whole suite also needs Postgres, so run the files you need.
+@@ -90 +75 @@ The backend reads from a `.env` file in `backend/` (see `.env.example`) and fall
+-### Frontend
++## Configuration
+@@ -92,4 +77 @@ The backend reads from a `.env` file in `backend/` (see `.env.example`) and fall
+-```bash
+-npm install
+-npm run dev
+-```
++Everything is read from `backend/.env` at startup (see `backend/.env.example` for the full list and comments). Restart after changing it. The main settings:
+@@ -97 +79,11 @@ npm run dev
+-Vite dev server on `http://localhost:5173` with `/api` proxied to the backend.
++| Variable | Purpose |
++|---|---|
++| `API_KEY`, `API_BASE_URL` | The shared secret and address of the model proxy |
++| `MODEL_PROXY_PROVIDER` | Who answers through the proxy: `meta` (default) or `openrouter` |
++| `META_API_KEY`, `META_MODEL_*`, `META_EFFORT_*` | Meta models and the reasoning effort per tier |
++| `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET` | Sandboxes for builds, previews and reviews |
++| `SITES_PUBLIC_URL` | Public address where hosted sites are reachable (a LAN or public address, not `localhost`, if visitors are on other devices) |
++| `GITHUB_*`, `ATLASSIAN_*`, `GMAIL_*` | Integrations; leave blank to disable |
++| `MAILGUN_*`, `MAIL_SMTP_*` | Outgoing mail |
++| `ELEVENLABS_*` | Voice |
++| `BRAVE_API_KEY` | Web search |
+@@ -99 +91 @@ Vite dev server on `http://localhost:5173` with `/api` proxied to the backend.
+-## API endpoints
++## API
+@@ -101,9 +93 @@ Vite dev server on `http://localhost:5173` with `/api` proxied to the backend.
+-- `GET  /api/agents` — list all agents
+-- `POST /api/agents` — create agent
+-- `GET  /api/agents/{id}` — fetch one
+-- `PATCH /api/agents/{id}` — update
+-- `DELETE /api/agents/{id}` — delete (cascades to conversations/messages)
+-- `GET  /api/agents/{id}/conversations` — list conversations for an agent
+-- `POST /api/agents/{id}/conversations` — start new conversation
+-- `GET  /api/conversations/{id}/messages` — list messages in a conversation
+-- `POST /api/conversations/{id}/chat` — send message, stream reply (SSE)
++Routes are grouped by file in `backend/routes/`. The shape worth knowing:
+@@ -111 +95,4 @@ Vite dev server on `http://localhost:5173` with `/api` proxied to the backend.
+-## SSE event types
++- `GET/POST /api/agents`, `/api/agents/{id}`: bots; `/api/agents/{id}/memory-versions` lists, promotes and rejects memory versions
++- `POST /api/conversations/{id}/chat`: send a message and stream the reply as SSE (`token`, `spawn`, `done`, `error` events)
++- `/api/projects/...`: projects, members, invites, builds
++- `GET /sites/{slug}/...` and `POST /sites/{slug}/_action`: the public side of hosted sites
+@@ -113,4 +100 @@ Vite dev server on `http://localhost:5173` with `/api` proxied to the backend.
+-- `data: {"type":"token","text":"..."}` — streamed token from assistant
+-- `data: {"type":"spawn","agents":[...]}` — new agents were created
+-- `data: {"type":"done","conversation_id":"..."}` — stream complete
+-- `data: {"type":"error","message":"..."}` — error during stream
++The SSE and event schema is in `docs/events-schema.md`. How the model layer is wired is in `docs/model-layer-audit.md`.

@@ -1,0 +1,8 @@
+diff --git a/.gitignore b/.gitignore
+index 28e3cc2..66bfd10 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -31,0 +32,3 @@ docs/model-layer-audit.md
++
++# runtime logs
++backend/dev.log*
