@@ -309,3 +309,28 @@ def test_a_big_push_is_blocked_for_a_bot_alone_but_shown_to_a_person(db, world):
 
     asked, _ = queue_outward(bot.id, "github_push_files", args, "", "o/r", db, interactive=True)
     assert "a card in this chat" in asked and sorted(t.status for t in db.query(Task).all()) == ["blocked", "decision"]
+
+
+def test_an_approved_action_runs_as_the_person_who_approved_it(db, world, monkeypatch):
+    """The approval route is not a chat route, so nothing set who was acting. Connected accounts (Jira, GitHub, Gmail) are looked up for that
+    person, and a background job the action starts (the wiki build) reports back into their chat."""
+    from core.usage import current_user
+    user, proj, bot = world
+    queue_outward(bot.id, "addCommentToJiraIssue", {"issueIdOrKey": "ABC-1", "commentBody": "x"}, "ABC", "", db, interactive=True)
+    from core import usage
+    outer = usage._user_id.set("")
+    seen = []
+
+    async def fake_run_tool(*a):
+        seen.append(current_user())
+        return "ok"
+    from routes import tasks
+    monkeypatch.setattr(tasks, "run_tool", fake_run_tool)
+    monkeypatch.setattr("routes.chat._start_kickoff", lambda *a, **k: None)
+    try:
+        asyncio.run(tasks._apply_decision(_task(db, bot), "Approved", user, proj, db))
+        after = current_user()
+    finally:
+        usage._user_id.reset(outer)
+    assert seen == [user.id]  # the approver, while the action ran
+    assert after == ""  # and only then

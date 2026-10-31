@@ -1,8 +1,99 @@
 diff --git a/src/styles.css b/src/styles.css
-index 764ceee..35156e8 100644
+index 764ceee..4ca2211 100644
 --- a/src/styles.css
 +++ b/src/styles.css
-@@ -1131,0 +1132,41 @@ button:disabled {
+@@ -276 +276 @@ button:disabled {
+-  gap: 8px;
++  align-items: center;
+@@ -277,0 +278,6 @@ button:disabled {
++  padding: 0;
++  list-style: none;
++  font-size: 0.84rem;
++  font-weight: 500;
++  letter-spacing: -0.011em;
++  color: rgba(255, 255, 255, 0.62);
+@@ -280,8 +286,5 @@ button:disabled {
+-.setup-steps span {
+-  padding: 6px 12px;
+-  border-radius: 999px;
+-  background: rgba(255, 255, 255, 0.06);
+-  color: rgba(255, 255, 255, 0.55);
+-  font-size: 0.82rem;
+-  font-weight: 600;
+-  letter-spacing: -0.011em;
++.setup-steps li {
++  display: inline-flex;
++  align-items: center;
++  gap: 6px;
++  min-height: 28px;
+@@ -290,2 +293,7 @@ button:disabled {
+-.setup-steps .is-done {
+-  color: rgba(255, 255, 255, 0.82);
++/* a quiet chevron between the steps */
++.setup-steps li + li::before {
++  content: "";
++  width: 12px;
++  height: 12px;
++  margin: 0 8px;
++  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-opacity='.35' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 6 6 6-6 6'/%3E%3C/svg%3E") center / contain no-repeat;
+@@ -294,3 +302,22 @@ button:disabled {
+-.setup-steps .is-skipped {
+-  text-decoration: line-through;
+-  opacity: 0.55;
++.setup-step-mark { display: none; }
++
++.setup-steps .is-done .setup-step-mark {
++  display: inline-grid;
++  place-items: center;
++  width: 14px;
++  height: 14px;
++}
++
++.setup-step-mark svg {
++  width: 14px;
++  height: 14px;
++  fill: none;
++  stroke: #4ade80;
++  stroke-width: 3;
++  stroke-linecap: round;
++  stroke-linejoin: round;
++}
++
++.setup-step-note {
++  font-size: 0.78rem;
++  font-weight: 400;
+@@ -300 +326,0 @@ button:disabled {
+-  background: rgba(91, 141, 239, 0.28);
+@@ -301,0 +328,20 @@ button:disabled {
++  font-weight: 650;
++}
++
++.setup-steps .is-current .setup-step-label {
++  padding-bottom: 2px;
++  border-bottom: 2px solid var(--stamp);
++}
++
++/* On a narrow screen the trail becomes one line: "Step 3 of 5 · Repository" */
++@media (max-width: 560px) {
++  .setup-steps li:not(.is-current) { display: none; }
++  .setup-steps li.is-current::before {
++    content: "Step " attr(data-pos) " of 5 ·";
++    width: auto;
++    height: auto;
++    margin: 0 6px 0 0;
++    background: none;
++    font-weight: 500;
++    color: rgba(255, 255, 255, 0.62);
++  }
+@@ -712,3 +758,2 @@ button:disabled {
+-  .setup-steps .is-current {
+-    background: #000;
+-    border: 1px solid #fff;
++  .setup-steps .is-current .setup-step-label {
++    border-bottom-color: #fff;
+@@ -715,0 +761 @@ button:disabled {
++
+@@ -1131,0 +1178,41 @@ button:disabled {
 +.file-card-actions {
 +  display: flex;
 +  gap: 6px;
@@ -44,16 +135,16 @@ index 764ceee..35156e8 100644
 +  text-underline-offset: 2px;
 +}
 +
-@@ -1959,2 +2000,4 @@ button:disabled {
+@@ -1959,2 +2046,4 @@ button:disabled {
 -.dm-thread-overlay { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px 16px 190px; background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
 -.dm-thread { width: min(640px, 100%); max-height: 100%; overflow: auto; display: flex; flex-direction: column; gap: 3px; padding: 4px; }
 +.dm-thread-overlay { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; padding: 16px; background: transparent; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
 +.dm-thread { width: min(640px, 100%); max-height: min(720px, calc(var(--app-height, 100svh) - 32px)); min-height: 0; display: flex; flex-direction: column; gap: 8px; padding: 14px 14px 12px; }
 +.dm-thread-body { flex: 1; min-height: 80px; overflow: auto; display: flex; flex-direction: column; gap: 3px; padding: 2px 2px 6px; overscroll-behavior: contain; touch-action: pan-y; }
 +.dm-thread-composer { flex-shrink: 0; }
-@@ -1962 +2004,0 @@ button:disabled {
+@@ -1962 +2050,0 @@ button:disabled {
 -.chat-dock.dm-dock-over { z-index: 60; }
-@@ -4348,0 +4391,48 @@ button:disabled {
+@@ -4348,0 +4437,48 @@ button:disabled {
 +.switch {
 +  position: relative;
 +  flex: none;
@@ -102,7 +193,7 @@ index 764ceee..35156e8 100644
 +  outline-offset: 2px;
 +}
 +
-@@ -4714 +4804,23 @@ button:disabled {
+@@ -4714 +4850,23 @@ button:disabled {
 -.chat-attach.is-glow {
 +.sidebar-quick { flex-basis: 100%; display: flex; align-items: center; gap: 8px; }
 +.sidebar-quick .sidebar-board-btn { flex: 1; min-width: 0; }
@@ -127,11 +218,11 @@ index 764ceee..35156e8 100644
 +
 +.chat-attach.is-glow,
 +.sidebar-circle-btn.is-glow {
-@@ -4726 +4838,2 @@ button:disabled {
+@@ -4726 +4884,2 @@ button:disabled {
 -  .chat-attach.is-glow {
 +  .chat-attach.is-glow,
 +  .sidebar-circle-btn.is-glow {
-@@ -5339,0 +5453,13 @@ button:disabled {
+@@ -5339,0 +5499,13 @@ button:disabled {
 +.dm-flat { display: contents; }
 +.dm-col { display: flex; flex-direction: column; gap: 6px; min-width: min(240px, 100%); max-width: min(78%, 60ch); }
 +.dm-col .msg-bubble { max-width: none; }
@@ -145,11 +236,14 @@ index 764ceee..35156e8 100644
 +.dm-share-yes { background: var(--stamp); color: #fff; }
 +.dm-share-yes:hover { filter: brightness(1.08); }
 +.dm-share-done { display: block; width: 0; min-width: 100%; font-size: 0.72rem; color: var(--soft); }
-@@ -8254,0 +8381,3 @@ button.landing-plan-cta {
+@@ -8249,0 +8422,2 @@ button.landing-plan-cta {
++.chat-ask-row { justify-content: flex-start; padding-left: 36px; }  /* avatar 28px + 8px gap, so it lines up under the bubble */
++.chat-ask-row > .dm-share { width: min(420px, 100%); min-width: 0; }  /* approvals and questions sit on the bot's side, under its bubbles */
+@@ -8254,0 +8429,3 @@ button.landing-plan-cta {
 +.src-spinner { width: 14px; height: 14px; flex: none; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: src-spin 0.9s linear infinite; }
 +@keyframes src-spin { to { transform: rotate(360deg); } }
 +@media (prefers-reduced-motion: reduce) { .src-spinner { animation-duration: 3s; } }
-@@ -8261,0 +8391,376 @@ button.landing-plan-cta {
+@@ -8261,0 +8439,632 @@ button.landing-plan-cta {
 +
 +
 +/* Document Store & List Panel (NURN-152) */
@@ -472,6 +566,9 @@ index 764ceee..35156e8 100644
 +
 +/* Excel-style spreadsheet viewer: always light, like a worksheet */
 +.sheet-col { width: min(1180px, 100%); }
++.pdf-col { width: min(1000px, 100%); }
++.sheet-title.pdf-title { background: #b3261e; }
++.pdf-frame { display: block; width: 100%; height: min(80vh, 900px); border: 0; background: #fff; }
 +.doc-page.sheet { background: #fff; color: #1f1f1f; font: 13px/1 var(--sans); display: flex; flex-direction: column; border-radius: 10px; }
 +.sheet-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 14px; background: #217346; color: #fff; }
 +.sheet-title .btn-quiet { color: #fff; }
@@ -526,3 +623,256 @@ index 764ceee..35156e8 100644
 +.src-approval .dm-share-actions button:disabled { opacity: 0.6; cursor: default; }
 +.dm-share-alt { background: rgba(91, 141, 239, 0.22); color: var(--ink); }
 +.src-approval .dm-share-done { margin-top: 2px; }
++
++/* The wiki as a file card (SourceCards "wikidoc"): the document card's look, with links in place of buttons */
++.file-card-wiki { background: #5b6ee1; font-size: 10px; letter-spacing: 0; text-decoration: none; color: #fff; }
++.file-card a.file-card-info { text-decoration: none; color: inherit; }
++
++/* Project setup, repository step: find an existing repository, or create one */
++.setup-tabs { display: inline-flex; gap: 4px; padding: 3px; border-radius: 999px; background: rgba(255, 255, 255, 0.06); border: 1px solid var(--line); width: fit-content; }
++.setup-tabs button { min-height: 32px; padding: 0 14px; border: 0; border-radius: 999px; background: none; color: var(--soft); font: inherit; font-size: 0.86rem; font-weight: 600; cursor: pointer; }
++.setup-tabs button[aria-pressed="true"] { background: var(--stamp); color: #fff; }
++.setup-tabs button:disabled { opacity: 0.6; cursor: default; }
++.setup-newrepo { display: flex; flex-direction: column; gap: 12px; }
++.setup-newrepo label, .setup-visibility { display: flex; flex-direction: column; gap: 6px; font-size: 0.86rem; color: var(--soft); }
++.setup-newrepo label em, .setup-visibility em { font-style: normal; opacity: 0.7; }
++.setup-newrepo input[type="text"], .setup-newrepo input:not([type]), .setup-newrepo select { min-height: 38px; padding: 6px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--field); color: var(--ink); font: inherit; }
++.setup-visibility { border: 0; margin: 0; padding: 0; }
++.setup-visibility legend { padding: 0; margin-bottom: 6px; }
++.setup-visibility label { flex-direction: row; align-items: center; gap: 8px; color: var(--ink); }
++.setup-newrepo .btn { align-self: flex-start; }
++.setup-created-actions { display: flex; flex-wrap: wrap; gap: 8px; }
++
++/* Project setup, final step: choose the coding bot (the same choice as Tweaks has) */
++.setup-coding { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--field); }
++.setup-coding span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
++.setup-coding b { color: var(--ink); font-size: 0.92rem; }
++.setup-coding em { font-style: normal; font-size: 0.8rem; color: var(--soft); }
++.setup-coding select { min-height: 36px; padding: 4px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--slip); color: var(--ink); font: inherit; flex: none; max-width: 45%; }
++@media (max-width: 560px) { .setup-coding { flex-direction: column; align-items: stretch; } .setup-coding select { max-width: none; } }
++
++/* Project setup, final step: start the first-build plan */
++.setup-plan { display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--field); cursor: pointer; }
++.setup-plan input { margin-top: 3px; flex: none; }
++.setup-plan span { display: flex; flex-direction: column; gap: 3px; }
++.setup-plan b { color: var(--ink); font-size: 0.92rem; }
++.setup-plan em { font-style: normal; font-size: 0.8rem; line-height: 1.4; color: var(--soft); }
++.file-card-zip { background: #7a5ac8; font-size: 11px; }
++
++/* A code bot's long job (PR review, wiki, first build): the glass card of the access question, always open */
++.dm-share.src-run { width: min(520px, 100%); min-width: 0; box-sizing: border-box; }
++.src-run-head { display: flex; align-items: center; gap: 8px; font-weight: 600; }
++.src-run-head .src-spinner { color: var(--stamp); }
++.src-run-icon { width: 16px; height: 16px; flex: none; fill: none; stroke: var(--stamp); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
++.src-run-failed .src-run-icon, .src-run-failed .dm-share-done { color: #ff8a80; stroke: #ff8a80; }
++.dm-share.src-run .dm-share-done { width: auto; min-width: 0; overflow-wrap: anywhere; }
++.dm-share.src-run .dm-share-done a { color: var(--stamp); }
++.src-approval-item { margin: 0 0 6px; font-size: 0.84rem; line-height: 1.4; color: var(--ink); }
++.dm-share.src-run .src-approval-list { margin-bottom: 8px; color: var(--soft); font-size: 0.8rem; }
++.src-run-actions { margin: 0 0 8px; }
++.src-run-note { list-style: none; padding: 0; margin: 0 0 8px; color: var(--soft); }
++
++/* The built app, running in a sandbox, docked on the right of the chat (PreviewPanel.tsx) */
++body.preview-open #root { padding-right: var(--preview-w, min(46vw, 640px)); box-sizing: border-box; }
++.preview-panel { position: fixed; top: 0; right: 0; bottom: 0; z-index: 40; width: var(--preview-w, min(46vw, 640px)); display: flex; flex-direction: column; background: rgba(20, 22, 28, 0.82); border-left: 1px solid rgba(255, 255, 255, 0.12); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); touch-action: auto; }
++.preview-head { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); font-size: 0.84rem; color: var(--ink); }
++.preview-head button { min-height: 30px; padding: 0 12px; border: none; border-radius: 999px; background: rgba(255, 255, 255, 0.12); color: var(--ink); font: inherit; font-size: 0.78rem; font-weight: 600; cursor: pointer; }
++.preview-head button.preview-icon { display: inline-flex; align-items: center; justify-content: center; width: 30px; padding: 0; }
++.preview-head button.preview-icon .src-spinner { width: 14px; height: 14px; }
++.preview-head button:focus-visible { outline: 2px solid var(--stamp); outline-offset: 2px; }
++.preview-spacer { flex: 1; }
++.preview-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--soft); }
++.preview-running { background: #4ade80; }
++.preview-starting { background: #fbbf24; }
++.preview-failed { background: #ff8a80; }
++.preview-frame { flex: 1; width: 100%; border: 0; background: #fff; }
++.preview-wait { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 24px; text-align: center; color: var(--soft); font-size: 0.86rem; overflow-wrap: anywhere; }
++.preview-wait .src-spinner { width: 22px; height: 22px; color: var(--stamp); }
++.preview-logs { border-top: 1px solid rgba(255, 255, 255, 0.1); font-size: 0.76rem; color: var(--soft); }
++.preview-logs summary { padding: 8px 14px; cursor: pointer; }
++.preview-logs pre { margin: 0; padding: 0 14px 12px; max-height: 180px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 0.74rem/1.45 var(--mono, ui-monospace, monospace); color: var(--ink); }
++@media (max-width: 820px) { body.preview-open #root { padding-right: 0; } .preview-panel { width: 100vw; } }
++.preview-note { margin: 0; padding: 6px 14px; font-size: 0.76rem; color: #ff8a80; }
++.preview-head .src-spinner { color: var(--stamp); }
++
++/* A decision asked of the person, inline (SourceCards.tsx DecisionCard) */
++.src-decision-options { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 10px; }
++.src-decision-options button { min-height: 36px; padding: 0 14px; border: none; border-radius: 999px; font: inherit; font-size: 0.84rem; font-weight: 600; cursor: pointer; }
++.src-decision-options button:focus-visible, .src-decision-form button:focus-visible { outline: 2px solid var(--stamp); outline-offset: 2px; }
++.src-decision-form { display: flex; gap: 8px; }
++.src-decision-form input { flex: 1; min-width: 0; min-height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.14); background: rgba(0, 0, 0, 0.2); color: var(--ink); font: inherit; font-size: 0.84rem; }
++.src-decision-form input:focus-visible { outline: 2px solid var(--stamp); outline-offset: 1px; }
++.src-decision-form button { min-height: 36px; padding: 0 16px; border: none; border-radius: 999px; font: inherit; font-size: 0.84rem; font-weight: 600; cursor: pointer; }
++
++.setup-logout::before { content: none; margin: 0; }
++
++/* GitHub / Atlassian on the name step (ProjectSetup.tsx ConnectRow): glass rows like the app's other cards */
++.setup-connects { display: flex; flex-direction: column; gap: 8px; width: 100%; }
++.setup-name .setup-connects { margin-top: 2px; }
++.setup-connect { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; margin: 0; padding: 8px 14px 8px 10px; box-sizing: border-box; border-radius: 14px; border: 1px solid rgba(255, 255, 255, 0.2); background: rgba(255, 255, 255, 0.08); color: var(--ink); font: inherit; text-align: left; cursor: pointer; transition: background 120ms ease-out, border-color 120ms ease-out, transform 120ms ease-out; }
++button.setup-connect:hover:not(:disabled) { background: rgba(255, 255, 255, 0.12); border-color: rgba(255, 255, 255, 0.22); }
++button.setup-connect:active:not(:disabled) { transform: scale(0.99); }
++button.setup-connect:focus-visible { outline: 2px solid var(--stamp); outline-offset: 2px; }
++button.setup-connect:disabled { cursor: default; }
++.setup-connect-mark { display: grid; place-items: center; flex: none; width: 36px; height: 36px; border-radius: 10px; background: rgba(255, 255, 255, 0.1); }
++.setup-connect-mark svg { width: 20px; height: 20px; fill: currentColor; }
++.setup-connect-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
++.setup-connect-text strong { font-size: 0.92rem; font-weight: 600; letter-spacing: -0.011em; }
++.setup-connect-text span { font-size: 0.8125rem; color: #a9bbb2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
++.setup-connect-go { width: 18px; height: 18px; flex: none; fill: none; stroke: #a9bbb2; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
++.setup-connect-tick { width: 22px; height: 22px; flex: none; fill: rgba(74, 222, 128, 0.18); stroke: #4ade80; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
++.setup-connect.is-connected { cursor: default; border-color: rgba(74, 222, 128, 0.35); background: rgba(74, 222, 128, 0.07); }
++.setup-connect.is-connected .setup-connect-text span { color: #4ade80; }
++.setup-connect-wait { width: 16px; height: 16px; color: var(--soft); }
++@media (prefers-reduced-motion: reduce) { .setup-connect { transition: none; } button.setup-connect:active:not(:disabled) { transform: none; } }
++
++.setup-steps .setup-step-mark:empty { display: none; }
++
++/* Cancel under Continue (the Goal step) */
++.setup-actions.is-cancel-last .btn-quiet { flex: 1 1 100%; order: 2; justify-content: center; min-height: 40px; }
++.setup-actions.is-cancel-last .setup-cancel { order: 3; }
++
++/* Continue / Create on the setup steps: a deeper blue so the white label reads (4.6:1), a clear not-ready state, and a visible focus ring */
++.setup-actions .btn-primary {
++  background: #3f74d6;
++  border-radius: 999px;
++  border-color: #3f74d6;
++  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 1px 2px rgba(0, 0, 0, 0.35);
++}
++.setup-actions .btn-primary:hover:not(:disabled) { background: #4a80e4; border-color: #4a80e4; }
++.setup-actions .btn-primary:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
++.setup-actions .btn-primary:disabled {
++  opacity: 1;
++  background: rgba(255, 255, 255, 0.08);
++  border-color: rgba(255, 255, 255, 0.12);
++  color: rgba(255, 255, 255, 0.55);
++  box-shadow: none;
++  cursor: default;
++}
++
++/* The Goal step: Continue and Cancel sit at the bottom of the screen, and stay there when the keyboard or a long goal makes the page scroll. Cancel is red: it throws the new project away. */
++.setup:has(.setup-pinned) { display: flex; flex-direction: column; }
++.setup:has(.setup-pinned) .setup-pinned { flex: 1; }
++.setup-actions.is-cancel-last { margin-top: auto; position: sticky; bottom: 0; padding: 14px 0 4px; background: linear-gradient(to top, #101412 72%, rgba(16, 20, 18, 0)); }
++.setup-actions.is-cancel-last .btn-quiet:not(.setup-skip) { color: #ff8a80; background: rgba(255, 90, 80, 0.1); border-color: rgba(255, 90, 80, 0.45); }
++.setup-actions.is-cancel-last .btn-quiet:not(.setup-skip):hover:not(:disabled) { background: rgba(255, 90, 80, 0.18); color: #ffa39b; }
++.setup-actions.is-cancel-last .btn-quiet:not(.setup-skip):focus-visible { outline: 2px solid #ff8a80; outline-offset: 2px; }
++
++/* "Continue without a repository": a plain text button, so the footer stays short and Create / Read stay the only filled action */
++.setup-actions.is-cancel-last .setup-skip { min-height: 34px; background: none; border-color: transparent; color: #a9bbb2; font-weight: 500; }
++.setup-actions.is-cancel-last .setup-skip:hover:not(:disabled) { background: rgba(255, 255, 255, 0.08); color: #fff; }
++.setup-actions.is-cancel-last { gap: 6px; }
++.setup-actions.is-cancel-last .setup-skip { order: 0; }
++
++/* Find an existing / Create a new: a full-width segmented control. The chosen segment is a lighter thumb, not the accent colour (white on the accent blue was 3.2:1), and the choice is also shown by its heavier weight. */
++.setup-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; width: 100%; padding: 3px; box-sizing: border-box; border-radius: 12px; background: rgba(255, 255, 255, 0.07); border: 1px solid rgba(255, 255, 255, 0.1); }
++.setup-tabs button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 40px; padding: 0 10px; border-radius: 9px; color: #a9bbb2; font-size: 0.88rem; font-weight: 500; letter-spacing: -0.011em; transition: background 120ms ease-out, color 120ms ease-out; }
++.setup-tabs button svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
++.setup-tabs button:hover:not(:disabled):not([aria-pressed="true"]) { background: rgba(255, 255, 255, 0.06); color: #fff; }
++.setup-tabs button[aria-pressed="true"] { background: rgba(255, 255, 255, 0.17); color: #fff; font-weight: 650; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.1); }
++.setup-tabs button:focus-visible { outline: 2px solid var(--stamp); outline-offset: 1px; }
++.setup-tabs button:disabled { opacity: 1; color: rgba(255, 255, 255, 0.4); }
++.setup-tabs button[aria-pressed="true"]:disabled { color: rgba(255, 255, 255, 0.7); }
++@media (prefers-reduced-motion: reduce) { .setup-tabs button { transition: none; } }
++
++/* Create a new repository (the Repository step): fields that match the rest of setup, a tidy owner menu, and Private / Public as two choice cards */
++.setup-newrepo { gap: 16px; }
++.setup-newrepo label, .setup-visibility { gap: 7px; color: #a9bbb2; font-size: 0.82rem; font-weight: 600; letter-spacing: -0.005em; }
++.setup-newrepo label em { opacity: 1; font-weight: 400; color: #a9bbb2; margin-left: 4px; }
++.setup-newrepo input[type="text"], .setup-newrepo input:not([type]), .setup-newrepo select { min-height: 44px; padding: 0 14px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.14); background: rgba(0, 0, 0, 0.22); color: var(--ink); font-size: 0.95rem; font-weight: 400; }
++.setup-newrepo select { appearance: none; -webkit-appearance: none; padding-right: 40px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a9bbb2' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m7 10 5 5 5-5'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; background-size: 18px; }
++.setup-newrepo input:focus-visible, .setup-newrepo select:focus-visible { outline: 2px solid var(--stamp); outline-offset: 1px; }
++.setup-newrepo input:disabled, .setup-newrepo select:disabled { opacity: 0.6; }
++.setup-visibility-options { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
++.setup-visibility-options label { position: relative; display: flex; align-items: flex-start; gap: 10px; padding: 12px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.14); background: rgba(255, 255, 255, 0.05); color: var(--ink); cursor: pointer; transition: background 120ms ease-out, border-color 120ms ease-out; }
++.setup-visibility-options label:hover { background: rgba(255, 255, 255, 0.09); }
++.setup-visibility-options input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
++.setup-visibility-options svg { width: 20px; height: 20px; flex: none; margin-top: 1px; fill: none; stroke: #a9bbb2; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
++.setup-visibility-options span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
++.setup-visibility-options b { font-size: 0.92rem; font-weight: 600; }
++.setup-visibility-options em { font-style: normal; font-size: 0.78rem; font-weight: 400; color: #a9bbb2; line-height: 1.35; }
++.setup-visibility-options label:has(input:checked) { background: rgba(91, 141, 239, 0.16); border-color: var(--stamp); box-shadow: inset 0 0 0 1px var(--stamp); }
++.setup-visibility-options label:has(input:checked) svg { stroke: #fff; }
++.setup-visibility-options label:has(input:focus-visible) { outline: 2px solid #fff; outline-offset: 2px; }
++.setup-visibility:disabled .setup-visibility-options label { opacity: 0.6; cursor: default; }
++@media (max-width: 480px) { .setup-visibility-options { grid-template-columns: 1fr; } }
++@media (prefers-reduced-motion: reduce) { .setup-visibility-options label { transition: none; } }
++.setup-visibility-options span { align-items: flex-start; text-align: left; }
++
++/* Create personas: the direction cards, and the team list (ProjectSetup.tsx, steps "theme" and "team") */
++.setup-personas .setup-repos button { position: relative; padding-right: 44px; }
++.setup-personas .setup-repos button::after { content: ""; position: absolute; top: 14px; right: 14px; width: 20px; height: 20px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.3); box-sizing: border-box; }
++.setup-personas .setup-repos button.is-picked { box-shadow: inset 0 0 0 1px var(--stamp); }
++.setup-personas .setup-repos button.is-picked::after { border-color: var(--stamp); background: var(--stamp) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6.5 12.5 3.5 3.5 7.5-8'/%3E%3C/svg%3E") center / 14px no-repeat; }
++.setup-personas > input { min-height: 44px; padding: 0 14px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.14); background: rgba(0, 0, 0, 0.22); color: var(--ink); font: inherit; font-size: 0.95rem; }
++
++.setup-agents label { align-items: center; padding: 12px 14px; box-shadow: none; background: rgba(255, 255, 255, 0.06); border-color: rgba(255, 255, 255, 0.14); transition: background 120ms ease-out, border-color 120ms ease-out, opacity 120ms ease-out; }
++.setup-agents label:active { transform: none; }
++.setup-agents label:hover { background: rgba(255, 255, 255, 0.1); }
++.setup-agents label:has(input:checked) { border-color: rgba(91, 141, 239, 0.7); background: rgba(91, 141, 239, 0.12); }
++.setup-agents label:has(input:not(:checked)) .setup-agent-text { opacity: 0.78; }
++.setup-agents label:has(input:not(:checked)) .setup-agent-avatar { filter: grayscale(1); opacity: 0.6; }
++.setup-agents label:has(input:focus-visible) { outline: 2px solid #fff; outline-offset: 2px; }
++.setup-agent-avatar { display: grid !important; place-items: center; flex: none; width: 40px; height: 40px; }
++.setup-agent-text { flex: 1; }
++.setup-agent-role { color: #a9bbb2; font-size: 0.8rem; font-weight: 500; }
++.setup-agent-prompt { color: #a9bbb2; font-size: 0.8rem; line-height: 1.4; display: -webkit-box !important; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
++.setup-agents input[type="checkbox"] { appearance: none; -webkit-appearance: none; order: 3; display: grid; place-items: center; flex: none; width: 24px; height: 24px; margin: 0; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.35); box-sizing: border-box; background: transparent center / 14px no-repeat; cursor: pointer; transition: background-color 120ms ease-out, border-color 120ms ease-out; }
++.setup-agents input[type="checkbox"]:checked { background-color: var(--stamp); border-color: var(--stamp); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6.5 12.5 3.5 3.5 7.5-8'/%3E%3C/svg%3E"); }
++
++.setup-coding { padding: 14px; border-radius: 14px; border-color: rgba(255, 255, 255, 0.14); background: rgba(255, 255, 255, 0.06); }
++.setup-coding em { color: #a9bbb2; }
++.setup-coding select { appearance: none; -webkit-appearance: none; min-height: 40px; padding: 0 34px 0 12px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.16); background-color: rgba(0, 0, 0, 0.22); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a9bbb2' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m7 10 5 5 5-5'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 8px center; background-size: 18px; }
++.setup-coding select:focus-visible { outline: 2px solid var(--stamp); outline-offset: 1px; }
++
++/* the plan option is an on / off setting: a switch, not a checkbox */
++.setup-plan { align-items: center; padding: 14px; border-radius: 14px; border-color: rgba(255, 255, 255, 0.14); background: rgba(255, 255, 255, 0.06); gap: 14px; }
++.setup-plan:hover { background: rgba(255, 255, 255, 0.1); }
++.setup-plan em { color: #a9bbb2; }
++.setup-plan > span { flex: 1; }
++.setup-plan input[type="checkbox"] { appearance: none; -webkit-appearance: none; order: 2; position: relative; flex: none; width: 46px; height: 28px; margin: 0; border-radius: 999px; background: rgba(255, 255, 255, 0.22); cursor: pointer; transition: background 140ms ease-out; }
++.setup-plan input[type="checkbox"]::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4); transition: transform 140ms ease-out; }
++.setup-plan input[type="checkbox"]:checked { background: var(--stamp); }
++.setup-plan input[type="checkbox"]:checked::after { transform: translateX(18px); }
++.setup-plan input[type="checkbox"]:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
++.setup-plan input[type="checkbox"]:disabled { opacity: 0.6; cursor: default; }
++@media (prefers-reduced-motion: reduce) { .setup-agents label, .setup-agents input[type="checkbox"], .setup-plan input[type="checkbox"], .setup-plan input[type="checkbox"]::after { transition: none; } }
++.setup-agent-avatar .avatar-circle { display: block; flex: none; }
++.setup-agent-avatar img { display: block; }
++
++/* A coding session is running on this bot: a "Dev" badge in its chat header (ChatView.tsx), which opens the preview panel */
++.dev-badge { display: inline-flex; align-items: center; gap: 5px; margin-left: 10px; min-height: 24px; padding: 0 8px; vertical-align: middle; border: 1px solid rgba(74, 222, 128, 0.45); border-radius: 999px; background: rgba(74, 222, 128, 0.12); color: #4ade80; font: inherit; font-size: 0.72rem; font-weight: 650; letter-spacing: 0.02em; cursor: pointer; transition: background 120ms ease-out; }
++.dev-badge:hover { background: rgba(74, 222, 128, 0.22); }
++.dev-badge:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
++.dev-badge svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
++.dev-badge.dev-starting { border-color: rgba(251, 191, 36, 0.5); background: rgba(251, 191, 36, 0.12); color: #fbbf24; }
++.dev-badge.dev-running::after { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #4ade80; animation: dev-pulse 1.8s ease-in-out infinite; }
++@keyframes dev-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
++@media (prefers-reduced-motion: reduce) { .dev-badge.dev-running::after { animation: none; } }
++
++/* The preview at full width, or at a phone's width (390 px) to check that the app is responsive */
++.preview-stage { flex: 1; display: flex; justify-content: center; min-height: 0; background: #0b0f0d; overflow: auto; }
++.preview-stage .preview-frame { flex: 1 1 auto; width: 100%; height: 100%; }
++.preview-stage.is-phone { align-items: flex-start; padding: 12px 0; }
++.preview-stage.is-phone .preview-frame { flex: none; width: min(390px, 100%); height: min(780px, 100%); border-radius: 22px; border: 6px solid #1c2320; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5); box-sizing: border-box; }
++.preview-head button[aria-pressed="true"] { background: rgba(91, 141, 239, 0.35); }
++
++/* Drag the panel's left edge to resize it; the chat keeps its room (PreviewPanel.tsx) */
++.preview-resize { position: absolute; top: 0; bottom: 0; left: -5px; width: 10px; z-index: 2; cursor: col-resize; touch-action: none; }
++.preview-resize::after { content: ""; position: absolute; top: 50%; left: 3px; width: 4px; height: 44px; margin-top: -22px; border-radius: 2px; background: rgba(255, 255, 255, 0.28); opacity: 0; transition: opacity 120ms ease-out; }
++.preview-resize:hover::after, .preview-resize:focus-visible::after, body.preview-resizing .preview-resize::after { opacity: 1; }
++.preview-resize:focus-visible { outline: 2px solid var(--stamp); outline-offset: -2px; }
++/* while dragging, the frame must not swallow the pointer, and nothing gets selected */
++body.preview-resizing { cursor: col-resize; user-select: none; -webkit-user-select: none; }
++body.preview-resizing .preview-frame { pointer-events: none; }
++@media (max-width: 820px) { .preview-resize { display: none; } body.preview-open #root { padding-right: 0; } .preview-panel { width: 100vw; } }
++@media (prefers-reduced-motion: reduce) { .preview-resize::after { transition: none; } }
++.src-decision-item { margin: 0 0 12px; }
++.src-decision-input { width: 100%; box-sizing: border-box; min-height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.14); background: rgba(0, 0, 0, 0.2); color: var(--ink); font: inherit; font-size: 0.84rem; }
++.src-decision-input:focus-visible { outline: 2px solid var(--stamp); outline-offset: 1px; }
++
++.setup-people { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--field); }
++.setup-people em { font-style: normal; color: var(--muted, inherit); font-size: 0.85rem; }
++.setup-person { display: flex; gap: 8px; }
++.setup-person input { flex: 1; min-width: 0; }
++.setup-people > .btn { align-self: flex-start; }

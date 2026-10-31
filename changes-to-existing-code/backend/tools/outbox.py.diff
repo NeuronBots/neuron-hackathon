@@ -1,5 +1,5 @@
 diff --git a/backend/tools/outbox.py b/backend/tools/outbox.py
-index 940deda..1366cc7 100644
+index 940deda..4dd2227 100644
 --- a/backend/tools/outbox.py
 +++ b/backend/tools/outbox.py
 @@ -1 +1 @@
@@ -15,13 +15,20 @@ index 940deda..1366cc7 100644
 +    append_history,
 @@ -11,0 +15 @@ from core.models import (
 +from tools.writes import describe, is_write
-@@ -25,0 +30,6 @@ PUSH_MAX_FILES, PUSH_MAX_LINES = 3, 150  # ponytail: fixed size limit for "small
+@@ -26,2 +30,8 @@ PUSH_MAX_FILES, PUSH_MAX_LINES = 3, 150  # ponytail: fixed size limit for "small
+-def notify_pending(agent_id: str, title: str, db: Session) -> None:
+-    """Push to everyone on the project that a bot is waiting on a human."""
 +def _told(done: str, interactive: bool, alone: str) -> str:
 +    """What the bot is told after parking an action: a person in the chat is asked in a card; a bot on its own waits on the board."""
 +    return (f"{done} yet: the person you are talking to must allow it first, and a card in this chat asks them to Allow or Deny. "
 +            "Say in one sentence what you prepared. Do not call it again, and do not say it is done.") if interactive else alone
 +
 +
++def notify_pending(agent_id: str, title: str, db: Session, only: list[str] | None = None) -> None:
++    """Push to everyone on the project (or just the people in `only`) that a bot is waiting on a human."""
+@@ -34 +44 @@ def notify_pending(agent_id: str, title: str, db: Session) -> None:
+-    members = [m.user_id for m in db.query(ProjectMember).filter(ProjectMember.project_id == agent.project_id).all()]
++    members = only or [m.user_id for m in db.query(ProjectMember).filter(ProjectMember.project_id == agent.project_id).all()]
 @@ -39 +49 @@ def _queue_action(agent_id: str, status: str, title: str, text: str, call: dict
 -    """A board task whose first event explains what is wanted. With a call, an Approved answer runs it exactly as stored."""
 +    """A board task whose first event explains what is wanted: a Blocked one, which nobody approves."""
@@ -123,10 +130,11 @@ index 940deda..1366cc7 100644
 +    task = _park(agent_id, f"Push to {where}: {message}", f"Commit message: {message}\nChanges:\n{detail}\n\n{preview}".rstrip(), {"tool": name, "args": args}, db,
 +                 interactive, turn, title=f"Approve push: {message}")
 +    return _told("NOT pushed", interactive,
-@@ -110,0 +170,41 @@ def run_queue_push(agent_id: str, name: str, args: dict, db: Session) -> tuple[s
+@@ -110,0 +170,42 @@ def run_queue_push(agent_id: str, name: str, args: dict, db: Session) -> tuple[s
 +
 +
 +_LOCAL_JIRA_WRITES = ("manageJiraSprint", "planSprint", "attachDocumentToJiraIssue")  # built on raw Atlassian calls, run in tools/dispatch.py
++_LOCAL_OUTWARD = _LOCAL_JIRA_WRITES + ("build_wiki", "publish_build", "build_project", "push_pr_fix")  # build_wiki publishes to the repo's GitHub wiki; publish_build pushes a branch and opens a pull request; build_project starts a long, costly build
 +
 +
 +def is_outward(name: str) -> bool:
@@ -136,7 +144,7 @@ index 940deda..1366cc7 100644
 +    from integrations.github_mcp import owns as github_owns
 +    from integrations.gmail_mcp import owns as gmail_owns
 +
-+    return is_write(name) and (gmail_owns(name) or github_owns(name) or atlassian_owns(name) or name in _LOCAL_JIRA_WRITES)
++    return is_write(name) and (gmail_owns(name) or github_owns(name) or atlassian_owns(name) or name in _LOCAL_OUTWARD)
 +
 +
 +def run_queue_write(agent_id: str, name: str, args: dict, jira_key: str, repo: str, db: Session, interactive: bool = False, turn: dict | None = None) -> tuple[str, Optional[dict]]:

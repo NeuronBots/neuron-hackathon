@@ -1,0 +1,362 @@
+diff --git a/src/ProjectSetup.tsx b/src/ProjectSetup.tsx
+index ce9760d..de169c0 100644
+--- a/src/ProjectSetup.tsx
++++ b/src/ProjectSetup.tsx
+@@ -1,3 +1,4 @@
+-import { useEffect, useRef, useState, type FormEvent } from "react"
+-import { createProject, fetchConnections, scanRepo, searchRepos, startOAuth, suggestArchitects, suggestThemes } from "./api"
+-import type { NameTheme, ProjectRecord, ProjectScan, RepoHit, SuggestedAgent } from "./types"
++import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react"
++import { addMember, checkNewRepo, createProject, fetchConnections, repoOwners, scanRepo, searchRepos, startOAuth, suggestArchitects, suggestThemes } from "./api"
++import { Avatar } from "./Avatar"
++import type { NameTheme, ProjectRecord, ProjectScan, RepoHit, RepoOwner, SuggestedAgent } from "./types"
+@@ -13,0 +15,2 @@ const ATTEMPTS = 3
++// A repository name GitHub accepts, made from a project name.
++const slug = (text: string) => text.toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^[-.]+|[-.]+$/g, "").slice(0, 100)
+@@ -40,0 +44,11 @@ export function ProjectSetup({ onCancel, onLogout, onCreated }: Props) {
++  const [repoMode, setRepoMode] = useState<"find" | "new">("find")
++  const [newName, setNewName] = useState("")
++  const [newOwner, setNewOwner] = useState("")
++  const [newDesc, setNewDesc] = useState("")
++  const [newPrivate, setNewPrivate] = useState(true)
++  const [owners, setOwners] = useState<RepoOwner[]>([])
++  const [creating, setCreating] = useState(false)
++  const [people, setPeople] = useState<{ email: string; field: string }[]>([]) // invited with the project; the bots hand them decisions in their field
++  const [startPlan, setStartPlan] = useState(true) // the team plans the first build as soon as the project exists
++  const [created, setCreated] = useState("") // the new repository that passed its dry run, and is made when the project is (nothing exists on GitHub before that)
++  const [pendingRepo, setPendingRepo] = useState<{ name: string; owner: string; description: string; private: boolean } | null>(null)
+@@ -43,0 +58,2 @@ export function ProjectSetup({ onCancel, onLogout, onCreated }: Props) {
++  // The naming themes take about ten seconds to come back, so they are asked for as soon as the goal is written, while the person is still on the repository step
++  const themePrefetch = useRef<{ key: string; promise: Promise<NameTheme[]> } | null>(null)
+@@ -65 +81 @@ export function ProjectSetup({ onCancel, onLogout, onCreated }: Props) {
+-  async function finish(body: { repo?: string; summary?: string; agents?: SuggestedAgent[] }) {
++  async function finish(body: { repo?: string; new_repo?: { name: string; owner: string; description: string; private: boolean }; summary?: string; agents?: SuggestedAgent[]; start_plan?: boolean }) {
+@@ -69,0 +86,2 @@ export function ProjectSetup({ onCancel, onLogout, onCreated }: Props) {
++      // A miss here (the plan, a bad address) must not undo the project: they can add people again from the members list.
++      await Promise.allSettled(people.filter((p) => p.email.trim()).map((p) => addMember(created.id, p.email.trim(), p.field.trim())))
+@@ -125,0 +144,6 @@ export function ProjectSetup({ onCancel, onLogout, onCreated }: Props) {
++    const key = `${name.trim()}\n${goal.trim()}`
++    if (themePrefetch.current?.key !== key) {
++      const promise = suggestThemes({ name: name.trim(), goal: goal.trim(), summary: "" })
++      promise.catch(() => {}) // a miss here only means the personas step asks again
++      themePrefetch.current = { key, promise }
++    }
+@@ -130,0 +155,30 @@ export function ProjectSetup({ onCancel, onLogout, onCreated }: Props) {
++  // "Create a new repository" instead of searching: the name and description start from the project's, and the person may change them.
++  function openNewRepo() {
++    setRepoMode("new")
++    setError("")
++    if (!newName) setNewName(slug(name))
++    if (!newDesc) setNewDesc(goal.trim().slice(0, 200))
++    if (owners.length === 0) {
++      repoOwners()
++        .then((found) => { setOwners(found); setNewOwner((current) => current || found[0]?.login || "") })
++        .catch((err) => setError(err instanceof Error ? err.message : "Could not load where you can create a repository"))
++    }
++  }
++
++  async function submitNewRepo(e: FormEvent) {
++    e.preventDefault()
++    if (!newName.trim() || creating) return
++    setError("")
++    setCreating(true)
++    try {
++      const body = { name: newName.trim(), owner: newOwner, description: newDesc.trim(), private: newPrivate }
++      const plan = await checkNewRepo(body) // a dry run: the name is free and the place is theirs. The repository is made with the project
++      setPendingRepo(body)
++      openThemes("", plan.full_name) // an empty repository has nothing to read
++    } catch (err) {
++      setError(err instanceof Error ? err.message : "Could not check the repository")
++    } finally {
++      setCreating(false)
++    }
++  }
++
+@@ -145 +199 @@ export function ProjectSetup({ onCancel, onLogout, onCreated }: Props) {
+-      if (found.length === 0) setError("No repositories matched that.")
++      if (found.length === 0) setError("None of the repositories in your GitHub account matched that.")
+@@ -185,3 +239,9 @@ export function ProjectSetup({ onCancel, onLogout, onCreated }: Props) {
+-        const read = await scanTask.current
+-        if (themeRequest.current !== request) return
+-        const found = await suggestThemes({ name: name.trim(), goal: goal.trim(), summary: read?.summary ?? "" })
++        const early = attempt === 1 && themePrefetch.current?.key === `${name.trim()}\n${goal.trim()}` ? themePrefetch.current.promise : null
++        themePrefetch.current = null // used once: a retry asks afresh
++        let found: NameTheme[] | null = null
++        if (early) found = await early.catch(() => null) // already on its way, or done
++        if (!found) {
++          const read = await scanTask.current
++          if (themeRequest.current !== request) return
++          found = await suggestThemes({ name: name.trim(), goal: goal.trim(), summary: read?.summary ?? "" })
++        }
+@@ -207 +267 @@ export function ProjectSetup({ onCancel, onLogout, onCreated }: Props) {
+-  function openThemes(repo = "") {
++  function openThemes(repo = "", planned = "") {
+@@ -211,0 +272,2 @@ export function ProjectSetup({ onCancel, onLogout, onCreated }: Props) {
++    setCreated(planned)
++    if (!planned) setPendingRepo(null)
+@@ -245,2 +307,3 @@ export function ProjectSetup({ onCancel, onLogout, onCreated }: Props) {
+-      setAgents(found)
+-      setChosen(found.map(() => true))
++      const withIds = found.map((agent) => ({ ...agent, id: agent.id ?? (typeof crypto.randomUUID === "function" ? crypto.randomUUID() : undefined) }))
++      setAgents(withIds)
++      setChosen(withIds.map(() => true))
+@@ -264,7 +327,16 @@ export function ProjectSetup({ onCancel, onLogout, onCreated }: Props) {
+-        <p className="setup-steps">
+-          {steps.map((label, index) => (
+-            <span key={label} className={`${index === stepIndex ? "is-current" : index < stepIndex ? "is-done" : ""}${index === 2 && repoSkipped ? " is-skipped" : ""}`}>
+-              {label}
+-            </span>
+-          ))}
+-        </p>
++        <ol className="setup-steps" aria-label="Project setup progress">
++          {steps.map((label, index) => {
++            const skipped = index === 2 && repoSkipped
++            const state = index === stepIndex ? "is-current" : index < stepIndex ? "is-done" : ""
++            return (
++              <li key={label} className={`${state}${skipped ? " is-skipped" : ""}`} data-pos={index + 1} aria-current={index === stepIndex ? "step" : undefined}>
++                <span className="setup-step-mark" aria-hidden="true">
++                  {index < stepIndex && !skipped ? <svg viewBox="0 0 24 24"><path d="m6.5 12.5 3.5 3.5 7.5-8" /></svg> : null}
++                </span>
++                <span className="setup-step-label">{label}</span>
++                {skipped && <span className="setup-step-note">skipped</span>}
++                <span className="sr-only">{index < stepIndex && !skipped ? ", done" : index === stepIndex ? ", current step" : ""}</span>
++              </li>
++            )
++          })}
++        </ol>
+@@ -274 +346,5 @@ export function ProjectSetup({ onCancel, onLogout, onCreated }: Props) {
+-            {onLogout && (
++            {onCancel ? (
++              <button className="setup-back" type="button" onClick={onCancel}>
++                Back
++              </button>
++            ) : onLogout && (  // the first project has nowhere to go back to
+@@ -288,22 +364,19 @@ export function ProjectSetup({ onCancel, onLogout, onCreated }: Props) {
+-            {githubOn ? (
+-              <p className="setup-github is-connected">
+-                <GithubMark />
+-                GitHub connected
+-              </p>
+-            ) : (
+-              <button className="setup-github" type="button" onClick={connectGithub} disabled={githubOn === null}>
+-                <GithubMark />
+-                Connect GitHub
+-              </button>
+-            )}
+-            {atlassianOn ? (
+-              <p className="setup-github is-connected">
+-                <AtlassianMark />
+-                Atlassian connected
+-              </p>
+-            ) : (
+-              <button className="setup-github" type="button" onClick={() => connect("atlassian", "Atlassian")} disabled={atlassianOn === null}>
+-                <AtlassianMark />
+-                Connect Atlassian
+-              </button>
+-            )}
++            <div className="setup-connects">
++              <ConnectRow
++                mark={<GithubMark />}
++                name="GitHub"
++                connected={Boolean(githubOn)}
++                hint={githubOn ? "Connected" : "Bots read your code and repository"}
++                onClick={connectGithub}
++                disabled={githubOn === null}
++              />
++              <ConnectRow
++                mark={<AtlassianMark />}
++                tone="#4c9aff"
++                name="Atlassian"
++                connected={Boolean(atlassianOn)}
++                hint={atlassianOn ? "Connected" : "Bots work with your Jira and Confluence"}
++                onClick={() => connect("atlassian", "Atlassian")}
++                disabled={atlassianOn === null}
++              />
++            </div>
+@@ -312,3 +384,0 @@ export function ProjectSetup({ onCancel, onLogout, onCreated }: Props) {
+-              {onCancel && (
+-                <button className="btn btn-quiet" type="button" onClick={onCancel}>Cancel</button>
+-              )}
+@@ -336 +406 @@ export function ProjectSetup({ onCancel, onLogout, onCreated }: Props) {
+-          <form className="setup-block setup-goal" onSubmit={submitGoal}>
++          <form className="setup-block setup-goal setup-pinned" onSubmit={submitGoal}>
+@@ -352 +422 @@ export function ProjectSetup({ onCancel, onLogout, onCreated }: Props) {
+-            <div className="setup-actions">
++            <div className="setup-actions is-cancel-last">
+@@ -362 +432,4 @@ export function ProjectSetup({ onCancel, onLogout, onCreated }: Props) {
+-          <div className="setup-block">
++          <div className="setup-block setup-pinned">
++            <button className="setup-back" type="button" onClick={() => { setError(""); setStep("goal") }} disabled={busy || creating}>
++              Back
++            </button>
+@@ -368 +441,3 @@ export function ProjectSetup({ onCancel, onLogout, onCreated }: Props) {
+-                  ? "Search GitHub if this project already has a repository. It is read so the bots fit the code."
++                  ? repoMode === "new"
++                    ? "Neuron creates an empty repository on GitHub for this project, as you, and links it. First it only checks that the name is free; the repository is made when the project is."
++                    : "Search the repositories in your GitHub account, yours and your organizations', if this project already has one. It is read so the bots fit the code."
+@@ -371,0 +447,56 @@ export function ProjectSetup({ onCancel, onLogout, onCreated }: Props) {
++              <div className="setup-tabs" role="group" aria-label="Repository">
++                <button type="button" aria-pressed={repoMode === "find"} onClick={() => { setRepoMode("find"); setError("") }} disabled={busy || creating}>
++                  <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5" /><path d="m16 16 4.5 4.5" /></svg>
++                  Find an existing one
++                </button>
++                <button type="button" aria-pressed={repoMode === "new"} onClick={openNewRepo} disabled={busy || creating}>
++                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
++                  Create a new one
++                </button>
++              </div>
++            )}
++            {githubOn && repoMode === "new" && created && (
++              <div className="setup-newrepo">
++                <p className="hint"><b>{created}</b> is free, and is created on GitHub when the project is. Nothing has been made yet.</p>
++                <div className="setup-created-actions">
++                  <button className="btn btn-quiet" type="button" disabled={busy} onClick={() => { setCreated(""); setPendingRepo(null) }}>Choose a different one</button>
++                </div>
++              </div>
++            )}
++            {githubOn && repoMode === "new" && !created && (
++              <form id="setup-newrepo" className="setup-newrepo" onSubmit={submitNewRepo}>
++                <label>
++                  <span>Owner</span>
++                  <select value={newOwner} onChange={(e) => setNewOwner(e.target.value)} disabled={creating || owners.length === 0}>
++                    {owners.length === 0 && <option value="">Loading…</option>}
++                    {owners.map((o) => (
++                      <option key={o.login} value={o.login}>{o.login}{o.kind === "org" ? " (organization)" : " (you)"}</option>
++                    ))}
++                  </select>
++                </label>
++                <label>
++                  <span>Repository name</span>
++                  <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="my-project" maxLength={100} autoFocus disabled={creating} />
++                </label>
++                <label>
++                  <span>Description <em>optional</em></span>
++                  <input value={newDesc} onChange={(e) => setNewDesc(e.target.value)} maxLength={350} disabled={creating} />
++                </label>
++                <fieldset className="setup-visibility" disabled={creating}>
++                  <legend>Visibility</legend>
++                  <div className="setup-visibility-options">
++                    <label>
++                      <input type="radio" name="visibility" checked={newPrivate} onChange={() => setNewPrivate(true)} />
++                      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg>
++                      <span><b>Private</b><em>Only people you add can see it</em></span>
++                    </label>
++                    <label>
++                      <input type="radio" name="visibility" checked={!newPrivate} onChange={() => setNewPrivate(false)} />
++                      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" /><path d="M3.5 12h17M12 3.5c2.5 2.4 3.6 5.2 3.6 8.5s-1.1 6.1-3.6 8.5c-2.5-2.4-3.6-5.2-3.6-8.5S9.5 5.9 12 3.5z" /></svg>
++                      <span><b>Public</b><em>Anyone on the internet can see it</em></span>
++                    </label>
++                  </div>
++                </fieldset>
++              </form>
++            )}
++            {githubOn && repoMode === "find" && (
+@@ -384 +515 @@ export function ProjectSetup({ onCancel, onLogout, onCreated }: Props) {
+-            {loadingRepos ? (
++            {repoMode === "find" && (loadingRepos ? (
+@@ -407 +538 @@ export function ProjectSetup({ onCancel, onLogout, onCreated }: Props) {
+-            )}
++            ))}
+@@ -409,11 +540,2 @@ export function ProjectSetup({ onCancel, onLogout, onCreated }: Props) {
+-            <div className="setup-actions">
+-              {onCancel && (
+-                <button className="btn btn-quiet" type="button" onClick={onCancel} disabled={busy}>Cancel</button>
+-              )}
+-              <button className="btn btn-quiet" type="button" onClick={() => { setError(""); setStep("goal") }} disabled={busy}>
+-                Back
+-              </button>
+-              <button className="btn btn-quiet" type="button" disabled={busy} onClick={() => openThemes()}>
+-                No repository
+-              </button>
+-              {githubOn && (
++            <div className="setup-actions is-cancel-last">
++              {githubOn && repoMode === "find" && (
+@@ -423,0 +546,14 @@ export function ProjectSetup({ onCancel, onLogout, onCreated }: Props) {
++              {githubOn && repoMode === "new" && !created && (
++                <button className="btn btn-primary" type="submit" form="setup-newrepo" disabled={creating || !newName.trim() || !newOwner}>
++                  {creating ? "Checking…" : `Use ${newOwner ? newOwner + "/" : ""}${newName.trim() || "this name"}`}
++                </button>
++              )}
++              {githubOn && repoMode === "new" && created && (
++                <button className="btn btn-primary" type="button" disabled={busy} onClick={() => openThemes("", created)}>Continue with {created}</button>
++              )}
++              <button className="btn btn-quiet setup-skip" type="button" disabled={busy || creating} onClick={() => openThemes()}>
++                {githubOn ? "Continue without a repository" : "Continue"}
++              </button>
++              {onCancel && (
++                <button className="btn btn-quiet setup-cancel" type="button" onClick={onCancel} disabled={busy || creating}>Cancel</button>
++              )}
+@@ -429 +565 @@ export function ProjectSetup({ onCancel, onLogout, onCreated }: Props) {
+-          <form className="setup-block setup-personas" onSubmit={(e) => { e.preventDefault(); void staff(themeValue) }}>
++          <form className="setup-block setup-personas setup-pinned" onSubmit={(e) => { e.preventDefault(); void staff(themeValue) }}>
+@@ -476,0 +613 @@ export function ProjectSetup({ onCancel, onLogout, onCreated }: Props) {
++                      aria-pressed={pickedTheme === item.title && !ownTheme.trim()}
+@@ -499,0 +637 @@ export function ProjectSetup({ onCancel, onLogout, onCreated }: Props) {
++              aria-label="A direction of your own"
+@@ -503 +641 @@ export function ProjectSetup({ onCancel, onLogout, onCreated }: Props) {
+-            <div className="setup-actions">
++            <div className="setup-actions is-cancel-last">
+@@ -527 +665 @@ export function ProjectSetup({ onCancel, onLogout, onCreated }: Props) {
+-          <div className="setup-block setup-finalize">
++          <div className="setup-block setup-finalize setup-pinned">
+@@ -539,3 +677,2 @@ export function ProjectSetup({ onCancel, onLogout, onCreated }: Props) {
+-                {staffedFor
+-                  ? `Named after ${staffedFor}. Uncheck anyone you do not want.`
+-                  : "Uncheck anyone you do not want."}
++                {staffedFor ? `Named after ${staffedFor}. ` : ""}
++                {agents.length > 0 ? `${chosen.filter(Boolean).length} of ${agents.length} selected. Untick anyone you do not want.` : "Untick anyone you do not want."}
+@@ -557 +694,2 @@ export function ProjectSetup({ onCancel, onLogout, onCreated }: Props) {
+-                      <span>
++                      <span className="setup-agent-avatar" aria-hidden="true"><Avatar name={agent.name} id={agent.id ?? agent.name} size={40} /></span>
++                      <span className="setup-agent-text">
+@@ -570,0 +709,19 @@ export function ProjectSetup({ onCancel, onLogout, onCreated }: Props) {
++            <div className="setup-people">
++              <b>Add people to your space</b>
++              <em>Their field is what they are expert in. The bots send them the decisions that field covers, and ask them as a human in the loop. Optional; needs the Pro or Max plan.</em>
++              {people.map((person, i) => (
++                <div className="setup-person" key={i}>
++                  <input type="email" value={person.email} placeholder="Email" aria-label="Email" disabled={busy} onChange={(e) => setPeople((c) => c.map((p, j) => (j === i ? { ...p, email: e.target.value } : p)))} />
++                  <input value={person.field} placeholder="Field, e.g. legal, design, finance" aria-label="Field of expertise" maxLength={120} disabled={busy} onChange={(e) => setPeople((c) => c.map((p, j) => (j === i ? { ...p, field: e.target.value } : p)))} />
++                  <button type="button" className="btn btn-quiet" aria-label="Remove" disabled={busy} onClick={() => setPeople((c) => c.filter((_, j) => j !== i))}>×</button>
++                </div>
++              ))}
++              <button type="button" className="btn btn-quiet" disabled={busy} onClick={() => setPeople((c) => [...c, { email: "", field: "" }])}>+ Add a person</button>
++            </div>
++            <label className="setup-plan">
++              <input type="checkbox" checked={startPlan} onChange={(e) => setStartPlan(e.target.checked)} disabled={busy} />
++              <span>
++                <b>Start with a plan for the first build</b>
++                <em>Your team studies the goal{(scan?.repo || linkedRepo || created) ? " and the repository" : ""}, asks you the few decisions that matter, and writes one detailed plan document to build from. Nothing is built until you have read it.</em>
++              </span>
++            </label>
+@@ -572 +729 @@ export function ProjectSetup({ onCancel, onLogout, onCreated }: Props) {
+-            <div className="setup-actions">
++            <div className="setup-actions is-cancel-last">
+@@ -582,0 +740 @@ export function ProjectSetup({ onCancel, onLogout, onCreated }: Props) {
++                    new_repo: !(scan?.repo || linkedRepo) && created ? pendingRepo ?? undefined : undefined,
+@@ -584,0 +743 @@ export function ProjectSetup({ onCancel, onLogout, onCreated }: Props) {
++                    start_plan: startPlan,
+@@ -597,0 +757,23 @@ export function ProjectSetup({ onCancel, onLogout, onCreated }: Props) {
++function ConnectRow({ mark, name, hint, connected, onClick, disabled, tone }: { mark: ReactNode; name: string; hint: string; connected: boolean; onClick: () => void; disabled: boolean; tone?: string }) {
++  // One row per integration: connected ones are a quiet status, the others a button that starts the sign-in
++  const body = (
++    <>
++      <span className="setup-connect-mark" style={tone ? { color: tone } : undefined}>{mark}</span>
++      <span className="setup-connect-text">
++        <strong>{connected ? name : `Connect ${name}`}</strong>
++        <span>{disabled && !connected ? "Checking…" : hint}</span>
++      </span>
++      {connected ? (
++        <svg className="setup-connect-tick" viewBox="0 0 24 24" role="img" aria-label="Connected"><circle cx="12" cy="12" r="10" /><path d="m7.5 12.5 3 3 6-6.5" /></svg>
++      ) : disabled ? (
++        <span className="src-spinner setup-connect-wait" aria-hidden="true" />
++      ) : (
++        <svg className="setup-connect-go" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
++      )}
++    </>
++  )
++  return connected
++    ? <div className="setup-connect is-connected" role="status">{body}</div>
++    : <button type="button" className="setup-connect" onClick={onClick} disabled={disabled}>{body}</button>
++}
++

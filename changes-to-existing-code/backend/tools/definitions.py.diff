@@ -1,0 +1,68 @@
+diff --git a/backend/tools/definitions.py b/backend/tools/definitions.py
+index d2ee6ba..09fe261 100644
+--- a/backend/tools/definitions.py
++++ b/backend/tools/definitions.py
+@@ -82,0 +83,2 @@ BOARD_TOOL_DEFS = [
++                "options": {"type": "array", "items": {"type": "string"}, "description": "Two to four short answers they can pick with one tap, your recommendation first. Leave out for an open question."},
++                "to": {"type": "string", "description": "A person from the project's People list whose field covers this decision. They are notified and named on the card. Leave out when no one's field fits."},
+@@ -266,0 +269,60 @@ DOC_TOOL_DEFS = [
++WIKI_TOOL = {
++    "name": "build_wiki",
++    "description": (
++        "Build or update the GitHub wiki of this project's linked repository: it reads the code and writes a structured wiki (Home, a sidebar, getting started, "
++        "architecture, module and reference pages, a glossary). Call it when the user asks you to create, generate, write or refresh the wiki or the project's documentation wiki. "
++        "Pages people wrote in the wiki are never changed; only pages this tool wrote are rewritten. It runs in the background for several minutes: the call returns at once, "
++        "and you are told when it is published, then tell the user. It needs the user's permission, which they are asked for. The wiki must be enabled on the repository and have one page already."
++    ),
++    "input_schema": {
++        "type": "object",
++        "properties": {"focus": {"type": "string", "description": "Optional: what the user wants the wiki to concentrate on, in a sentence. Leave empty for a complete wiki."}},
++        "required": [],
++    },
++}
++
++
++BUILD_TOOL = {
++    "name": "build_project",
++    "description": (
++        "Start Muse building the project's first version from its first-build plan, in a sandbox. Call it when the user asks you to build, implement or "
++        "start building the plan or the first version, once the first-build plan document exists. Muse writes the code, runs it, and writes a run guide; the code "
++        "is saved in Docs and a pull request is offered. It runs in the background for several minutes: the call returns at once, the person is shown progress, "
++        "and you are told when it is done. They are asked to allow it. The project's latest plan is built; pass plan (its file name) only to build a different one. "
++        "This is the way to build: do not try to build by asking teammates or adding tasks."
++    ),
++    "input_schema": {
++        "type": "object",
++        "properties": {"plan": {"type": "string", "description": "Optional: the file name of the plan document, from its download link. Leave empty for the latest plan."}},
++        "required": [],
++    },
++}
++
++
++SESSION_TOOLS = [
++    {
++        "name": "start_coding_session",
++        "description": (
++            "Start a live coding session on the project's built app: it runs in a sandbox and appears in a panel beside the chat, and it reloads by itself whenever the code "
++            "changes. Call it when the user says things like \"start a coding session\", \"let's code\", \"start coding\" or \"open the app so we can change it\". "
++            "Needs a saved build (build_project first). It starts at once, with no permission step. After it starts, make each change they ask for with change_code."
++        ),
++        "input_schema": {"type": "object", "properties": {}, "required": []},
++    },
++    {
++        "name": "change_code",
++        "description": (
++            "Make one change to the app in the running coding session: Muse edits the code in the sandbox and the frame beside the chat reloads when it is done. Use it for every "
++            "change the person asks for during a session (\"make the button green\", \"add a login page\", \"fix the total\"), with the request in their words plus any detail "
++            "they gave. It runs in the background; wait to be told it finished before the next one."
++        ),
++        "input_schema": {"type": "object", "properties": {"request": {"type": "string", "description": "What to change, as the person said it, with enough detail to do it."}}, "required": ["request"]},
++    },
++    {
++        "name": "save_coding_session",
++        "description": "Save the session's code to Docs as a zip and, if the project has a repository, offer a pull request for the person to allow. Call it when they say to save, finish or ship what was built in the session.",
++        "input_schema": {"type": "object", "properties": {}, "required": []},
++    },
++]
++
++

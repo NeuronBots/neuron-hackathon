@@ -1,0 +1,39 @@
+diff --git a/backend/agents/naming.py b/backend/agents/naming.py
+index 0c17262..301d41c 100644
+--- a/backend/agents/naming.py
++++ b/backend/agents/naming.py
+@@ -22,0 +23,2 @@ _NAME_STOP = {
++    "lets", "let", "please", "want", "need", "like", "would", "should", "could", "will", "also", "just", "was", "were", "been", "have", "has",
++    "help", "helps", "helping", "who", "which", "project", "team", "our", "its", "them", "then", "there", "here", "some", "any", "all",
+@@ -48,0 +51,31 @@ def name_from_job(text: str) -> str:
++_NAME_SYSTEM = (
++    "You name a new bot on a small software team from the request that created it. Reply with the name only: one or two words in Title Case, "
++    "a short name that fits the job, like Mint, Catalyst, Reviewer or Scribe. No quotes, no punctuation, and never the words bot, agent or assistant."
++)
++
++
++def clean_name(raw: str) -> str:
++    """A model's answer as a bot name, or '' when it is not one: a line of one to three plain words."""
++    line = (raw or "").strip().splitlines()[0].strip() if (raw or "").strip() else ""
++    words = re.findall(r"[A-Za-z][A-Za-z'-]*", line)
++    if not 1 <= len(words) <= 3 or len(line) > 40 or any(w.lower() in ("bot", "agent", "assistant", "name") for w in words):
++        return ""
++    return " ".join(w[:1].upper() + w[1:] for w in words)
++
++
++async def suggest_name(text: str) -> str:
++    """A name for the bot this request describes: the model's, falling back to the words of the request when it cannot be asked or answers badly."""
++    import asyncio
++
++    from core.tiers import TIERS
++    from llm.client import complete
++
++    try:
++        raw = await asyncio.wait_for(asyncio.to_thread(complete, TIERS["FAST"], _NAME_SYSTEM, (text or "").strip()[:1500], 30), 10)
++        if name := clean_name(raw):
++            return name
++    except Exception:  # no key, a plan limit, a slow or failed call: a name from the words is better than no bot
++        pass
++    return name_from_job(text)
++
++

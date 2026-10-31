@@ -1,0 +1,17 @@
+diff --git a/backend/llm/routing.py b/backend/llm/routing.py
+index 0dd7be9..f9ed80b 100644
+--- a/backend/llm/routing.py
++++ b/backend/llm/routing.py
+@@ -34,0 +35,9 @@ _ROUTER_SYSTEM = (
++_QUESTION = re.compile(r"^\s*(what|why|how|when|where|who|which|is|are|does)\b[^\n]*\?\s*$", re.IGNORECASE)
++
++
++def plain_question(text: str, team: str) -> bool:
++    """A question that names nothing of a teammate's field: the router would say discuss, no reaction, no owner, so skip its call."""
++    words = set(re.findall(r"[a-z]{4,}", team.lower()))
++    return bool(_QUESTION.match(text)) and not words & set(re.findall(r"[a-z]{4,}", text.lower()))  # ponytail: word overlap with the team list, loosen if too few skips
++
++
+@@ -38,0 +48,2 @@ async def route_message(text: str, recent: list[dict], team: str = "", names: tu
++    if plain_question(text, team):
++        return False, "", ""

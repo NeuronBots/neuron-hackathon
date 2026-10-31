@@ -1,0 +1,15 @@
+diff --git a/backend/tools/catalog.py b/backend/tools/catalog.py
+index 8a28626..1bcb1b9 100644
+--- a/backend/tools/catalog.py
++++ b/backend/tools/catalog.py
+@@ -28,0 +29 @@ from tools.definitions import (
++    BUILD_TOOL,
+@@ -29,0 +31 @@ from tools.definitions import (
++    SESSION_TOOLS,
+@@ -30,0 +33 @@ from tools.definitions import (
++    WIKI_TOOL,
+@@ -62,2 +65,2 @@ def local_tools() -> list[dict]:
+-    """Tools that run in this app: the board, the web, and documents."""
+-    return list(BOARD_TOOL_DEFS) + list(WEB_TOOL_DEFS) + list(DOC_TOOL_DEFS) + calendar_tools.TOOL_DEFS + recall.TOOL_DEFS + [MESSAGE_PERSON_TOOL]
++    """Tools that run in this app: the board, the web, documents, and the wiki build."""
++    return list(BOARD_TOOL_DEFS) + list(WEB_TOOL_DEFS) + list(DOC_TOOL_DEFS) + calendar_tools.TOOL_DEFS + recall.TOOL_DEFS + [MESSAGE_PERSON_TOOL, WIKI_TOOL, BUILD_TOOL, *SESSION_TOOLS]

@@ -1,5 +1,5 @@
 diff --git a/backend/routes/auth.py b/backend/routes/auth.py
-index 0a71686..dc19938 100644
+index 0a71686..ca991df 100644
 --- a/backend/routes/auth.py
 +++ b/backend/routes/auth.py
 @@ -13 +13 @@ from pydantic import BaseModel
@@ -8,6 +8,9 @@ index 0a71686..dc19938 100644
 @@ -19 +19 @@ from core.database import get_db
 -from core.limits import _own_usage, allowance, covering_projects, plan_in, tokens_used, week_start
 +from core.limits import _own_usage, allowance, covering_projects, plan_in, tokens_used, voice_seconds_to_tokens, voice_to_tokens, week_start
+@@ -210 +210 @@ def _onboard(user: User, email: str, db: Session) -> None:
+-            db.add(ProjectMember(project_id=invite.project_id, user_id=user.id, role="member"))
++            db.add(ProjectMember(project_id=invite.project_id, user_id=user.id, role="member", field=invite.field))
 @@ -568 +568 @@ def _usage_bucket(db: Session, user: User, since: datetime, scope: str = "") ->
 -    incoming, outgoing, calls, cache_read, cache_write = _own_usage(db.query(
 +    incoming, outgoing, calls, cache_read, cache_write, voice_chars, voice_secs = _own_usage(db.query(

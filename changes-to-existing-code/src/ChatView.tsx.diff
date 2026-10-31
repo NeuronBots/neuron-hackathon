@@ -1,5 +1,5 @@
 diff --git a/src/ChatView.tsx b/src/ChatView.tsx
-index 5d6e699..bb626f3 100644
+index 5d6e699..3b19fc8 100644
 --- a/src/ChatView.tsx
 +++ b/src/ChatView.tsx
 @@ -1 +1 @@
@@ -8,21 +8,22 @@ index 5d6e699..bb626f3 100644
 @@ -6 +6 @@ import remarkGfm from "remark-gfm"
 -import type { ChatMessage, AgentRecord, Attachment, UsageBucket, UsageReport } from "./types"
 +import { usageUnits, type ChatMessage, type AgentRecord, type Attachment, type UsageReport } from "./types"
-@@ -9 +9 @@ import { TeamButton } from "./Sidebar"
+@@ -9 +9,2 @@ import { TeamButton } from "./Sidebar"
 -import { changeSlide, documentExists, fetchDocumentText, fetchUsage, saveDocument, splitFiles, uploadFile } from "./api"
-+import { changeSlide, documentExists, fetchDocumentText, fetchSheets, fetchUsage, saveDocument, splitFiles, uploadFile } from "./api"
-@@ -19,0 +20 @@ type Props = {
++import { changeSlide, documentExists, fetchDevSession, fetchDocumentText, fetchSheets, fetchTasks, fetchUsage, getPreview, saveDocument, splitFiles, uploadFile } from "./api"
++import { openPreview } from "./PreviewPanel"
+@@ -19,0 +21 @@ type Props = {
 +  agentTyping?: boolean
-@@ -24,2 +24,0 @@ type Props = {
+@@ -24,2 +25,0 @@ type Props = {
 -  onOpenCalendar?: () => void
 -  onOpenBoard?: () => void
-@@ -87 +86 @@ function isPeerMessage(msg: ChatMessage): boolean {
+@@ -87 +87 @@ function isPeerMessage(msg: ChatMessage): boolean {
 -function openableDocs(text: string): string {
 +export function openableDocs(text: string): string {
-@@ -89 +88 @@ function openableDocs(text: string): string {
+@@ -89 +89 @@ function openableDocs(text: string): string {
 -    /(?:sandbox:|https?:\/\/[^/\s)]+)?(\/api\/documents\/[A-Za-z0-9][A-Za-z0-9._-]{0,120})/g,
 +    /(?:sandbox:|https?:\/\/[^/\s)]+)?(\/api\/(?:documents\/[A-Za-z0-9][A-Za-z0-9._-]{0,120}|docs\/[A-Za-z0-9._-]+))/g,
-@@ -94,2 +93,16 @@ function openableDocs(text: string): string {
+@@ -94,2 +94,16 @@ function openableDocs(text: string): string {
 -const DOC_PATH = "/api/documents/[A-Za-z0-9][A-Za-z0-9._-]{0,120}\\.(?:md|pdf|xlsx|html)"
 -const DOC_LINK = new RegExp(`\\[[^\\]]*\\]\\((${DOC_PATH})\\)`, "gi")
 +export function safeHref(href?: string): string {
@@ -39,12 +40,12 @@ index 5d6e699..bb626f3 100644
 +  label?: string
 +}
 +
-+const DOC_PATH = "/api/(?:documents/[A-Za-z0-9][A-Za-z0-9._-]{0,120}\\.(?:md|pdf|xlsx|html)|docs/[A-Za-z0-9._-]+)"
++const DOC_PATH = "/api/(?:documents/[A-Za-z0-9][A-Za-z0-9._-]{0,120}\\.(?:md|pdf|xlsx|html|zip)|docs/[A-Za-z0-9._-]+)"
 +const DOC_LINK = new RegExp(`\\[([^\\]]*)\\]\\((${DOC_PATH})\\)`, "gi")
-@@ -97 +110 @@ const DOC_BARE = new RegExp(`(${DOC_PATH})`, "gi")
+@@ -97 +111 @@ const DOC_BARE = new RegExp(`(${DOC_PATH})`, "gi")
 -const DOC_LABEL_LINE = /^[\s>*_`-]*(?:download(?: link)?|file|link|here)?[\s:*_`-]*$/i
 +const DOC_LABEL_LINE = /^[\s>*_`-]*(?:(?:forwarded|shared)\s+(?:file|document)|download(?:\s+link)?|file|document|link|here)\s*:[\s*_`-]*$/i
-@@ -100,4 +113,10 @@ const DOC_LABEL_LINE = /^[\s>*_`-]*(?:download(?: link)?|file|link|here)?[\s:*_`
+@@ -100,4 +114,10 @@ const DOC_LABEL_LINE = /^[\s>*_`-]*(?:download(?: link)?|file|link|here)?[\s:*_`
 -function splitDocs(text: string): { text: string; files: string[] } {
 -  const files: string[] = []
 -  const take = (_: string, path: string) => {
@@ -59,7 +60,7 @@ index 5d6e699..bb626f3 100644
 +      seen.add(path)
 +      files.push({ path, label: label ? label.trim() : undefined })
 +    }
-@@ -105,2 +124,11 @@ function splitDocs(text: string): { text: string; files: string[] } {
+@@ -105,2 +125,11 @@ function splitDocs(text: string): { text: string; files: string[] } {
 -  }
 -  const cleaned = text.replace(DOC_LINK, take).replace(DOC_BARE, take)
 +  })
@@ -73,7 +74,10 @@ index 5d6e699..bb626f3 100644
 +    return ""
 +  })
 +
-@@ -118 +146,51 @@ const CHAT_PRE = mermaidPre(true)
+@@ -113 +142 @@ function splitDocs(text: string): { text: string; files: string[] } {
+-const FILE_KIND: Record<string, string> = { pdf: "PDF document", md: "Markdown note", xlsx: "Excel spreadsheet", html: "Slideshow" }
++const FILE_KIND: Record<string, string> = { pdf: "PDF document", md: "Markdown note", xlsx: "Excel spreadsheet", html: "Slideshow", zip: "Code archive" }
+@@ -118 +147,51 @@ const CHAT_PRE = mermaidPre(true)
 -export function FileCard({ path, label, detail, bot }: { path: string; label?: string; detail?: string; bot?: { id: string; name: string } }) {
 +
 +export const EYE_ICON = (
@@ -126,18 +130,16 @@ index 5d6e699..bb626f3 100644
 +  onShare?: () => void
 +  onDelete?: () => void
 +}) {
-@@ -128,0 +207,10 @@ export function FileCard({ path, label, detail, bot }: { path: string; label?: s
+@@ -128,0 +208,8 @@ export function FileCard({ path, label, detail, bot }: { path: string; label?: s
 +
 +  function handleView() {
 +    if (missing) return
-+    if (ext === "pdf") {
-+      window.open(path, "_blank", "noopener,noreferrer")
-+    } else if (ext === "md" || ext === "html" || ext === "xlsx") {
++    if (ext === "md" || ext === "html" || ext === "xlsx" || ext === "pdf") {
 +      setOpen(true)
 +    }
 +  }
 +
-@@ -131,2 +219,24 @@ export function FileCard({ path, label, detail, bot }: { path: string; label?: s
+@@ -131,2 +218,24 @@ export function FileCard({ path, label, detail, bot }: { path: string; label?: s
 -      <span className={`file-card-icon file-card-${ext}`} aria-hidden="true">{ext === "html" ? "SLIDE" : ext.toUpperCase()}</span>
 -      <span className="file-card-info">
 +      <span
@@ -164,7 +166,7 @@ index 5d6e699..bb626f3 100644
 +        title="Click to view file"
 +        style={{ cursor: missing ? "default" : "pointer" }}
 +      >
-@@ -135,5 +245,27 @@ export function FileCard({ path, label, detail, bot }: { path: string; label?: s
+@@ -135,5 +244,27 @@ export function FileCard({ path, label, detail, bot }: { path: string; label?: s
 -      </span>
 -      {!missing && ext === "pdf" && <a className="btn btn-sm btn-quiet" href={path} target="_blank" rel="noreferrer">View</a>}
 -      {!missing && (ext === "md" || ext === "html") && <button className="btn btn-sm btn-quiet" onClick={() => setOpen(true)}>View</button>}
@@ -196,8 +198,8 @@ index 5d6e699..bb626f3 100644
 +          {onDelete && <button className="btn btn-sm btn-quiet" type="button" onClick={onDelete}>Delete</button>}
 +        </>
 +      )}
-+      {open && (ext === "html" ? <SlideViewer path={path} bot={bot} onClose={() => setOpen(false)} /> : ext === "xlsx" ? <SheetViewer path={path} name={name} onClose={() => setOpen(false)} /> : <DocViewer path={path} name={name} bot={bot} onClose={() => setOpen(false)} />)}
-@@ -336 +468,84 @@ function SlideViewer({ path, bot, onClose }: { path: string; bot?: { id: string;
++      {open && (ext === "html" ? <SlideViewer path={path} bot={bot} onClose={() => setOpen(false)} /> : ext === "xlsx" ? <SheetViewer path={path} name={name} onClose={() => setOpen(false)} /> : ext === "pdf" ? <PdfViewer path={path} name={name} onClose={() => setOpen(false)} /> : <DocViewer path={path} name={name} bot={bot} onClose={() => setOpen(false)} />)}
+@@ -336 +467,109 @@ function SlideViewer({ path, bot, onClose }: { path: string; bot?: { id: string;
 -function DocViewer({ path, name, onClose }: { path: string; name: string; onClose: () => void }) {
 +// ponytail: values as text, no formulas or styling; the backend caps rows at 2000 per sheet
 +const colName = (i: number): string => (i >= 26 ? colName(Math.floor(i / 26) - 1) : "") + String.fromCharCode(65 + (i % 26))
@@ -282,19 +284,44 @@ index 5d6e699..bb626f3 100644
 +  )
 +}
 +
++// The browser's own PDF viewer in a frame: same overlay as the other documents, nothing to render ourselves.
++function PdfViewer({ path, name, onClose }: { path: string; name: string; onClose: () => void }) {
++  useEffect(() => {
++    const onKey = (e: globalThis.KeyboardEvent) => { if (e.key === "Escape") onClose() }
++    window.addEventListener("keydown", onKey)
++    return () => window.removeEventListener("keydown", onKey)
++  }, [onClose])
++
++  return createPortal(
++    <div className="doc-overlay" onClick={onClose}>
++      <div className="doc-col pdf-col" onClick={(e) => e.stopPropagation()}>
++        <button className="doc-back" type="button" onClick={onClose}>Back</button>
++        <article className="doc-page pdf">
++          <header className="sheet-title pdf-title">
++            <span className="sheet-file">{name}</span>
++            <button className="btn btn-sm btn-quiet" type="button" onClick={onClose}>Close</button>
++          </header>
++          <iframe className="pdf-frame" src={path} title={name} />
++        </article>
++      </div>
++    </div>,
++    document.body,
++  )
++}
++
 +function DocViewer({ path, name, bot, onClose }: { path: string; name: string; bot?: { id: string; name: string }; onClose: () => void }) {
-@@ -338,0 +554,5 @@ function DocViewer({ path, name, onClose }: { path: string; name: string; onClos
+@@ -338,0 +578,5 @@ function DocViewer({ path, name, onClose }: { path: string; name: string; onClos
 +  const [editing, setEditing] = useState(false)
 +  const [draft, setDraft] = useState("")
 +  const [previewTab, setPreviewTab] = useState<"write" | "preview">("write")
 +  const [saving, setSaving] = useState(false)
 +  const [saveError, setSaveError] = useState("")
-@@ -342,0 +563 @@ function DocViewer({ path, name, onClose }: { path: string; name: string; onClos
+@@ -342,0 +587 @@ function DocViewer({ path, name, onClose }: { path: string; name: string; onClos
 +
-@@ -345,0 +567,2 @@ function DocViewer({ path, name, onClose }: { path: string; name: string; onClos
+@@ -345,0 +591,2 @@ function DocViewer({ path, name, onClose }: { path: string; name: string; onClos
 +
 +  // Keep document fetch effect dependent ONLY on [path]
-@@ -347,2 +570,44 @@ function DocViewer({ path, name, onClose }: { path: string; name: string; onClos
+@@ -347,2 +594,44 @@ function DocViewer({ path, name, onClose }: { path: string; name: string; onClos
 -    fetchDocumentText(path).then(setText).catch(() => setText("Could not load this document."))
 -    const onKey = (e: globalThis.KeyboardEvent) => { if (e.key === "Escape") onClose() }
 +    let active = true
@@ -341,7 +368,7 @@ index 5d6e699..bb626f3 100644
 +        }
 +      }
 +    }
-@@ -351 +616,16 @@ function DocViewer({ path, name, onClose }: { path: string; name: string; onClos
+@@ -351 +640,16 @@ function DocViewer({ path, name, onClose }: { path: string; name: string; onClos
 -  }, [path])
 +  }, [requestClose])
 +
@@ -359,10 +386,10 @@ index 5d6e699..bb626f3 100644
 +    }
 +  }
 +
-@@ -354 +634 @@ function DocViewer({ path, name, onClose }: { path: string; name: string; onClos
+@@ -354 +658 @@ function DocViewer({ path, name, onClose }: { path: string; name: string; onClos
 -    <div className="doc-overlay" onClick={onClose}>
 +    <div className="doc-overlay" onClick={editing ? undefined : requestClose}>
-@@ -356,16 +636,47 @@ function DocViewer({ path, name, onClose }: { path: string; name: string; onClos
+@@ -356,16 +660,47 @@ function DocViewer({ path, name, onClose }: { path: string; name: string; onClos
 -      <button className="doc-back" type="button" onClick={onClose}>Back</button>
 -      <article className={dark ? "doc-page is-dark" : "doc-page"}>
 -        <header className="doc-bar">
@@ -426,7 +453,7 @@ index 5d6e699..bb626f3 100644
 +                  {saving ? "Saving…" : "Save"}
 +                </button>
 +              </div>
-@@ -373,3 +684,47 @@ function DocViewer({ path, name, onClose }: { path: string; name: string; onClos
+@@ -373,3 +708,47 @@ function DocViewer({ path, name, onClose }: { path: string; name: string; onClos
 -              <svg viewBox="0 0 24 24" aria-hidden="true">
 -                <path d="M21 14.5A8.5 8.5 0 1 1 9.5 3a7 7 0 0 0 11.5 11.5z" />
 -              </svg>
@@ -477,7 +504,7 @@ index 5d6e699..bb626f3 100644
 +                </button>
 +                <button className="btn btn-sm btn-quiet" type="button" onClick={requestClose}>Close</button>
 +              </div>
-@@ -377,20 +732,43 @@ function DocViewer({ path, name, onClose }: { path: string; name: string; onClos
+@@ -377,20 +756,43 @@ function DocViewer({ path, name, onClose }: { path: string; name: string; onClos
 -          </button>
 -          <button
 -            className="btn btn-sm btn-quiet"
@@ -541,16 +568,16 @@ index 5d6e699..bb626f3 100644
 +            )}
 +          </div>
 +        </article>
-@@ -440,2 +818 @@ const WARN_STEP = 5 // percent: a dismissed warning comes back each time usage c
+@@ -440,2 +842 @@ const WARN_STEP = 5 // percent: a dismissed warning comes back each time usage c
 -// The enforced count in limits.py: input + output + cache read + cache write.
 -const tokens = (b: UsageBucket) => b.input_tokens + b.output_tokens + b.cache_read_tokens + b.cache_write_tokens
 +const tokens = usageUnits
-@@ -469,0 +847 @@ export function ChatView({
+@@ -469,0 +871 @@ export function ChatView({
 +  agentTyping,
-@@ -475,2 +852,0 @@ export function ChatView({
+@@ -475,2 +876,0 @@ export function ChatView({
 -  onOpenCalendar,
 -  onOpenBoard,
-@@ -513,16 +888,0 @@ export function ChatView({
+@@ -513,16 +912,0 @@ export function ChatView({
 -  // The board icon glows when a bot adds a task.
 -  const [boardGlow, setBoardGlow] = useState(false)
 -  useEffect(() => {
@@ -567,24 +594,89 @@ index 5d6e699..bb626f3 100644
 -      window.clearTimeout(timer)
 -    }
 -  }, [])
-@@ -804 +1164 @@ export function ChatView({
+@@ -725,0 +1110,37 @@ export function ChatView({
++  // A coding session running on this bot (only the coding bot has one): a badge in the header that opens the preview panel again
++  const [dev, setDev] = useState<{ preview_id: string; status: string } | null>(null)
++  const devAgentId = agent?.id
++  useEffect(() => {
++    setDev(null)
++    if (!devAgentId) return
++    let live = true
++    const look = () => {
++      fetchDevSession(devAgentId).then((found) => {
++        if (!live) return
++        setDev(found.preview_id ? found : null)
++        if (!found.preview_id) return
++        const seen = `session-opened-${found.preview_id}` // the same mark the session card uses: a session opens its panel once per tab, from whichever sees it first
++        try {
++          if (sessionStorage.getItem(seen)) return
++          sessionStorage.setItem(seen, "1")
++        } catch { /* private window: it opens, and may open again */ }
++        getPreview(found.preview_id).then(openPreview).catch(() => {})
++      }).catch(() => {})
++    }
++    look()
++    const timer = window.setInterval(look, 5000)
++    const soon = () => window.setTimeout(look, 1500) // a session just started or stopped from the panel
++    window.addEventListener("neuron:preview", soon)
++    return () => { live = false; window.clearInterval(timer); window.removeEventListener("neuron:preview", soon) }
++  }, [devAgentId])
++
++  // Questions and approvals still waiting on me always sit at the bottom of the chat, below anything said after them
++  const [waitingTasks, setWaitingTasks] = useState<Set<string>>(new Set())
++  const waitingAgentId = agent?.id
++  useEffect(() => {
++    if (!waitingAgentId) return
++    let live = true
++    fetchTasks({ status: "decision", agentId: waitingAgentId }).then((found) => { if (live) setWaitingTasks(new Set(found.map((t) => t.id))) }).catch(() => {})
++    return () => { live = false }
++  }, [waitingAgentId, messages.length, streaming])
++
+@@ -804 +1225 @@ export function ChatView({
 -        if (piece.card.kind === "call") {  // a call sits in the middle of the chat, between the two sides
-+        if (piece.card.kind === "call" || piece.card.kind === "pr" || piece.card.kind === "approval") {  // a call, a PR review or an approval request sits in the middle of the chat, between the two sides
-@@ -841 +1201,2 @@ export function ChatView({
++        if (piece.card.kind === "call" || piece.card.kind === "pr" || piece.card.kind === "wiki" || piece.card.kind === "build" || piece.card.kind === "prfix" || piece.card.kind === "session" || piece.card.kind === "decision" || piece.card.kind === "buildplan" || piece.card.kind === "approval") {  // a call, a PR review, a wiki or code build, or a request for approval sits in the middle of the chat, between the two sides
+@@ -837,0 +1259,18 @@ export function ChatView({
++  const isWaiting = (r: Row) => r.kind === "call" && (r.card.kind === "decision" || r.card.kind === "approval") && waitingTasks.has(r.card.task_id)
++  rows.push(...rows.splice(0).sort((a, b) => Number(isWaiting(a)) - Number(isWaiting(b))))  // stable: only the waiting ones move down
++  const askKey = (r: Row) => r.kind === "call" && r.card.kind === "approval" ? `a${r.card.title}\n${r.card.detail}` : r.kind === "call" && r.card.kind === "decision" ? `d${r.card.question}` : ""
++  const latestAsk = new Map<string, Row>()
++  rows.forEach((r) => { if (isWaiting(r)) latestAsk.set(askKey(r), r) })
++  rows.push(...rows.splice(0).filter((r) => !isWaiting(r) || latestAsk.get(askKey(r)) === r))  // the same ask pending twice: only the latest stays
++  // Several questions of one task are answered together: answering one closes the task, so separate cards would strand the rest
++  const batches = new Map<string, { question: string; options: string[] }[]>()
++  rows.forEach((r) => {
++    if (r.kind === "call" && r.card.kind === "decision" && isWaiting(r)) batches.set(r.card.task_id, [...(batches.get(r.card.task_id) ?? []), { question: r.card.question, options: r.card.options }])
++  })
++  const lastOfTask = new Map<string, Row>()
++  rows.forEach((r) => { if (r.kind === "call" && r.card.kind === "decision" && isWaiting(r)) lastOfTask.set(r.card.task_id, r) })
++  rows.push(...rows.splice(0).flatMap((r) => {
++    if (r.kind !== "call" || r.card.kind !== "decision" || !isWaiting(r)) return [r]
++    if (lastOfTask.get(r.card.task_id) !== r) return []
++    return [{ ...r, card: { ...r.card, batch: batches.get(r.card.task_id) } }]
++  }))
+@@ -841 +1280,2 @@ export function ChatView({
 -  if (!peerThread && streaming && (lastMsg?.role !== "assistant" || replyText)) {
 +  // A bot working in the background (a PR it was told about) is typing even though no turn of mine is streaming.
 +  if (!peerThread && ((streaming && (lastMsg?.role !== "assistant" || replyText)) || (!streaming && agentTyping))) {
-@@ -1013,0 +1375 @@ export function ChatView({
+@@ -871,0 +1312,6 @@ export function ChatView({
++                {dev && !peerThread && (
++                  <button type="button" className={`dev-badge dev-${dev.status}`} title={dev.status === "running" ? "Coding session running. Open the preview." : "Coding session starting. Open the preview."} onClick={() => { getPreview(dev.preview_id).then(openPreview).catch(() => {}) }}>
++                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 7-5 5 5 5M16 7l5 5-5 5M14 5l-4 14" /></svg>
++                    <span className="sr-only">{dev.status === "running" ? ", session running" : ", session starting"}. Open the preview.</span>
++                  </button>
++                )}
+@@ -930 +1376 @@ export function ChatView({
+-              return <div key={row.key} className="chat-peer-divider chat-call-row"><SourceCards card={row.card} /></div>
++              return <div key={row.key} className={`chat-peer-divider chat-call-row${row.card.kind === "approval" || row.card.kind === "decision" ? " chat-ask-row" : ""}`}><SourceCards card={row.card} /></div>
+@@ -1013,0 +1460 @@ export function ChatView({
 +                            const { text: fwdClean, files: fwdDocs } = splitDocs(openableDocs(forwarded[3]))
-@@ -1018 +1380 @@ export function ChatView({
+@@ -1018 +1465 @@ export function ChatView({
 -                                  <b>Forwarded from {forwarded[2]}</b>{forwarded[3]}
 +                                  <b>Forwarded from {forwarded[2]}</b>{fwdClean}
-@@ -1019,0 +1382,12 @@ export function ChatView({
+@@ -1019,0 +1467 @@ export function ChatView({
 +                                {fwdDocs.map((f) => <FileCard key={f.path} path={f.path} label={f.label} />)}
-+                                {chips}
-+                              </>
-+                            )
-+                          }
+@@ -1024 +1472,13 @@ export function ChatView({
+-                          return quoted ? (
 +                          if (quoted) {
 +                            const { text: replyClean, files: replyDocs } = splitDocs(openableDocs(quoted[3]))
 +                            return (
@@ -592,25 +684,27 @@ index 5d6e699..bb626f3 100644
 +                                <blockquote className="msg-quote"><b>{quoted[1]}</b>{quoted[2]}</blockquote>
 +                                {replyClean}
 +                                {replyDocs.map((f) => <FileCard key={f.path} path={f.path} label={f.label} />)}
-@@ -1024 +1398,2 @@ export function ChatView({
--                          return quoted ? (
++                                {chips}
++                              </>
++                            )
++                          }
 +                          const { text: textClean, files: textDocs } = splitDocs(openableDocs(shownText))
 +                          return (
-@@ -1026,2 +1401,2 @@ export function ChatView({
+@@ -1026,2 +1486,2 @@ export function ChatView({
 -                              <blockquote className="msg-quote"><b>{quoted[1]}</b>{quoted[2]}</blockquote>
 -                              {quoted[3]}
 +                              {textClean}
 +                              {textDocs.map((f) => <FileCard key={f.path} path={f.path} label={f.label} />)}
-@@ -1030 +1405 @@ export function ChatView({
+@@ -1030 +1490 @@ export function ChatView({
 -                          ) : <>{shownText}{chips}</>
 +                          )
-@@ -1042 +1417 @@ export function ChatView({
+@@ -1042 +1502 @@ export function ChatView({
 -                                    <a href={openableDocs(href || "")} target="_blank" rel="noopener noreferrer">{children}</a>
 +                                    <a href={safeHref(href)} target="_blank" rel="noopener noreferrer">{children}</a>
-@@ -1047 +1422 @@ export function ChatView({
+@@ -1047 +1507 @@ export function ChatView({
 -                            {files.map((path) => <FileCard key={path} path={path} bot={incoming} />)}
 +                            {files.map((f) => <FileCard key={f.path} path={f.path} label={f.label} bot={incoming} />)}
-@@ -1311,10 +1685,0 @@ export function ChatView({
+@@ -1311,10 +1770,0 @@ export function ChatView({
 -                {onOpenCalendar && (
 -                  <button type="button" className="chat-attach" aria-label="Open calendar" title="Calendar" onClick={onOpenCalendar}>
 -                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>

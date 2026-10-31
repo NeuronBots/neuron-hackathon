@@ -1,7 +1,10 @@
 diff --git a/backend/routes/chat.py b/backend/routes/chat.py
-index df62b39..288cab8 100644
+index df62b39..674e221 100644
 --- a/backend/routes/chat.py
 +++ b/backend/routes/chat.py
+@@ -22 +22 @@ from agents.memory import flush_memory
+-from agents.naming import asks_for_new_bot, can_create_bots, name_from_job
++from agents.naming import asks_for_new_bot, can_create_bots, suggest_name
 @@ -28 +28 @@ from board.tasks import begin_agent_work, finish_agent_work, record_exchange
 -from llm.client import cached
 +from llm.client import BUSY, TRIES, apost_retry, backoff, cached
@@ -79,6 +82,12 @@ index df62b39..288cab8 100644
 +                gated = kickoff or (not body.outward_ok and audience.requester() is None)
 +                if no_tools:
 +                    return index, "Error: tools are off for this message. Answer in plain words.", None, False
+@@ -661 +659 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
+-                        result_text, ev = run_fold_decisions(agent.id, tc["arguments"].get("keep", ""), tc["arguments"].get("fold") or [], tc["arguments"].get("question", ""), db)
++                        result_text, ev = run_fold_decisions(agent.id, tc["arguments"].get("keep", ""), tc["arguments"].get("fold") or [], tc["arguments"].get("question", ""), db, tc["arguments"].get("options"))
+@@ -663 +661 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
+-                        result_text, ev = run_request_decision(agent.id, tc["arguments"].get("title", ""), tc["arguments"].get("question", ""), db)
++                        result_text, ev = run_request_decision(agent.id, tc["arguments"].get("title", ""), tc["arguments"].get("question", ""), db, to=tc["arguments"].get("to", ""))
 @@ -680,4 +678,2 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
 -                    elif kickoff and tname in GH_PUSHES:
 -                        result_text, ev = run_queue_push(agent.id, tname, tc["arguments"], db)
@@ -103,3 +112,11 @@ index df62b39..288cab8 100644
 +                elif kind == "notice":
 +                    notice = "Couldn't write the follow-up: " + value  # "couldn't" is what makes the chat keep the banner after the turn
 +                    yield f"data: {json.dumps({'type': 'status', 'message': notice})}\n\n"
+@@ -957 +955,3 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
+-            if agent.is_master == "true" and asks_for_new_bot(body.content) and not tool_proposed:
++            # A kickoff is the system talking to the bot (a brief, a handover, a decision answer), never a person asking for a bot: matching
++            # its wording against a request turned a project brief into a bot of its own.
++            if agent.is_master == "true" and not kickoff and asks_for_new_bot(body.content) and not tool_proposed:
+@@ -961 +961 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
+-                    "name": hinted.get("name") or name_from_job(body.content),
++                    "name": hinted.get("name") or await suggest_name(body.content),

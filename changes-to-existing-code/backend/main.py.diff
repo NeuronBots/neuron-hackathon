@@ -1,5 +1,5 @@
 diff --git a/backend/main.py b/backend/main.py
-index fac5732..38e34a5 100644
+index fac5732..5cffff5 100644
 --- a/backend/main.py
 +++ b/backend/main.py
 @@ -16,15 +15,0 @@ import_sqlite()
@@ -39,11 +39,18 @@ index fac5732..38e34a5 100644
 +    check_model_base()
 +
 +
-@@ -88,0 +93,7 @@ async def _start_routines() -> None:
+@@ -88,0 +93,14 @@ async def _start_routines() -> None:
 +@app.on_event("startup")
 +async def _start_voice_sweep() -> None:
 +    from services import voice
 +    if background_agents() and not getattr(app.state, "voice_sweep", None):
 +        app.state.voice_sweep = asyncio.create_task(voice.sweeper())
++
++
++@app.on_event("startup")
++async def _start_sandbox_reaper() -> None:
++    from services import review_sandbox
++    if review_sandbox.REAP_SECONDS > 0 and not getattr(app.state, "sandbox_reaper", None):
++        app.state.sandbox_reaper = asyncio.create_task(review_sandbox.reaper())
 +
 +

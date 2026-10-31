@@ -1,7 +1,7 @@
 diff --git a/backend/pytest.ini b/backend/pytest.ini
-index 80fba48..d99f1ea 100644
+index 80fba48..fa8222b 100644
 --- a/backend/pytest.ini
 +++ b/backend/pytest.ini
 @@ -3 +3 @@
 -testpaths = tests/test_core tests/test_admin_users_usage.py tests/test_delete_account.py tests/test_typing_indicator.py
-+testpaths = tests/test_core tests/test_admin_users_usage.py tests/test_delete_account.py tests/test_typing_indicator.py tests/test_model_proxy.py tests/test_docs.py tests/test_voice_usage.py tests/test_github_webhook.py tests/test_outward_approval.py
++testpaths = tests/test_core tests/test_admin_users_usage.py tests/test_delete_account.py tests/test_typing_indicator.py tests/test_model_proxy.py tests/test_docs.py tests/test_voice_usage.py tests/test_github_webhook.py tests/test_outward_approval.py tests/test_review_sandbox.py tests/test_wiki.py tests/test_repo_create.py tests/test_project_create.py tests/test_first_plan.py tests/test_bot_naming.py tests/test_working_indicator.py tests/test_setup_replies.py tests/test_build_prompt.py tests/test_first_build.py tests/test_build_publish.py tests/test_build_sandbox.py tests/test_pr_fix.py tests/test_preview.py

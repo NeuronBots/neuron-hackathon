@@ -1,11 +1,56 @@
 diff --git a/backend/services/runs.py b/backend/services/runs.py
-index d5a993b..5cbb411 100644
+index d5a993b..afc4493 100644
 --- a/backend/services/runs.py
 +++ b/backend/services/runs.py
-@@ -136,2 +136,2 @@ async def tail(run: Run) -> AsyncGenerator[str, None]:
+@@ -53,0 +54,44 @@ def count_for(user_id: str, agent_ids: set[str] | None = None) -> int:
++def running_for(user_id: str) -> dict[str, "Run"]:
++    """The turns this person has in flight, by bot: the ones they started in a chat, a call's, and the ones the system started for them in the
++    background (a brief, a decision they answered, a handover). A bot with several is given its newest."""
++    found: dict[str, Run] = {}
++    for key, run in _runs.items():
++        if run.done:
++            continue
++        parts = key.split(":")
++        if parts[0] and user_id and (parts[-1] == user_id or (parts[-1] == "bg" and len(parts) >= 3 and parts[-2] == user_id)):
++            found[parts[0]] = run
++    return found
++
++
++def doing(run: "Run") -> str:
++    """What this run is up to right now, in a few words for the chat, from the newest thing it has said: a tool that has started and not finished,
++    or its last status line."""
++    import json
++
++    finished: list[str] = []
++    for chunk in reversed(run.chunks[-120:]):
++        if not chunk.startswith("data: "):
++            continue
++        try:
++            event = json.loads(chunk[6:])
++        except ValueError:
++            continue
++        if not isinstance(event, dict):
++            continue
++        kind = event.get("type")
++        if kind == "tool":
++            name = str(event.get("name") or "")
++            if event.get("ok") is not None:
++                finished.append(name)  # seen end first when reading backwards: its start further back is over
++            elif name in finished:
++                finished.remove(name)
++            elif name == "ask_teammate":
++                return f"Asking {event['who']}…" if event.get("who") else "Asking a teammate…"
++            elif name:
++                return f"Using {name.replace('_', ' ')}…"
++        elif kind == "status" and event.get("message"):
++            return str(event["message"])
++    return ""
++
++
+@@ -136,2 +180,2 @@ async def tail(run: Run) -> AsyncGenerator[str, None]:
 -def spawn(coro) -> None:
 -    """Run a coroutine in the background, holding a reference so it is not collected."""
 +def spawn(coro) -> "asyncio.Task":
 +    """Run a coroutine in the background, holding a reference so it is not collected. The task is returned so a caller can cancel it."""
-@@ -140,0 +141 @@ def spawn(coro) -> None:
+@@ -140,0 +185 @@ def spawn(coro) -> None:
 +    return task

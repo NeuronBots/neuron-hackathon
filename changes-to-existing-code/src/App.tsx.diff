@@ -1,17 +1,24 @@
 diff --git a/src/App.tsx b/src/App.tsx
-index 5d89efb..700f967 100644
+index 5d89efb..d387ddd 100644
 --- a/src/App.tsx
 +++ b/src/App.tsx
-@@ -42,0 +43,2 @@ import {
+@@ -8,0 +9 @@ import { DocumentsView } from "./DocumentsView"
++import { PreviewPanel } from "./PreviewPanel"
+@@ -42,0 +44,2 @@ import {
 +  setCodingBot,
 +  setPrReviews,
-@@ -343 +345 @@ export function App() {
+@@ -115,0 +119 @@ export function App() {
++  const [autoStatus, setAutoStatus] = useState<Record<string, string>>({}) // what each bot working on its own is doing, from the server
+@@ -343 +347 @@ export function App() {
 -  async function handleEditSave(draft: { id: string; name: string; system_prompt: string; model: string; field: string; label: string }): Promise<boolean> {
 +  async function handleEditSave(draft: { id: string; name: string; system_prompt: string; field: string; label: string }): Promise<boolean> {
-@@ -345 +347 @@ export function App() {
+@@ -345 +349 @@ export function App() {
 -      const updated = await updateAgent(draft.id, { name: draft.name, system_prompt: draft.system_prompt, model: draft.model, field: draft.field, label: draft.label })
 +      const updated = await updateAgent(draft.id, { name: draft.name, system_prompt: draft.system_prompt, field: draft.field, label: draft.label })
-@@ -885,0 +888,16 @@ export function App() {
+@@ -843,0 +848,2 @@ export function App() {
++          const next = data.status ?? {}
++          setAutoStatus((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next))
+@@ -885,0 +892,47 @@ export function App() {
 +  // When the bot I am looking at stops typing in the background, show what it wrote. The flag is kept with the agent it was read for, so
 +  // switching from a typing bot to an idle one is not mistaken for "stopped typing" (that would reload the new chat over its own load).
 +  const wasTyping = useRef<{ id: string | null; typing: boolean }>({ id: null, typing: false })
@@ -28,7 +35,50 @@ index 5d89efb..700f967 100644
 +    }).catch(() => {})
 +  }, [selectedAgentId, activeTyping])
 +
-@@ -1171,0 +1190,14 @@ export function App() {
++  // The chat I am looking at has to be looked at again while something is happening in it that I am not streaming: a wiki build or a PR review
++  // writes its progress into its pill in place (no new message for the poll above to see), and a bot working on its own (a plan the system gave it,
++  // a decision I answered) writes a line at a time. Every few seconds, so the pill moves and the bot's words appear as they are written.
++  const pillRunning = messages.some((m) => /"kind":\s*"(wiki|pr|build|prfix|session)"/.test(m.content) && /"status":\s*"running"/.test(m.content))
++  const botWorking = !!selectedAgentId && activeTyping.agents.includes(selectedAgentId)
++  useEffect(() => {
++    if (!selectedAgentId || !(pillRunning || botWorking)) return
++    const agentId = selectedAgentId
++    const timer = window.setInterval(() => {
++      if (streamsRef.current.has(agentId)) return
++      fetchAgentHistory(agentId).then((history) => {
++        if (selectedRef.current !== agentId || streamsRef.current.has(agentId)) return
++        setMessages(history.map((m, i) => ({ ...m, id: `hist-${agentId}-${i}` })))
++      }).catch(() => {})
++    }, 4000)
++    return () => window.clearInterval(timer)
++  }, [selectedAgentId, pillRunning, botWorking])
++
++  // Show what a bot working on its own is doing in the same place a streaming turn's status goes, and take it away when it stops.
++  const shownAuto = useRef("")
++  useEffect(() => {
++    if (!selectedAgentId || streamsRef.current.has(selectedAgentId)) return
++    if (botWorking) {
++      shownAuto.current = selectedAgentId
++      setStatusMsg(autoStatus[selectedAgentId] ?? "")
++    } else if (shownAuto.current === selectedAgentId) {
++      shownAuto.current = ""
++      setStatusMsg("")
++    }
++  }, [selectedAgentId, botWorking, autoStatus])
++
+@@ -1138,2 +1191,9 @@ export function App() {
+-    await openProject(created.id, list, { mode: "replace" })
+-    setWelcome({ title: `Welcome to ${created.name}!`, text: "Your project is ready. Say hello to your bots.", name: created.name, id: created.id })
++    await openProject(created.id, list, { mode: "replace", agentId: created.plan_started ? created.master_id : undefined }) // where the planning is happening
++    setWelcome({
++      title: `Welcome to ${created.name}!`,
++      text: created.plan_started
++        ? "Your project is ready. The team is drafting a plan for the first build and will ask you the few decisions that matter. Watch it work here."
++        : "Your project is ready. Say hello to your bots.",
++      name: created.name,
++      id: created.id,
++    })
+@@ -1171,0 +1232,14 @@ export function App() {
 +  async function handleSetCodingBot(agentId: string) {
 +    const saved = await setCodingBot(projectId, agentId)
 +    const withBot = (list: ProjectRecord[]) => list.map((item) => (item.id === projectId ? { ...item, coding_bot_id: saved } : item))
@@ -43,17 +93,19 @@ index 5d89efb..700f967 100644
 +    setProjects(withFlag)
 +  }
 +
-@@ -1262,0 +1295,2 @@ export function App() {
+@@ -1252,0 +1327 @@ export function App() {
++      <PreviewPanel />
+@@ -1262,0 +1338,2 @@ export function App() {
 +        onOpenCalendar={handleOpenCalendar}
 +        onOpenBoard={handleOpenBoard}
-@@ -1293,0 +1328,2 @@ export function App() {
+@@ -1293,0 +1371,2 @@ export function App() {
 +        onSetCodingBot={handleSetCodingBot}
 +        onSetPrReviews={handleSetPrReviews}
-@@ -1322 +1358 @@ export function App() {
+@@ -1322 +1401 @@ export function App() {
 -        <DocumentsView onClose={handleCloseCalendar} onOpenTeam={() => setNavOpen(true)} teamOpen={navOpen} />
 +        <DocumentsView onClose={handleCloseCalendar} onOpenTeam={() => setNavOpen(true)} teamOpen={navOpen} members={members} />
-@@ -1335,0 +1372 @@ export function App() {
+@@ -1335,0 +1415 @@ export function App() {
 +          agentTyping={!!selectedAgentId && activeTyping.agents.includes(selectedAgentId)}
-@@ -1349,2 +1385,0 @@ export function App() {
+@@ -1349,2 +1428,0 @@ export function App() {
 -          onOpenCalendar={handleOpenCalendar}
 -          onOpenBoard={handleOpenBoard}

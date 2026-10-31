@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
-import tempfile
 
 from services import code_review as cr, github_app, review_render as render
 
@@ -67,19 +65,11 @@ async def review(repo: str, pr: dict, owner: str, context: str, since: str) -> d
     not_reviewed: list[str] = []
     if previous or files:
         async with cr._slots:
-            with tempfile.TemporaryDirectory(prefix="review-") as work:
-                repo_dir = os.path.join(work, "repo")
-                os.mkdir(repo_dir)
-                await cr.checkout(repo, sha, token, repo_dir)
-                os.mkdir(os.path.join(repo_dir, ".review"))
-                with open(os.path.join(repo_dir, ".review", "pr.diff"), "w") as f:
-                    f.write(cr.diff_text(files))
-                with open(os.path.join(repo_dir, ".review", "files.txt"), "w") as f:
-                    f.write("".join(f"{x['path']} ({x['status']}, +{x['add']} -{x['del']})\n" for x in files))
+            async with cr.open_box(repo, sha, token, files) as box:  # the whole PR's head, with only what changed since as the diff to review
                 if previous:
-                    statuses = await cr.run_muse(check_prompt(repo, pr, context, previous), CHECK_SCHEMA, clean_check, work, repo_dir)
+                    statuses = await cr.run_muse(check_prompt(repo, pr, context, previous), CHECK_SCHEMA, clean_check, box)
                 if files:
-                    parts, not_reviewed = await cr.review_batches(repo, pr, files, context, "", _scope(since), work, repo_dir)
+                    parts, not_reviewed = await cr.review_batches(repo, pr, files, context, "", _scope(since), box)
     return assemble(previous, statuses, parts, not_reviewed, len(files), since, cr.diff_text(full))
 
 

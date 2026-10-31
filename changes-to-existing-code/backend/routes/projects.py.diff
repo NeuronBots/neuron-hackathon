@@ -1,10 +1,26 @@
 diff --git a/backend/routes/projects.py b/backend/routes/projects.py
-index 4e0eac0..d5c8b18 100644
+index 4e0eac0..32399d6 100644
 --- a/backend/routes/projects.py
 +++ b/backend/routes/projects.py
-@@ -17,0 +18 @@ from services.project_setup import parse_repo, scan_repo, search_repos, suggest_
+@@ -6 +6 @@ import uuid
+-from fastapi import APIRouter, Depends, HTTPException
++from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
+@@ -7,0 +8 @@ from pydantic import BaseModel, Field
++from sqlalchemy import func
+@@ -15,0 +17 @@ from core.models import Agent, Project, ProjectInvite, ProjectMember, User
++from core.limits import over_limit
+@@ -17 +19,3 @@ from core.usage import set_usage_user
+-from services.project_setup import parse_repo, scan_repo, search_repos, suggest_architects, suggest_themes
++from services import first_build, first_plan, pr_fix, preview
++from services.project_setup import check_new_repo, create_repo, parse_repo, repo_owners, scan_repo, search_repos, suggest_architects, suggest_themes
 +from core.tiers import TIERS
-@@ -47,0 +49,8 @@ class JiraBody(BaseModel):
+@@ -28,0 +33 @@ class SuggestedAgent(BaseModel):
++    id: str = ""  # the id the setup screen already showed this bot's avatar for (the avatar is drawn from the id); used only if it is a fresh UUID
+@@ -38,0 +44 @@ class ProjectBody(BaseModel):
++    new_repo: "NewRepoBody | None" = None  # a repository to create as part of creating the project (not before: an abandoned setup leaves nothing behind)
+@@ -41,0 +48 @@ class ProjectBody(BaseModel):
++    start_plan: bool = True  # the team starts on a plan for the first build as soon as the project exists
+@@ -47,0 +55,8 @@ class JiraBody(BaseModel):
 +class PrReviewsBody(BaseModel):
 +    enabled: bool
 +
@@ -13,19 +29,296 @@ index 4e0eac0..d5c8b18 100644
 +    agent_id: str = ""  # blank clears it
 +
 +
-@@ -107 +116 @@ def list_projects(user: User = Depends(get_current_user), db: Session = Depends(
+@@ -83,0 +99 @@ class MemberBody(BaseModel):
++    field: str = Field(default="", max_length=120)  # what the person is expert in
+@@ -107 +123 @@ def list_projects(user: User = Depends(get_current_user), db: Session = Depends(
 -        {"id": project.id, "name": project.name, "role": role, "jira_project_key": project.jira_project_key or "", "repo": project.repo or ""}
 +        {"id": project.id, "name": project.name, "role": role, "jira_project_key": project.jira_project_key or "", "repo": project.repo or "", "coding_bot_id": project.coding_bot_id or "", "pr_reviews": bool(project.pr_reviews)}
-@@ -219 +228 @@ def create_project(body: ProjectBody, user: User = Depends(get_current_user), db
+@@ -120,2 +136 @@ async def find_repos(body: RepoQuery, user: User = Depends(get_current_user)):
+-    """Search GitHub for a repository. Never includes the token."""
+-    set_usage_user(user.id)
++    """Search the repositories in the signed-in person's own GitHub account. Never includes the token."""
+@@ -123 +138 @@ async def find_repos(body: RepoQuery, user: User = Depends(get_current_user)):
+-        repos = await search_repos(body.query)
++        repos = await search_repos(await _own_github_token(user), user.id, body.query)
+@@ -124,0 +140,2 @@ async def find_repos(body: RepoQuery, user: User = Depends(get_current_user)):
++        if isinstance(exc, HTTPException):
++            raise
+@@ -128,0 +146,52 @@ async def find_repos(body: RepoQuery, user: User = Depends(get_current_user)):
++class NewRepoBody(BaseModel):
++    name: str = Field(min_length=1, max_length=100)
++    owner: str = Field(default="", max_length=100)  # "" = the person's own account
++    description: str = Field(default="", max_length=350)
++    private: bool = True
++
++
++ProjectBody.model_rebuild()
++
++
++async def _own_github_token(user: User) -> str:
++    from integrations import connections
++
++    token = await connections.access_token("github", user_id=user.id)  # the person's own connection: a shared server token never creates repositories
++    if not token:
++        raise HTTPException(status_code=400, detail="Connect your GitHub account first")
++    return token
++
++
++@router.get("/api/projects/repos/owners")
++async def new_repo_owners(user: User = Depends(get_current_user)):
++    """Where this person can create a repository: themselves and their organisations."""
++    try:
++        return {"owners": await repo_owners(await _own_github_token(user))}
++    except Exception as exc:
++        if isinstance(exc, HTTPException):
++            raise
++        raise _setup_error(exc) from exc
++
++
++@router.post("/api/projects/repos/check")
++async def check_repo(body: NewRepoBody, user: User = Depends(get_current_user)):
++    """A dry run of creating a repository: says what would be made, or why it could not be. Nothing is created."""
++    try:
++        return await check_new_repo(await _own_github_token(user), body.name, body.owner, body.private, body.description)
++    except Exception as exc:
++        if isinstance(exc, HTTPException):
++            raise
++        raise _setup_error(exc) from exc
++
++
++@router.post("/api/projects/repos/create", status_code=201)
++async def new_repo(body: NewRepoBody, user: User = Depends(get_current_user)):
++    """Create a repository for a new project, as the signed-in person."""
++    try:
++        return await create_repo(await _own_github_token(user), body.name, body.owner, body.private, body.description)
++    except Exception as exc:
++        if isinstance(exc, HTTPException):
++            raise
++        raise _setup_error(exc) from exc
++
++
+@@ -177,0 +247,25 @@ async def project_architects(body: ArchitectBody, user: User = Depends(get_curre
++def _bot_id(db: Session, wanted: str, used: set[str]) -> str:
++    """The id for a new bot: the one the setup screen drew its avatar from when that is a fresh UUID, otherwise a new one. Chats draw a bot's avatar
++    from its id, so keeping it makes the avatar chosen here the one the bot keeps."""
++    try:
++        parsed = uuid.UUID((wanted or "").strip())
++    except ValueError:
++        return str(uuid.uuid4())
++    chosen = str(parsed)
++    if parsed.version != 4 or chosen in used or db.get(Agent, chosen) is not None:
++        return str(uuid.uuid4())
++    used.add(chosen)
++    return chosen
++
++
++def _master_brief(name: str, goal: str, repo: str, summary: str) -> str:
++    lines = ["This project is %s." % name]
++    if goal:
++        lines.append("Goal: %s" % goal)
++    if repo:
++        lines.append("Repository: %s." % repo)
++    if summary:
++        lines.append(summary)
++    return "\n\n" + " ".join(lines) if goal or repo or summary else ""
++
++
+@@ -179 +273 @@ async def project_architects(body: ArchitectBody, user: User = Depends(get_curre
+-def create_project(body: ProjectBody, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
++async def create_project(body: ProjectBody, background: BackgroundTasks, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+@@ -185,0 +280,11 @@ def create_project(body: ProjectBody, user: User = Depends(get_current_user), db
++    token = ""
++    if body.new_repo is not None:
++        if body.repo.strip():
++            raise HTTPException(status_code=400, detail="Pick an existing repository or create a new one, not both.")
++        try:  # a dry run now, so nothing is made if the repository could not be: nothing exists yet, and nothing is left behind
++            token = await _own_github_token(user)
++            await check_new_repo(token, body.new_repo.name, body.new_repo.owner, body.new_repo.private, body.new_repo.description)
++        except Exception as exc:
++            if isinstance(exc, HTTPException):
++                raise
++            raise _setup_error(exc) from exc
+@@ -201,8 +306 @@ def create_project(body: ProjectBody, user: User = Depends(get_current_user), db
+-    lines = ["This project is %s." % name]
+-    if goal:
+-        lines.append("Goal: %s" % goal)
+-    if repo:
+-        lines.append("Repository: %s." % repo)
+-    if summary:
+-        lines.append(summary)
+-    brief = "\n\n" + " ".join(lines) if goal or repo or summary else ""
++    brief = _master_brief(name, goal, repo, summary)
+@@ -215 +313 @@ def create_project(body: ProjectBody, user: User = Depends(get_current_user), db
+-    db.add(Agent(
++    master = Agent(
+@@ -219 +317 @@ def create_project(body: ProjectBody, user: User = Depends(get_current_user), db
 -        model="claude-opus-5-5",
 +        model=TIERS["JUDGEMENT"],
-@@ -245 +254 @@ def create_project(body: ProjectBody, user: User = Depends(get_current_user), db
+@@ -226 +324,3 @@ def create_project(body: ProjectBody, user: User = Depends(get_current_user), db
+-    ))
++    )
++    db.add(master)
++    team: list[tuple[str, str, str]] = []
+@@ -227,0 +328,2 @@ def create_project(body: ProjectBody, user: User = Depends(get_current_user), db
++    used_ids: set[str] = set()
++    made: dict[str, str] = {}  # suggested name -> the id of the bot made from it (its own name may have been made unique)
+@@ -241,2 +343,2 @@ def create_project(body: ProjectBody, user: User = Depends(get_current_user), db
+-        db.add(Agent(
+-            id=str(uuid.uuid4()),
++        bot = Agent(
++            id=_bot_id(db, suggestion.id, used_ids),
+@@ -245 +347 @@ def create_project(body: ProjectBody, user: User = Depends(get_current_user), db
 -            model="claude-opus-5-5",
 +            model=TIERS["JUDGEMENT"],
-@@ -253 +262 @@ def create_project(body: ProjectBody, user: User = Depends(get_current_user), db
+@@ -250 +352,4 @@ def create_project(body: ProjectBody, user: User = Depends(get_current_user), db
+-        ))
++        )
++        db.add(bot)
++        made.setdefault(suggestion.name.strip().lower(), bot.id)  # a name used twice stays the first one's
++        team.append((bot.name, bot.label, bot.field))
+@@ -251,0 +357,13 @@ def create_project(body: ProjectBody, user: User = Depends(get_current_user), db
++    if body.new_repo is not None:  # the project and its team exist now (not yet saved): make the repository, and if GitHub refuses, nothing of this is kept
++        try:
++            made_repo = await create_repo(token, body.new_repo.name, body.new_repo.owner, body.new_repo.private, body.new_repo.description)
++        except Exception as exc:
++            db.rollback()
++            if isinstance(exc, HTTPException):
++                raise
++            raise _setup_error(exc) from exc
++        repo = project.repo = made_repo["full_name"]
++        master.system_prompt = _MASTER_PROMPT + _master_brief(name, goal, repo, summary)
++    if repo:  # pull requests are what the coding bot hears about, so without a repository there is nothing to assign. The Master is it: the one that plans and builds. Tweaks can change that later.
++        project.coding_bot_id = master.id
++    plan = first_plan.queue(db, project, master, team, user.name) if body.start_plan else ""
+@@ -253 +371,4 @@ def create_project(body: ProjectBody, user: User = Depends(get_current_user), db
 -    return {"id": project.id, "name": project.name, "role": "owner", "repo": project.repo or "", "jira_project_key": project.jira_project_key or ""}
-+    return {"id": project.id, "name": project.name, "role": "owner", "repo": project.repo or "", "jira_project_key": project.jira_project_key or "", "coding_bot_id": "", "pr_reviews": True}
-@@ -302,0 +312,23 @@ async def link_repo(project_id: str, body: RepoBody, user: User = Depends(get_cu
++    if plan:  # after the response: the Master works on the plan for as long as it takes, and the person watches it in the project's chat
++        background.add_task(first_plan.start, master.id, project.id, user.id, plan)
++    return {"id": project.id, "name": project.name, "role": "owner", "repo": project.repo or "", "jira_project_key": project.jira_project_key or "", "coding_bot_id": project.coding_bot_id or "", "pr_reviews": True,
++            "plan_started": bool(plan), "master_id": master.id}
+@@ -302,0 +424,145 @@ async def link_repo(project_id: str, body: RepoBody, user: User = Depends(get_cu
++class BuildBody(BaseModel):
++    plan: str = Field(min_length=1, max_length=200)  # the plan document's file name
++    row: int | None = None  # the plan card's row in the chat, which is told the build started
++
++
++@router.post("/api/projects/{project_id}/build", status_code=202)
++async def start_build(project_id: str, body: BuildBody, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
++    """The person approves the plan: Muse builds it in a sandbox, in the background, and the chat shows how it goes."""
++    _membership(project_id, user, db)
++    if blocked := over_limit(user.id, project_id):  # a build is a lot of model work: not for someone who has used their plan's tokens
++        raise HTTPException(status_code=429, detail=blocked)
++    try:
++        await first_build.start(project_id, user.id, body.plan.strip(), body.row)
++    except first_build.BuildError as exc:
++        raise HTTPException(status_code=exc.status, detail=str(exc))
++    return {"started": True}
++
++
++class FixPrBody(BaseModel):
++    repo: str = Field(min_length=3, max_length=200)
++    number: int = Field(gt=0)
++
++
++@router.post("/api/pr-fix", status_code=202)
++async def start_pr_fix(body: FixPrBody, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
++    """The person asks for the findings of a PR review to be fixed: Muse does it in a sandbox, and a card in the chat asks before anything is pushed."""
++    repo = body.repo.strip()
++    mine = [p for p in db.query(Project).filter(func.lower(Project.repo) == repo.lower(), Project.coding_bot_id != "").all()
++            if db.query(ProjectMember).filter_by(project_id=p.id, user_id=user.id).first()]
++    if not mine:
++        raise HTTPException(status_code=404, detail="No project of yours reviews that repository.")
++    if blocked := over_limit(user.id, mine[0].id):
++        raise HTTPException(status_code=429, detail=blocked)
++    try:
++        await pr_fix.start(mine[0].id, user.id, repo, body.number)
++    except first_build.BuildError as exc:
++        raise HTTPException(status_code=exc.status, detail=str(exc))
++    return {"started": True}
++
++
++class PreviewBody(BaseModel):
++    archive: str = Field(min_length=1, max_length=200)  # the saved build (a zip in Docs)
++
++
++def _my_projects(user: User, db: Session) -> set[str]:
++    return {m.project_id for m in db.query(ProjectMember).filter_by(user_id=user.id).all()}
++
++
++@router.post("/api/projects/{project_id}/preview", status_code=202)
++async def start_preview(project_id: str, body: PreviewBody, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
++    """Run the built app live in a sandbox; the chat shows it in a frame."""
++    _membership(project_id, user, db)
++    project = db.get(Project, project_id)
++    agent_id = project.coding_bot_id or (db.query(Agent).filter(Agent.project_id == project_id, Agent.is_master == "true").first() or Agent()).id
++    if not agent_id:
++        raise HTTPException(status_code=404, detail="This project has no bot to run it for.")
++    try:
++        return await preview.start(project_id, user.id, agent_id, body.archive.strip())
++    except first_build.BuildError as exc:
++        raise HTTPException(status_code=exc.status, detail=str(exc))
++    except ValueError as exc:
++        raise HTTPException(status_code=404, detail=str(exc))
++
++
++@router.get("/api/dev-session")
++def dev_session(agent_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
++    """Whether this person has a coding session running on this bot's project, for the badge in the bot's chat header. Only the coding bot has one."""
++    agent = db.get(Agent, agent_id)
++    project = db.get(Project, agent.project_id) if agent else None
++    if project is None or project.coding_bot_id != agent_id or not db.query(ProjectMember).filter_by(project_id=project.id, user_id=user.id).first():
++        return {"preview_id": "", "status": ""}
++    found = preview.session_of(project.id, user.id)
++    return {"preview_id": found.id, "status": found.status} if found else {"preview_id": "", "status": ""}
++
++
++@router.get("/api/previews/{preview_id}")
++def preview_status(preview_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
++    found = preview.get(preview_id, _my_projects(user, db))
++    if found is None:
++        raise HTTPException(status_code=404, detail="That preview is not running.")
++    return found.view()
++
++
++@router.post("/api/previews/{preview_id}/save")
++async def save_preview(preview_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
++    """Save a coding session's code (a zip in Docs, and the pull request behind its Allow card)."""
++    found = preview.get(preview_id, _my_projects(user, db))
++    if found is None or not found.session:
++        raise HTTPException(status_code=404, detail="That coding session is not running.")
++    try:
++        return await preview.save(found)
++    except first_build.BuildError as exc:
++        raise HTTPException(status_code=exc.status, detail=str(exc))
++
++
++@router.delete("/api/previews/{preview_id}")
++async def stop_preview(preview_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
++    if preview.get(preview_id, _my_projects(user, db)) is not None:
++        await preview.stop(preview_id)
++    return {"stopped": True}
++
++
++_CORS = {"access-control-allow-origin": "*", "access-control-allow-methods": "GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS", "access-control-max-age": "600"}
++
++
++@router.api_route("/api/preview/{preview_id}/{key}/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"])
++async def preview_proxy(preview_id: str, key: str, path: str, request: Request):
++    """The running app, as the chat's frame sees it (no session: the frame is sandboxed away from it, and the key in the address stands in). The sandbox's own address is never given out.
++    A sandboxed frame has no origin of its own, so its requests to this server are cross-origin: they need CORS, which is safe here because nothing rides on cookies (the key is in the address)."""
++    found = preview.by_key(preview_id, key)
++    if found is None:
++        raise HTTPException(status_code=404, detail="That preview is not running.")
++    if request.method == "OPTIONS":  # the browser's question before a request that is not simple (a JSON POST): the app is not asked
++        return Response(status_code=204, headers={**_CORS, "access-control-allow-headers": request.headers.get("access-control-request-headers", "*")})
++    status, headers, content = await preview.forward(found, request.method, path, request.url.query, dict(request.headers), await request.body())
++    headers.update(_CORS)
++    headers["cache-control"] = "no-store"
++    headers["content-security-policy"] = "sandbox allow-scripts allow-forms allow-popups"  # no same-origin: the app cannot reach Neuron's cookies or API even if opened directly
++    headers["referrer-policy"] = "no-referrer"
++    return Response(content=content, status_code=status, headers=headers)
++
++
 +@router.put("/api/projects/{project_id}/coding-bot")
 +def set_coding_bot(project_id: str, body: CodingBotBody, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
 +    if _membership(project_id, user, db).role != "owner":
@@ -49,3 +342,28 @@ index 4e0eac0..d5c8b18 100644
 +    return {"pr_reviews": body.enabled}
 +
 +
+@@ -341 +607 @@ def list_members(project_id: str, user: User = Depends(get_current_user), db: Se
+-        db.query(User, ProjectMember.role)
++        db.query(User, ProjectMember.role, ProjectMember.field)
+@@ -347 +613 @@ def list_members(project_id: str, user: User = Depends(get_current_user), db: Se
+-    people = [{"id": member.id, "name": member.name, "email": member.email, "role": role, "avatar_seed": member.avatar_seed,
++    people = [{"id": member.id, "name": member.name, "email": member.email, "role": role, "field": field, "avatar_seed": member.avatar_seed,
+@@ -349,3 +615,3 @@ def list_members(project_id: str, user: User = Depends(get_current_user), db: Se
+-               "last_seen": int(member.last_seen_at) if member.last_seen_at else None} for member, role in rows]
+-    pending = db.query(ProjectInvite.email).filter(ProjectInvite.project_id == project_id).all()
+-    return people + [{"id": "invite:" + e, "name": e, "email": e, "role": "invited"} for (e,) in pending]
++               "last_seen": int(member.last_seen_at) if member.last_seen_at else None} for member, role, field in rows]
++    pending = db.query(ProjectInvite.email, ProjectInvite.field).filter(ProjectInvite.project_id == project_id).all()
++    return people + [{"id": "invite:" + e, "name": e, "email": e, "role": "invited", "field": f} for (e, f) in pending]
+@@ -382 +648 @@ def add_member(
+-            db.add(ProjectInvite(project_id=project_id, email=email))
++            db.add(ProjectInvite(project_id=project_id, email=email, field=body.field.strip()))
+@@ -389 +655 @@ def add_member(
+-        return {"id": "invite:" + email, "name": email, "email": email, "role": "invited", "emailed": not problem, "problem": problem}
++        return {"id": "invite:" + email, "name": email, "email": email, "role": "invited", "field": body.field.strip(), "emailed": not problem, "problem": problem}
+@@ -397 +663 @@ def add_member(
+-    db.add(ProjectMember(project_id=project_id, user_id=other.id, role="member"))
++    db.add(ProjectMember(project_id=project_id, user_id=other.id, role="member", field=body.field.strip()))
+@@ -403 +669 @@ def add_member(
+-    return {"id": other.id, "name": other.name, "email": other.email, "role": "member", "emailed": not problem, "problem": problem}
++    return {"id": other.id, "name": other.name, "email": other.email, "role": "member", "field": body.field.strip(), "emailed": not problem, "problem": problem}

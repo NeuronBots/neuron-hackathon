@@ -1,17 +1,64 @@
 diff --git a/src/SourceCards.tsx b/src/SourceCards.tsx
-index 5cecb89..9445a35 100644
+index 5cecb89..e921147 100644
 --- a/src/SourceCards.tsx
 +++ b/src/SourceCards.tsx
-@@ -0,0 +1,4 @@
-+import { useEffect, useState } from "react"
-+import { allowThisSession, decideTask, fetchTask } from "./api"
+@@ -0,0 +1,5 @@
++import { useEffect, useState, type ReactNode } from "react"
++import { allowThisSession, decideTask, fetchTask, fixPrFindings, getPreview, startBuild, startPreview } from "./api"
++import { openPreview } from "./PreviewPanel"
 +import type { TaskRead } from "./types"
 +
-@@ -4,0 +9 @@ export type Card =
+@@ -4,0 +10,8 @@ export type Card =
++  | { kind: "wiki"; repo: string; status: "running" | "done" | "failed"; stage?: string; focus?: string; url?: string; sha?: string; pages?: number; planned?: number; changed?: boolean; untouched?: number; failed?: number; reason?: string }
++  | { kind: "wikidoc"; repo: string; url: string; pages: number; untouched?: number; changed?: boolean }
++  | { kind: "buildplan"; filename: string; title: string; project_id: string; status: "ready" | "started"; row?: number }
++  | { kind: "build"; project: string; status: "running" | "done" | "failed"; stage?: string; files?: number; guide?: boolean; repo?: string; reason?: string; archive?: string; project_id?: string }
++  | { kind: "prfix"; repo: string; number: number; title: string; branch: string; status: "running" | "done" | "failed"; stage?: string; files?: number; waiting?: boolean; reason?: string }
++  | { kind: "session"; project: string; preview_id: string; status: "running" | "done" | "failed"; title: string; stage?: string }
++  | { kind: "decision"; task_id: string; agent_id?: string; name?: string; title: string; question: string; options: string[]; for?: string; batch?: { question: string; options: string[] }[] }  // batch: every question of this task that is waiting, answered together
 +  | { kind: "approval"; task_id: string; agent_id?: string; name?: string; title: string; detail: string; interactive?: boolean; count?: number }
-@@ -6,0 +12 @@ export type Card =
+@@ -6,0 +20 @@ export type Card =
 +  | { kind: "pr"; repo: string; number: number; what: string; title: string; author: string; head: string; base: string; url: string; status?: "running" | "done" | "failed"; verdict?: string; findings?: number; posted?: boolean; uncovered?: number; reason?: string; followup?: boolean; fixed?: number; open?: number }
-@@ -82,0 +89,76 @@ export function FetchChip({ card }: { card: Extract<Card, { kind: "fetch" }> })
+@@ -82,0 +97,282 @@ export function FetchChip({ card }: { card: Extract<Card, { kind: "fetch" }> })
++// Under a first-build plan: the person's go-ahead. Clicking it is the approval of the plan; Muse then builds it in a sandbox.
++function BuildPlanCard({ card }: { card: Extract<Card, { kind: "buildplan" }> }) {
++  const [started, setStarted] = useState(card.status === "started")
++  const [busy, setBusy] = useState(false)
++  const [error, setError] = useState("")
++
++  async function go() {
++    setBusy(true)
++    setError("")
++    try {
++      await startBuild(card.project_id, card.filename, card.row)
++      setStarted(true)
++    } catch (err) {
++      setError(err instanceof Error ? err.message : "Could not start the build.")
++    } finally {
++      setBusy(false)
++    }
++  }
++
++  return (
++    <div className="dm-share src-approval" role="group" aria-label="Build the plan">
++      <p className="dm-share-q">{card.title || "The first-build plan"} is ready. Read it, then have Muse build it?</p>
++      <ul className="src-approval-list">
++        <li>Muse writes the code in a sandbox, using the ponytail, frontend design and single-responsibility skills, and runs it to check it works.</li>
++        <li>You get a run guide with the exact commands, the code saved in Docs, and a pull request waiting for your Allow.</li>
++      </ul>
++      {error && <p className="src-approval-error">{error}</p>}
++      {started ? (
++        <span className="dm-share-done">Build started. Follow it below.</span>
++      ) : (
++        <div className="dm-share-actions">
++          <a className="dm-share-no" href={`/api/documents/${encodeURIComponent(card.filename)}`} target="_blank" rel="noopener noreferrer" style={{ textAlign: "center", lineHeight: "36px", textDecoration: "none" }}>Read the plan</a>
++          <button type="button" className="dm-share-yes" disabled={busy} onClick={() => void go()}>{busy ? "Starting…" : "Approve and build"}</button>
++        </div>
++      )}
++    </div>
++  )
++}
++
 +// What the server wrote for a person to read: a line, one "• action" per request, then every request's full details.
 +function readAsk(text: string, fallback: string): { items: string[]; rest: string } {
 +  const lines = text.split("\n")
@@ -52,7 +99,7 @@ index 5cecb89..9445a35 100644
 +  const waiting = loaded?.status === "decision"
 +  const said = loaded?.decisions.map((d) => d.text).find((t) => t.startsWith("Decision: ")) ?? ""
 +  // What is shown to approve is what the server stored, not what the card says: the card's own text comes from the bot's message.
-+  const { items, rest } = readAsk(loaded?.decisions[0]?.text ?? card.detail, loaded?.title ?? card.title)
++  const { items } = readAsk(loaded?.decisions[0]?.text ?? card.detail, loaded?.title ?? card.title)
 +  const many = items.length > 1
 +  const who = card.name || "The bot"
 +  const outcome = task === null ? "Checking…" : !said ? "No longer waiting"
@@ -60,8 +107,7 @@ index 5cecb89..9445a35 100644
 +    : said.startsWith("Decision: Approved") ? (many ? "Allowed, all done" : "Allowed, done") : "Denied, nothing was changed"
 +  const list = (
 +    <>
-+      <ul className="src-approval-list">{items.map((item, i) => <li key={i}>{item}</li>)}</ul>
-+      {rest && <details className="src-approval-more"><summary>Show details</summary><pre>{rest}</pre></details>}
++      {items.map((item, i) => <p key={i} className="src-approval-item">{item}</p>)}
 +    </>
 +  )
 +  if (!waiting) {
@@ -88,9 +134,225 @@ index 5cecb89..9445a35 100644
 +  )
 +}
 +
-@@ -83,0 +166 @@ export function SourceCards({ card }: { card: Card }) {
++function DecisionCard({ card }: { card: Extract<Card, { kind: "decision" }> }) {
++  // A question only the person can answer, in the chat where they are talking to the bot; the answer is the board's decision, so it works the same from either place
++  const [task, setTask] = useState<TaskRead | "gone" | null>(null)
++  const [text, setText] = useState("")
++  const [busy, setBusy] = useState(false)
++  const [error, setError] = useState("")
++  const batch = card.batch && card.batch.length > 1 ? card.batch : null
++  const [picked, setPicked] = useState<string[]>([]) // one answer per question of a batch
++  useEffect(() => {
++    let live = true
++    fetchTask(card.task_id).then((t) => { if (live) setTask(t) }).catch(() => { if (live) setTask("gone") })
++    return () => { live = false }
++  }, [card.task_id])
++
++  async function answer(value: string) {
++    if (!value.trim()) return
++    setBusy(true)
++    setError("")
++    try {
++      setTask(await decideTask(card.task_id, value.trim()))
++    } catch (err) {
++      setError(err instanceof Error ? err.message : "Could not send your answer.")
++    } finally {
++      setBusy(false)
++    }
++  }
++
++  const loaded = task !== null && task !== "gone" ? task : null
++  const said = loaded?.decisions.map((d) => d.text).find((t) => t.startsWith("Decision: "))?.slice("Decision: ".length) ?? ""
++  if (loaded?.status !== "decision") {
++    return (
++      <div className="dm-share src-approval" role="group" aria-label="Question">
++        <p className="dm-share-q">{batch ? batch.map((q) => q.question).join(" · ") : card.question}</p>
++        <span className="dm-share-done">{task === null ? "Checking…" : said ? `You answered: ${said}` : "No longer waiting"}</span>
++      </div>
++    )
++  }
++  if (batch) {
++    const ready = batch.every((_, i) => (picked[i] ?? "").trim())
++    return (
++      <div className="dm-share src-approval" role="group" aria-label="Decisions needed">
++        {batch.map((q, i) => (
++          <div key={i} className="src-decision-item">
++            <p className="dm-share-q">{q.question}</p>
++            {q.options.length > 0 && (
++              <div className="src-decision-options">
++                {q.options.map((option) => (
++                  <button key={option} type="button" className={picked[i] === option ? "dm-share-yes" : "dm-share-no"} aria-pressed={picked[i] === option} disabled={busy} onClick={() => setPicked((p) => Object.assign([...p], { [i]: option }))}>{option}</button>
++                ))}
++              </div>
++            )}
++            <input className="src-decision-input" value={picked[i] ?? ""} onChange={(e) => setPicked((p) => Object.assign([...p], { [i]: e.target.value }))} placeholder={q.options.length ? "Or answer in your own words" : "Your answer"} aria-label={`Your answer to: ${q.question}`} maxLength={2000} disabled={busy} />
++          </div>
++        ))}
++        {error && <p className="src-approval-error">{error}</p>}
++        <div className="dm-share-actions">
++          <button type="button" className="dm-share-yes" disabled={busy || !ready} onClick={() => void answer(batch.map((q, i) => `${q.question} → ${(picked[i] ?? "").trim()}`).join(" | "))}>{busy ? "Sending…" : `Send ${batch.length} answers`}</button>
++        </div>
++      </div>
++    )
++  }
++  return (
++    <div className="dm-share src-approval" role="group" aria-label="Decision needed">
++      {card.for && <p className="hint">For {card.for}</p>}
++      <p className="dm-share-q">{card.question}</p>
++      {error && <p className="src-approval-error">{error}</p>}
++      {card.options.length > 0 && (
++        <div className="src-decision-options">
++          {card.options.map((option, i) => (
++            <button key={option} type="button" className={i === 0 ? "dm-share-yes" : "dm-share-no"} disabled={busy} onClick={() => void answer(option)}>{option}</button>
++          ))}
++        </div>
++      )}
++      <form className="src-decision-form" onSubmit={(e) => { e.preventDefault(); void answer(text) }}>
++        <input value={text} onChange={(e) => setText(e.target.value)} placeholder={card.options.length ? "Or answer in your own words" : "Your answer"} aria-label="Your answer" maxLength={2000} />
++        <button type="submit" className="dm-share-yes" disabled={busy || !text.trim()}>{busy ? "Sending…" : "Send"}</button>
++      </form>
++    </div>
++  )
++}
++
++const svgProps = { viewBox: "0 0 24 24", "aria-hidden": true, className: "src-run-icon" } as const
++const BuildIcon = () => <svg {...svgProps}><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.4 2.4-2.6-.6-.6-2.6z" /></svg>
++const WikiIcon = () => <svg {...svgProps}><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z" /><path d="M4 21a2 2 0 0 1 2-2h13" /><path d="M9 8h6M9 12h4" /></svg>
++const PrIcon = () => <svg {...svgProps}><circle cx="6" cy="6" r="2" /><circle cx="6" cy="18" r="2" /><circle cx="18" cy="18" r="2" /><path d="M6 8v8M18 16V9a3 3 0 0 0-3-3h-2" /></svg>
++
++function RunCard({ running, failed, icon, title, lines, link, action }: { running: boolean; failed?: boolean; icon: ReactNode; title: string; lines: string[]; link?: { href: string; text: string }; action?: ReactNode }) {
++  // A code bot's long job (PR review, wiki, first build): the same glass card as the access question, always open, with what it is doing as the last line
++  const [first, ...rest] = lines.filter(Boolean)
++  return (
++    <div className={`dm-share src-run${failed ? " src-run-failed" : ""}`} role="group" aria-label={title}>
++      <p className="dm-share-q src-run-head">
++        {running ? <span className="src-spinner" role="status" aria-label="In progress" /> : icon}
++        <span>{title}</span>
++      </p>
++      {rest.length > 0 && <ul className="src-approval-list">{rest.map((line, i) => <li key={i}>{line}</li>)}</ul>}
++      {action}
++      <span className="dm-share-done">{first}{link && <> · <a href={safe(link.href)} target="_blank" rel="noopener noreferrer">{link.text}</a></>}</span>
++    </div>
++  )
++}
++
++function LiveButton({ projectId, archive }: { projectId: string; archive: string }) {
++  const [busy, setBusy] = useState(false)
++  const [error, setError] = useState("")
++  async function go() {
++    setBusy(true)
++    setError("")
++    try {
++      openPreview(await startPreview(projectId, archive))
++    } catch (err) {
++      setError(err instanceof Error ? err.message : "Could not start the preview.")
++    } finally {
++      setBusy(false)
++    }
++  }
++  return (
++    <>
++      {error && <p className="src-approval-error">{error}</p>}
++      <div className="dm-share-actions src-run-actions">
++        <button type="button" className="dm-share-yes" disabled={busy} onClick={() => void go()}>{busy ? "Starting…" : "Run it live"}</button>
++      </div>
++    </>
++  )
++}
++
++function SessionCard({ card }: { card: Extract<Card, { kind: "session" }> }) {
++  // The first card of a session opens the panel by itself, once per browser tab; the change cards that follow only report
++  useEffect(() => {
++    if (card.title !== "Coding session" || card.status !== "running") return
++    const seen = `session-opened-${card.preview_id}`
++    try {
++      if (sessionStorage.getItem(seen)) return
++      sessionStorage.setItem(seen, "1")
++    } catch { /* private window: it opens, and may open again */ }
++    getPreview(card.preview_id).then(openPreview).catch(() => {})
++  }, [card.preview_id, card.title, card.status])
++  const running = card.status === "running"
++  return <RunCard running={running && card.title !== "Coding session"} failed={card.status === "failed"} icon={<BuildIcon />} title={`${card.title} · ${card.project}`}
++    lines={[running ? (card.title === "Coding session" ? card.stage || "Starting…" : `${card.stage || "Working"}…`) : card.status === "failed" ? card.stage || "It could not finish." : card.stage || "Done. The frame has reloaded."]}
++    action={card.title === "Coding session" ? <div className="dm-share-actions src-run-actions"><button type="button" className="dm-share-yes" onClick={() => getPreview(card.preview_id).then(openPreview).catch(() => {})}>Open the preview</button></div> : undefined} />
++}
++
++function FixButton({ repo, number }: { repo: string; number: number }) {
++  const [state, setState] = useState<"idle" | "busy" | "started">("idle")
++  const [error, setError] = useState("")
++  async function go() {
++    setState("busy")
++    setError("")
++    try {
++      await fixPrFindings(repo, number)
++      setState("started")
++    } catch (err) {
++      setError(err instanceof Error ? err.message : "Could not start the fixes.")
++      setState("idle")
++    }
++  }
++  if (state === "started") return <p className="src-approval-list src-run-note">Fixing started. Follow it below.</p>
++  return (
++    <>
++      {error && <p className="src-approval-error">{error}</p>}
++      <div className="dm-share-actions src-run-actions">
++        <button type="button" className="dm-share-yes" disabled={state === "busy"} onClick={() => void go()}>{state === "busy" ? "Starting…" : "Fix these findings"}</button>
++      </div>
++    </>
++  )
++}
++
+@@ -83,0 +380,2 @@ export function SourceCards({ card }: { card: Card }) {
 +  if (card.kind === "approval") return <ApprovalCard card={card} />
-@@ -102,0 +186,34 @@ export function SourceCards({ card }: { card: Card }) {
++  if (card.kind === "decision") return <DecisionCard card={card} />
+@@ -102,0 +401,63 @@ export function SourceCards({ card }: { card: Card }) {
++  if (card.kind === "buildplan") return <BuildPlanCard card={card} />
++  if (card.kind === "build") {
++    const running = card.status === "running"
++    const failed = card.status === "failed"
++    const outcome = running ? `${card.stage || "Starting"}…`
++      : failed ? card.reason || "It could not finish."
++      : [`${card.files} file${card.files === 1 ? "" : "s"} written and run in a sandbox`, "code saved in Docs", card.guide ? "run guide saved" : "no run guide was written",
++         card.repo ? "pull request waiting for your Allow" : ""].filter(Boolean).join(" · ")
++    return <RunCard running={running} failed={failed} icon={<BuildIcon />} title={`${running ? "Building the first version" : failed ? "The build did not finish" : "First version built"} · ${card.project}`}
++      lines={[outcome]} action={card.status === "done" && card.archive && card.project_id ? <LiveButton projectId={card.project_id} archive={card.archive} /> : undefined} />
++  }
++  if (card.kind === "wikidoc") {  // the same card a document gets (ChatView's FileCard), for a page on GitHub
++    const kind = ["GitHub wiki", card.changed === false ? "already up to date" : `${card.pages} page${card.pages === 1 ? "" : "s"}`,
++                  card.untouched ? `${card.untouched} written by people left untouched` : ""].filter(Boolean).join(" · ")
++    return (
++      <div className="file-card">
++        <a className="file-card-icon file-card-wiki" href={safe(card.url)} target="_blank" rel="noopener noreferrer" aria-label="Open the wiki">WIKI</a>
++        <a className="file-card-info is-clickable" href={safe(card.url)} target="_blank" rel="noopener noreferrer" title="Open the wiki on GitHub">
++          <span className="file-card-name">{card.repo.split("/").pop()} wiki</span>
++          <span className="file-card-kind">{kind}</span>
++        </a>
++        <a className="btn btn-sm btn-primary file-card-download" href={safe(card.url)} target="_blank" rel="noopener noreferrer">Open</a>
++      </div>
++    )
++  }
++  if (card.kind === "session") return <SessionCard card={card} />
++  if (card.kind === "prfix") {
++    const running = card.status === "running"
++    const failed = card.status === "failed"
++    const outcome = running ? `${card.stage || "Starting"}…`
++      : failed ? card.reason || "It could not finish."
++      : card.files ? `${card.files} file${card.files === 1 ? "" : "s"} changed · run in a sandbox${card.waiting ? " · push waiting for your Allow" : ""}` : "Muse changed nothing"
++    return <RunCard running={running} failed={failed} icon={<BuildIcon />} title={`${running ? "Fixing the findings" : failed ? "The fixes did not finish" : "Findings fixed"} · #${card.number}`}
++      lines={[outcome, `${card.repo} · branch ${card.branch}`, card.title]} />
++  }
++  if (card.kind === "wiki") {
++    const running = card.status === "running"
++    const label = running ? "Wiki build in progress" : card.status === "failed" ? "Wiki build failed" : card.changed === false ? "Wiki already up to date" : "Wiki published"
++    const count = (n: number | undefined, one: string, many = one + "s") => `${n} ${n === 1 ? one : many}`
++    const outcome = running ? `${card.stage || "Starting"}…`
++      : card.status === "failed" ? card.reason || "It could not finish."
++      : [card.changed === false ? "Nothing had changed" : count(card.pages, "page") + " written",
++         card.untouched ? `${count(card.untouched, "page")} written by people left untouched` : "",
++         card.failed ? `${count(card.failed, "planned page")} could not be written` : ""].filter(Boolean).join(" · ")
++    return <RunCard running={running} failed={card.status === "failed"} icon={<WikiIcon />} title={`${label} · ${card.repo}`}
++      lines={[outcome, card.focus ? `Focus: ${card.focus}` : "", card.status === "done" && card.sha ? `From commit ${card.sha.slice(0, 8)}` : ""]} />
++  }
 +  if (card.kind === "pr") {
 +    const running = !card.status || card.status === "running"
 +    const noun = card.followup ? "PR follow-up review" : "PR review"
@@ -102,26 +364,8 @@ index 5cecb89..9445a35 100644
 +         card.posted ? "posted on GitHub" : "",
 +         card.uncovered ? `${card.uncovered} file${card.uncovered === 1 ? "" : "s"} not covered` : ""].filter(Boolean).join(" · ")
 +      : card.status === "failed" ? card.reason || "It could not run." : card.followup ? "Checking the earlier findings and the new commits in the background…" : "Reading the changes in the background…"
-+    return (
-+      <details className="src-call src-pr">
-+        <summary>
-+          {running ? (
-+            <span className="src-spinner" role="status" aria-label="Review in progress" />
-+          ) : (
-+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="6" r="2" /><circle cx="6" cy="18" r="2" /><circle cx="18" cy="18" r="2" /><path d="M6 8v8M18 16V9a3 3 0 0 0-3-3h-2" /></svg>
-+          )}
-+          {label} · #{card.number}
-+        </summary>
-+        <ul>
-+          <li className="src-call-tool">
-+            <b>GitHub</b>
-+            <span>{card.repo} #{card.number} was {card.what}.</span>
-+            <span>{card.title} · by {card.author}</span>
-+            <span>{card.head} → {card.base}</span>
-+            <span>{outcome}</span>
-+            {card.url && <a href={safe(card.url)} target="_blank" rel="noopener noreferrer">Open on GitHub</a>}
-+          </li>
-+        </ul>
-+      </details>
-+    )
++    return <RunCard running={running} failed={card.status === "failed"} icon={<PrIcon />} title={`${label} · #${card.number}`}
++      lines={[outcome, `${card.repo} #${card.number} was ${card.what}.`, `${card.title} · by ${card.author}`, `${card.head} → ${card.base}`]}
++      link={card.url ? { href: card.url, text: "Open on GitHub" } : undefined}
++      action={card.status === "done" && (card.findings ?? 0) + (card.open ?? 0) > 0 ? <FixButton repo={card.repo} number={card.number} /> : undefined} />
 +  }

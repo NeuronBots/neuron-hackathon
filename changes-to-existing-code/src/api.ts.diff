@@ -1,5 +1,5 @@
 diff --git a/src/api.ts b/src/api.ts
-index c214349..faaa5b9 100644
+index c214349..54aed2c 100644
 --- a/src/api.ts
 +++ b/src/api.ts
 @@ -56 +56 @@ export async function fetchAgents(): Promise<
@@ -76,7 +76,46 @@ index c214349..faaa5b9 100644
 +              agents?: Array<{ id: string; name: string; identity: string }>
 @@ -653,0 +674 @@ export async function logoutAccount(): Promise<void> {
 +  forgetSessionAllowances()
-@@ -757,0 +779,20 @@ export async function linkRepo(projectId: string, repo: string): Promise<string>
+@@ -678,0 +700,2 @@ export async function createProject(body: {
++  start_plan?: boolean // the team starts on a plan for the first build (the server's default is yes)
++  new_repo?: { name: string; owner?: string; description?: string; private?: boolean } // created with the project, not before
+@@ -697,0 +721,35 @@ export async function searchRepos(query: string): Promise<RepoHit[]> {
++// The person approves the project's first-build plan: Muse builds it in a sandbox, in the background, and the chat shows how it goes.
++export async function startBuild(projectId: string, plan: string, row?: number): Promise<void> {
++  const res = await apiFetch(`/projects/${encodeURIComponent(projectId)}/build`, {
++    method: "POST",
++    headers: { "content-type": "application/json" },
++    body: JSON.stringify({ plan, row }),
++  })
++  await handleResponse(res)
++}
++
++export async function repoOwners(): Promise<import("./types").RepoOwner[]> {
++  const data = await handleResponse(await apiFetch("/projects/repos/owners")) as { owners: import("./types").RepoOwner[] }
++  return data.owners
++}
++
++// Creates the repository as the signed-in person (their own GitHub connection), with a README so it has a first commit.
++export async function createRepo(body: { name: string; owner?: string; description?: string; private?: boolean }): Promise<RepoHit & { private: boolean }> {
++  const res = await apiFetch("/projects/repos/create", {
++    method: "POST",
++    headers: { "content-type": "application/json" },
++    body: JSON.stringify(body),
++  })
++  return handleResponse(res) as Promise<RepoHit & { private: boolean }>
++}
++
++// A dry run of creating a repository: what would be made, or why it could not be. Nothing is created.
++export async function checkNewRepo(body: { name: string; owner?: string; description?: string; private?: boolean }): Promise<{ full_name: string; private: boolean; description: string }> {
++  const res = await apiFetch("/projects/repos/check", {
++    method: "POST",
++    headers: { "content-type": "application/json" },
++    body: JSON.stringify(body),
++  })
++  return handleResponse(res) as Promise<{ full_name: string; private: boolean; description: string }>
++}
++
+@@ -757,0 +816,20 @@ export async function linkRepo(projectId: string, repo: string): Promise<string>
 +export async function setCodingBot(projectId: string, agentId: string): Promise<string> {
 +  const res = await apiFetch(`/projects/${encodeURIComponent(projectId)}/coding-bot`, {
 +    method: "PUT",
@@ -97,10 +136,24 @@ index c214349..faaa5b9 100644
 +  return data.pr_reviews
 +}
 +
-@@ -784 +825 @@ export async function deleteInvite(projectId: string, email: string): Promise<vo
+@@ -770 +848 @@ export async function fetchMembers(projectId: string): Promise<ProjectMember[]>
+-export async function addMember(projectId: string, email: string): Promise<ProjectMember> {
++export async function addMember(projectId: string, email: string, field = ""): Promise<ProjectMember> {
+@@ -774 +852 @@ export async function addMember(projectId: string, email: string): Promise<Proje
+-    body: JSON.stringify({ email }),
++    body: JSON.stringify({ email, field }),
+@@ -784 +862 @@ export async function deleteInvite(projectId: string, email: string): Promise<vo
 -export type DirectMessage = { id: number; from: string; to: string; content: string; at: string | null; reactions?: Record<string, string>; reply_to?: number | null }
 +export type DirectMessage = { id: number; from: string; to: string; content: string; at: string | null; reactions?: Record<string, string>; reply_to?: number | null; withheld?: string[]; share?: "" | "pending" | "sharing" | "shared" | "declined" | "drafted" | "draft" | "sent" | "dropped" | "proceed" | "running" | "done" | "cancelled" | "private"; action?: boolean }
-@@ -823,0 +865,27 @@ export async function sendDirect(personId: string, content: string, replyTo?: nu
+@@ -810 +888,3 @@ export async function sendDirectTyping(personId: string, typing = true): Promise
+-export async function fetchActiveTyping(): Promise<{ people: string[]; agents: string[] }> {
++// agents: bots typing in a people chat, or working on their own (a turn the system started, one from another tab, a talk with a teammate).
++// status: for those working on their own, what each is doing right now.
++export async function fetchActiveTyping(): Promise<{ people: string[]; agents: string[]; status?: Record<string, string> }> {
+@@ -812 +892 @@ export async function fetchActiveTyping(): Promise<{ people: string[]; agents: s
+-  return handleResponse(res) as Promise<{ people: string[]; agents: string[] }>
++  return handleResponse(res) as Promise<{ people: string[]; agents: string[]; status?: Record<string, string> }>
+@@ -823,0 +904,27 @@ export async function sendDirect(personId: string, content: string, replyTo?: nu
 +export async function shareDirect(personId: string, messageId: number, share: boolean): Promise<DirectMessage> {
 +  const res = await apiFetch(`/direct/${encodeURIComponent(personId)}/${messageId}/share`, {
 +    method: "POST",
@@ -128,9 +181,9 @@ index c214349..faaa5b9 100644
 +  return handleResponse(res) as Promise<DirectMessage>
 +}
 +
-@@ -932 +999,0 @@ export type SpecProposal = {
+@@ -932 +1038,0 @@ export type SpecProposal = {
 -  model: string
-@@ -969,0 +1037,71 @@ export async function savePushSubscription(subscription: PushSubscriptionJSON):
+@@ -969,0 +1076,110 @@ export async function savePushSubscription(subscription: PushSubscriptionJSON):
 +
 +
 +export interface DocItem {
@@ -201,4 +254,43 @@ index c214349..faaa5b9 100644
 +  })
 +  if (res.status === 204) return
 +  await handleResponse(res)
++}
++
++// The person asks for a PR review's findings to be fixed: Muse does it in a sandbox, and a card in the chat asks before anything is pushed.
++export async function fixPrFindings(repo: string, number: number): Promise<void> {
++  const res = await apiFetch(`/pr-fix`, {
++    method: "POST",
++    headers: { "content-type": "application/json" },
++    body: JSON.stringify({ repo, number }),
++  })
++  await handleResponse(res)
++}
++
++export interface PreviewState { id: string; name: string; src: string; status: "starting" | "running" | "failed" | "stopped" | "stopping"; stage: string; session?: boolean; busy?: boolean; version?: number; logs: string[] }
++
++// Run the built app live in a sandbox. The frame it is shown in points at this server, never at the sandbox.
++export async function startPreview(projectId: string, archive: string): Promise<PreviewState> {
++  const res = await apiFetch(`/projects/${encodeURIComponent(projectId)}/preview`, {
++    method: "POST",
++    headers: { "content-type": "application/json" },
++    body: JSON.stringify({ archive }),
++  })
++  return (await handleResponse(res)) as PreviewState
++}
++
++export async function getPreview(id: string): Promise<PreviewState> {
++  return (await handleResponse(await apiFetch(`/previews/${encodeURIComponent(id)}`))) as PreviewState
++}
++
++export async function stopPreview(id: string): Promise<void> {
++  await apiFetch(`/previews/${encodeURIComponent(id)}`, { method: "DELETE" })
++}
++
++export async function saveSession(id: string): Promise<{ files: number; zip: string }> {
++  return (await handleResponse(await apiFetch(`/previews/${encodeURIComponent(id)}/save`, { method: "POST" }))) as { files: number; zip: string }
++}
++
++// The coding session this person has running on this bot's project, if the bot is its coding bot
++export async function fetchDevSession(agentId: string): Promise<{ preview_id: string; status: string }> {
++  return (await handleResponse(await apiFetch(`/dev-session?agent_id=${encodeURIComponent(agentId)}`))) as { preview_id: string; status: string }
 +}

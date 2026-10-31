@@ -1,0 +1,49 @@
+diff --git a/backend/tools/board_actions.py b/backend/tools/board_actions.py
+index ad8a621..bb71a89 100644
+--- a/backend/tools/board_actions.py
++++ b/backend/tools/board_actions.py
+@@ -10 +10 @@ from core.models import Agent, Task, TaskEvent
+-from tools.outbox import MAIL_DRAFT, notify_pending
++from tools.outbox import MAIL_DRAFT, append_history, notify_pending
+@@ -87,2 +87,28 @@ def run_fold_decisions(agent_id: str, keep: str, fold: list, question: str, db:
+-def run_request_decision(agent_id: str, title: str, question: str, db: Session) -> tuple[str, Optional[dict]]:
+-    """Park a task on the board's Decisions pending column until a human answers. Starts the task if it is not on the board yet."""
++def decision_owner(agent: Agent | None, to: str, db: Session):
++    """The person on the bot's project whose name matches `to`, with their field. None when `to` is empty or names nobody there."""
++    from core.models import ProjectMember, User
++    want = " ".join((to or "").lower().split())
++    if not want or agent is None:
++        return None
++    for user, member in db.query(User, ProjectMember).join(ProjectMember, ProjectMember.user_id == User.id).filter(ProjectMember.project_id == agent.project_id):
++        if want in (user.name.lower(), user.email.lower()):
++            return user, member.field
++    return None
++
++
++def decision_card(task: Task, agent_id: str, name: str, question: str, options: list[str], to: str = "") -> str:
++    """The decision as a card in the bot's own chat: answering there answers the task, like the board does."""
++    import json
++
++    card = {"kind": "decision", "task_id": task.id, "agent_id": agent_id, "name": name, "title": task.title, "question": question[:2000], "options": options, "for": to}
++    return "[[SOURCES:" + json.dumps(card).replace("]]", "] ]").replace("[[", "[ [") + "]]"
++
++
++def clean_options(raw) -> list[str]:
++    """Up to four short answers the bot suggested, best first."""
++    return [" ".join(str(o).split())[:80] for o in (raw if isinstance(raw, list) else []) if str(o).strip()][:4]
++
++
++def run_request_decision(agent_id: str, title: str, question: str, db: Session, options=None, to: str = "") -> tuple[str, Optional[dict]]:
++    """Park a task on the board's Decisions pending column until a human answers. Starts the task if it is not on the board yet.
++    `to` names the person it is for (the project's expert in that field): the card and the push go to them; anyone on the project can still answer."""
+@@ -100,0 +127,2 @@ def run_request_decision(agent_id: str, title: str, question: str, db: Session)
++    owner = decision_owner(agent, to, db)
++    for_whom = f" for {owner[0].name}" + (f" ({owner[1]})" if owner[1] else "") if owner else ""
+@@ -102 +130,3 @@ def run_request_decision(agent_id: str, title: str, question: str, db: Session)
+-    append_decision(task, agent.name if agent else "Bot", f"Needs your decision: {question}")
++    append_decision(task, agent.name if agent else "Bot", f"Needs your decision{for_whom}: {question}")
++    if agent:  # and the same question as a card in the bot's chat, where the person is talking to it
++        append_history(agent, "assistant", decision_card(task, agent_id, agent.name, question, clean_options(options), owner[0].name if owner else ""))
+@@ -104 +134 @@ def run_request_decision(agent_id: str, title: str, question: str, db: Session)
+-    notify_pending(agent_id, question, db)
++    notify_pending(agent_id, question, db, [owner[0].id] if owner else None)

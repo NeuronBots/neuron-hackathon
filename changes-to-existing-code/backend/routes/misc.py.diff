@@ -1,18 +1,23 @@
 diff --git a/backend/routes/misc.py b/backend/routes/misc.py
-index 64721c9..dcc7ebd 100644
+index 64721c9..84470f9 100644
 --- a/backend/routes/misc.py
 +++ b/backend/routes/misc.py
 @@ -9 +9 @@ from pydantic import BaseModel, Field
 -from core.access import get_current_user
 +from core.access import get_current_user, get_current_user_optional
-@@ -156,2 +156,2 @@ _EDIT_LIMIT = 16 * 1024 * 1024
+@@ -15 +15 @@ from integrations import connections
+-from core.usage import set_usage_user
++from core.usage import reset_usage_user, set_usage_user
+@@ -130,0 +131 @@ _DOC_TYPES = {
++    ".zip": "application/zip",
+@@ -156,2 +157,2 @@ _EDIT_LIMIT = 16 * 1024 * 1024
 -async def save_document(filename: str, request: Request, user: User = Depends(get_current_user)):
 -    """Save an edited slideshow. Only HTML slideshows are edited in the app."""
 +async def save_document(filename: str, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
 +    """Save an edited slideshow or markdown document. Requires read permission and ownership."""
-@@ -159 +158,0 @@ async def save_document(filename: str, request: Request, user: User = Depends(ge
+@@ -159 +159,0 @@ async def save_document(filename: str, request: Request, user: User = Depends(ge
 -    # Any project member may edit: the project has no read-only role, and members already change its files through their bots.
-@@ -162,2 +161,25 @@ async def save_document(filename: str, request: Request, user: User = Depends(ge
+@@ -162,2 +162,25 @@ async def save_document(filename: str, request: Request, user: User = Depends(ge
 -    if path.suffix.lower() != ".html":
 -        raise HTTPException(status_code=400, detail="Only slideshows can be edited here.")
 +    if not user_may_read(user.id, filename, db=db):
@@ -40,13 +45,13 @@ index 64721c9..dcc7ebd 100644
 +    if has_owner_recorded and not is_owner:
 +        raise HTTPException(status_code=403, detail="Only the document owner can edit this document")
 +
-@@ -166 +188 @@ async def save_document(filename: str, request: Request, user: User = Depends(ge
+@@ -166 +189 @@ async def save_document(filename: str, request: Request, user: User = Depends(ge
 -        raise HTTPException(status_code=413 if body else 400, detail="The slideshow is empty or too large (16 MB at most).")
 +        raise HTTPException(status_code=413 if body else 400, detail="The document is empty or too large (16 MB at most).")
-@@ -168 +190 @@ async def save_document(filename: str, request: Request, user: User = Depends(ge
+@@ -168 +191 @@ async def save_document(filename: str, request: Request, user: User = Depends(ge
 -        body.decode("utf-8")
 +        text_content = body.decode("utf-8")
-@@ -170,3 +192,13 @@ async def save_document(filename: str, request: Request, user: User = Depends(ge
+@@ -170,3 +193,14 @@ async def save_document(filename: str, request: Request, user: User = Depends(ge
 -        raise HTTPException(status_code=400, detail="The slideshow must be UTF-8 text.")
 -    # Whatever the app sent, no handler, javascript: link or new script is stored.
 -    page = slideshow.clean_page(body.decode("utf-8"), path.read_text(encoding="utf-8", errors="replace")).encode("utf-8")
@@ -63,13 +68,35 @@ index 64721c9..dcc7ebd 100644
 +            doc_model.updated_at = datetime.now(timezone.utc)
 +            db.commit()
 +
-@@ -236 +268 @@ def change_slide(filename: str, body: SlideChange, user: User = Depends(get_curr
++    old = path.read_text(encoding="utf-8", errors="replace")
+@@ -173,0 +208 @@ async def save_document(filename: str, request: Request, user: User = Depends(ge
++    tell_bot_of_edit(db, user, doc_rec, filename, old, page.decode("utf-8", errors="replace"))
+@@ -176,0 +212,18 @@ async def save_document(filename: str, request: Request, user: User = Depends(ge
++def tell_bot_of_edit(db: Session, user: User, doc_rec, filename: str, old: str, new: str) -> None:
++    """Leave the bot that wrote the document a hidden note of what the person changed by hand, so its next answer starts from their version."""
++    import difflib
++    from core.models import Agent, append_history
++    agent = db.get(Agent, doc_rec.agent_id) if doc_rec and doc_rec.agent_id else None
++    diff = "".join(difflib.unified_diff(old.splitlines(True), new.splitlines(True), "before", "after", n=1))
++    if agent is None or not diff:
++        return
++    if len(diff) > 6000:
++        diff = diff[:6000] + "\n... (diff cut; read the document for the rest)"  # ponytail: cap, the bot can read_document the full text
++    token = set_usage_user(user.id, doc_rec.project_id or agent.project_id)  # append_history files the note under the current user
++    try:
++        append_history(agent, "user", f"[I edited \"{doc_rec.title or filename}\" ({filename}) myself and saved it. What I changed:\n{diff}\nTreat my version as the current one.]", hidden=True)
++        db.commit()
++    finally:
++        reset_usage_user(token)
++
++
+@@ -236 +289 @@ def change_slide(filename: str, body: SlideChange, user: User = Depends(get_curr
 -def download_document(filename: str, user: User = Depends(get_current_user)):
 +def download_document(filename: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-@@ -239 +271 @@ def download_document(filename: str, user: User = Depends(get_current_user)):
+@@ -239 +292 @@ def download_document(filename: str, user: User = Depends(get_current_user)):
 -    if path is None or not path.is_file() or not user_may_read(user.id, filename):
 +    if path is None or not path.is_file() or not user_may_read(user.id, filename, db=db):
-@@ -245,0 +278,110 @@ def download_document(filename: str, user: User = Depends(get_current_user)):
+@@ -245,0 +299,110 @@ def download_document(filename: str, user: User = Depends(get_current_user)):
 +
 +
 +

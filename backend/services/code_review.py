@@ -7,12 +7,14 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import contextlib
 import json
 import logging
 import os
 import re
 import signal
 import tempfile
+import uuid
 
 import httpx
 
@@ -26,6 +28,7 @@ TIMEOUT = int(os.getenv("REVIEW_TIMEOUT_SECONDS", "1800"))  # per Muse run
 EFFORT = os.getenv("REVIEW_EFFORT", "medium")
 BATCH_CHARS = int(os.getenv("REVIEW_BATCH_CHARS", "120000"))  # patch text one findings run is asked to cover
 RETRIES = 2  # extra runs for files a run did not report
+MAX_TARBALL = int(os.getenv("REVIEW_MAX_TARBALL_MB", "200")) * 1024 * 1024  # the PR's code, as uploaded to a sandbox
 SEVERITIES = render.SEVERITIES
 CATEGORIES = ("security", "correctness", "stability", "data-integrity", "maintainability", "architecture")
 VERDICTS = ("approve", "comment", "request_changes")
@@ -134,21 +137,27 @@ async def _run(proc, timeout: float) -> tuple[bytes, bytes]:
         raise
 
 
-async def _git(*args: str, cwd: str, token: str = "") -> None:
-    # The token travels in the environment, not the command line, so it is not in the process list; it is never written to the clone's config or a URL.
+async def git_run(*args: str, cwd: str, token: str = "", timeout: float = 300) -> tuple[int, str, str]:
+    """git with a clean environment, hooks and symlinks off, and the token in the environment, not the command line, so it is not in the process
+    list; it is never written to the clone's config or a URL. Returns (exit code, stdout, stderr); raises asyncio.TimeoutError past `timeout`."""
     config = [("core.symlinks", "false"), ("core.hooksPath", "/dev/null")]
     if token:
         config.append(("http.extraheader", "Authorization: Basic " + base64.b64encode(f"x-access-token:{token}".encode()).decode()))
     env = _clean_env(os.path.dirname(cwd), GIT_TERMINAL_PROMPT="0", GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL="/dev/null", GIT_CONFIG_COUNT=str(len(config)))
     for i, (key, value) in enumerate(config):
         env[f"GIT_CONFIG_KEY_{i}"], env[f"GIT_CONFIG_VALUE_{i}"] = key, value
-    proc = await asyncio.create_subprocess_exec("git", *args, cwd=cwd, env=env, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE, start_new_session=True)
+    proc = await asyncio.create_subprocess_exec("git", *args, cwd=cwd, env=env, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, start_new_session=True)
+    out, err = await _run(proc, timeout)
+    return proc.returncode, out.decode(errors="replace"), err.decode(errors="replace")
+
+
+async def _git(*args: str, cwd: str, token: str = "") -> None:
     try:
-        _, err = await _run(proc, 300)
+        rc, _, err = await git_run(*args, cwd=cwd, token=token, timeout=300)
     except asyncio.TimeoutError:
         raise RuntimeError("could not check out the PR in time")
-    if proc.returncode != 0:
-        log.error("git %s failed: %s", args[0], err.decode(errors="replace")[:300])
+    if rc != 0:
+        log.error("git %s failed: %s", args[0], err[:300])
         raise RuntimeError("could not check out the PR")
 
 
@@ -157,6 +166,21 @@ async def checkout(repo: str, sha: str, token: str, dest: str) -> None:
     await _git("init", "-q", cwd=dest)
     await _git("fetch", "-q", "--depth=1", f"https://github.com/{repo}.git", sha, cwd=dest, token=token)
     await _git("checkout", "-q", "FETCH_HEAD", cwd=dest)
+
+
+async def fetch_tarball(repo: str, sha: str, token: str) -> bytes:
+    """The PR's head commit as one archive, for a sandbox that is given the code but never a GitHub token."""
+    buf = bytearray()
+    async with httpx.AsyncClient(timeout=120, follow_redirects=True) as client:  # httpx drops the token when GitHub redirects to its archive host
+        async with client.stream("GET", f"https://api.github.com/repos/{repo}/tarball/{sha}",
+                                 headers={"Authorization": "Bearer " + token, "Accept": "application/vnd.github+json"}) as r:
+            if r.status_code != 200:
+                raise RuntimeError(f"GitHub returned {r.status_code} for the PR's code")
+            async for chunk in r.aiter_bytes():
+                buf += chunk
+                if len(buf) > MAX_TARBALL:
+                    raise RuntimeError("the PR's code is too large to review")
+    return bytes(buf)
 
 
 def diff_text(files: list[dict]) -> str:
@@ -299,41 +323,55 @@ def merge(parts: list[dict], not_reviewed: list[str], files: int) -> dict:
     return {"summary": summary, "overall": overall, "verdict": verdict, "findings": findings, "files": files, "not_reviewed": not_reviewed}
 
 
-async def run_muse(text: str, schema: dict, cleaner, workdir: str, repo_dir: str) -> dict:
-    with open(os.path.join(workdir, "schema.json"), "w") as f:
-        json.dump(schema, f)
-    with open(os.path.join(workdir, "prompt.txt"), "w") as f:
-        f.write(text)
-    # Muse reads the PR author's files, so it gets a minimal environment: the one model key it needs, a PATH and an empty home. It runs from
-    # outside the checkout (workspace config is not loaded: the workspace is untrusted, and --trust-workspace is never passed).
-    proc = await asyncio.create_subprocess_exec(
-        MUSE, "exec", "--prompt-file", os.path.join(workdir, "prompt.txt"), "--output-schema", os.path.join(workdir, "schema.json"),
-        "--workspace", repo_dir, "--disable-write", "--disable-shell", "--disable-web-tools", "--no-session-log",
-        "--approval-mode", "never", "--reasoning-effort", EFFORT,
-        cwd=workdir, env=_clean_env(workdir, META_API_KEY=os.environ.get("META_API_KEY", "")),
-        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, start_new_session=True,
-    )
+class LocalBox:
+    """Muse as a subprocess of this server, in a checkout under a temp folder. The review's default."""
+
+    def __init__(self, workdir: str, repo_dir: str, effort: str = ""):
+        self.workdir, self.repo_dir, self.effort = workdir, repo_dir, effort or EFFORT
+
+    async def muse(self, text: str, schema: dict) -> str:
+        workdir, tag = self.workdir, uuid.uuid4().hex[:8]  # a name of its own, so calls can run side by side
+        schema_path, prompt_path = os.path.join(workdir, f"schema-{tag}.json"), os.path.join(workdir, f"prompt-{tag}.txt")
+        with open(schema_path, "w") as f:
+            json.dump(schema, f)
+        with open(prompt_path, "w") as f:
+            f.write(text)
+        # Muse reads the PR author's files, so it gets a minimal environment: the one model key it needs, a PATH and an empty home. It runs from
+        # outside the checkout (workspace config is not loaded: the workspace is untrusted, and --trust-workspace is never passed).
+        proc = await asyncio.create_subprocess_exec(
+            MUSE, "exec", "--prompt-file", prompt_path, "--output-schema", schema_path,
+            "--workspace", self.repo_dir, "--disable-write", "--disable-shell", "--disable-web-tools", "--no-session-log",
+            "--approval-mode", "never", "--reasoning-effort", self.effort,
+            cwd=workdir, env=_clean_env(workdir, META_API_KEY=os.environ.get("META_API_KEY", "")),
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, start_new_session=True,
+        )
+        try:
+            out, err = await _run(proc, TIMEOUT)
+        except asyncio.TimeoutError:
+            raise RuntimeError("a review pass timed out")
+        if proc.returncode != 0:
+            log.error("muse exec exited %s: %s", proc.returncode, err.decode(errors="replace")[:500])
+            raise RuntimeError("Muse failed to run")
+        return out.decode()
+
+
+async def run_muse(text: str, schema: dict, cleaner, box) -> dict:
+    """One Muse pass in `box` (a LocalBox, or the Modal sandbox), checked by `cleaner`."""
+    raw = await box.muse(text, schema)
     try:
-        out, err = await _run(proc, TIMEOUT)
-    except asyncio.TimeoutError:
-        raise RuntimeError("a review pass timed out")
-    if proc.returncode != 0:
-        log.error("muse exec exited %s: %s", proc.returncode, err.decode(errors="replace")[:500])
-        raise RuntimeError("Muse failed to run")
-    try:
-        return cleaner(out.decode())
+        return cleaner(raw)
     except (ValueError, TypeError):
         raise RuntimeError("Muse did not return a review")
 
 
-async def review_batches(repo: str, pr: dict, files: list[dict], context: str, plan: str, scope: str, work: str, repo_dir: str) -> tuple[list[dict], list[str]]:
+async def review_batches(repo: str, pr: dict, files: list[dict], context: str, plan: str, scope: str, box) -> tuple[list[dict], list[str]]:
     """Run the findings pass over every file, a batch per Muse run. A file a run did not report is retried; what stays uncovered is returned."""
     parts: list[dict] = []
     not_reviewed: list[str] = []
     for group in batches(files):
         todo = group
         for _ in range(RETRIES + 1):
-            part = await run_muse(findings_prompt(repo, pr, todo, len(files), context, plan, scope), FINDINGS_SCHEMA, clean_findings, work, repo_dir)
+            part = await run_muse(findings_prompt(repo, pr, todo, len(files), context, plan, scope), FINDINGS_SCHEMA, clean_findings, box)
             parts.append(part)
             done = set(part["reviewed_files"])
             todo = [f for f in todo if f["path"] not in done]
@@ -341,6 +379,47 @@ async def review_batches(repo: str, pr: dict, files: list[dict], context: str, p
                 break
         not_reviewed += [f["path"] for f in todo]
     return parts, not_reviewed
+
+
+def _listing(files: list[dict]) -> str:
+    return "".join(f"{x['path']} ({x['status']}, +{x['add']} -{x['del']})\n" for x in files)
+
+
+@contextlib.asynccontextmanager
+async def open_box(repo: str, sha: str, token: str, files: list[dict] | None = None, effort: str = ""):
+    """Where Muse runs: a box holding the repo at `sha`, plus (for a PR review) .review/pr.diff and .review/files.txt for `files`.
+    On this server (the default), or with REVIEW_RUNNER=modal in a sandbox that holds nothing else of ours, so the PR author's files
+    never touch this server. A sandbox that cannot start fails the review; it never falls back to running the PR's code here."""
+    if os.getenv("REVIEW_RUNNER", "local").strip().lower() == "modal":
+        from services.review_sandbox import SandboxBox
+
+        tarball = await fetch_tarball(repo, sha, token)  # the sandbox is given the code, never the token
+        async with SandboxBox(effort or EFFORT, TIMEOUT) as box:
+            await box.load(tarball, {".review/pr.diff": diff_text(files), ".review/files.txt": _listing(files)} if files is not None else {})
+            yield box
+        return
+    with tempfile.TemporaryDirectory(prefix="review-") as work:
+        repo_dir = os.path.join(work, "repo")
+        os.mkdir(repo_dir)
+        await checkout(repo, sha, token, repo_dir)  # shallow clone of one commit
+        if files is not None:
+            os.mkdir(os.path.join(repo_dir, ".review"))
+            with open(os.path.join(repo_dir, ".review", "pr.diff"), "w") as f:
+                f.write(diff_text(files))
+            with open(os.path.join(repo_dir, ".review", "files.txt"), "w") as f:
+                f.write(_listing(files))
+        yield LocalBox(work, repo_dir, effort)
+
+
+async def _passes(box, repo: str, pr: dict, files: list[dict], context: str) -> tuple[dict, list[dict], list[str]]:
+    """The walkthrough, then the findings over every file, in whichever box holds the checkout."""
+    try:  # the walkthrough is the nice part; a review without it is still a review
+        walkthrough = await run_muse(walkthrough_prompt(repo, pr, files, context), WALKTHROUGH_SCHEMA, clean_walkthrough, box)
+    except RuntimeError:
+        log.exception("Walkthrough pass failed for %s#%s", repo, pr.get("number"))
+        walkthrough = {}
+    parts, not_reviewed = await review_batches(repo, pr, files, context, render.plan_text(walkthrough), "", box)
+    return walkthrough, parts, not_reviewed
 
 
 async def review(repo: str, pr: dict, user_id: str, context: str = "") -> dict:
@@ -352,21 +431,8 @@ async def review(repo: str, pr: dict, user_id: str, context: str = "") -> dict:
     if not sha:
         raise RuntimeError("the PR has no head commit")
     async with _slots:
-        with tempfile.TemporaryDirectory(prefix="review-") as work:
-            repo_dir = os.path.join(work, "repo")
-            os.mkdir(repo_dir)
-            await checkout(repo, sha, token, repo_dir)  # shallow clone of one commit
-            os.mkdir(os.path.join(repo_dir, ".review"))
-            with open(os.path.join(repo_dir, ".review", "pr.diff"), "w") as f:
-                f.write(diff_text(files))
-            with open(os.path.join(repo_dir, ".review", "files.txt"), "w") as f:
-                f.write("".join(f"{x['path']} ({x['status']}, +{x['add']} -{x['del']})\n" for x in files))
-            try:  # the walkthrough is the nice part; a review without it is still a review
-                walkthrough = await run_muse(walkthrough_prompt(repo, pr, files, context), WALKTHROUGH_SCHEMA, clean_walkthrough, work, repo_dir)
-            except RuntimeError:
-                log.exception("Walkthrough pass failed for %s#%s", repo, pr.get("number"))
-                walkthrough = {}
-            parts, not_reviewed = await review_batches(repo, pr, files, context, render.plan_text(walkthrough), "", work, repo_dir)
+        async with open_box(repo, sha, token, files) as box:
+            walkthrough, parts, not_reviewed = await _passes(box, repo, pr, files, context)
     result = merge(parts, not_reviewed, len(files))
     result["walkthrough"] = walkthrough
     result["diff"] = diff_text(files)  # kept so the comments can be anchored to changed lines

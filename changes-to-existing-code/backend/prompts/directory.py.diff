@@ -1,0 +1,21 @@
+diff --git a/backend/prompts/directory.py b/backend/prompts/directory.py
+index b51d7e5..82cf7b2 100644
+--- a/backend/prompts/directory.py
++++ b/backend/prompts/directory.py
+@@ -4 +4,15 @@ from sqlalchemy.orm import Session
+-from core.models import Agent
++from core.models import Agent, ProjectMember, User
++
++
++def build_people(agent_id: str, db: Session) -> str:
++    """The humans on the project who named a field they are expert in: the bots' humans in the loop. Empty when there are none."""
++    source = db.get(Agent, agent_id)
++    if source is None:
++        return ""
++    rows = (db.query(User.name, ProjectMember.field).join(ProjectMember, ProjectMember.user_id == User.id)
++            .filter(ProjectMember.project_id == source.project_id, ProjectMember.field != "").order_by(User.name).all())
++    if not rows:
++        return ""
++    return ("People on this project and the field each is expert in (humans in the loop):\n" + "\n".join(f"- {n}: {f}" for n, f in rows)
++            + "\nWhen a decision falls in one person's field, call request_decision with `to` set to their name, so it reaches the right human. "
++            "Ask other people in this list for their view in your reply when it matters. Otherwise leave `to` out.")

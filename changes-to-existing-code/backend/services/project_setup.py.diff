@@ -1,12 +1,191 @@
 diff --git a/backend/services/project_setup.py b/backend/services/project_setup.py
-index 690ccc8..aca3a87 100644
+index 690ccc8..9677209 100644
 --- a/backend/services/project_setup.py
 +++ b/backend/services/project_setup.py
-@@ -9,0 +10 @@ from integrations.github_mcp import call_tool, is_enabled
+@@ -8,0 +9,2 @@ import time
++import httpx
++
+@@ -9,0 +12 @@ from integrations.github_mcp import call_tool, is_enabled
 +from core.tiers import TIERS
-@@ -191 +192 @@ async def _ask(system: str, user: str, max_tokens: int, phase: str) -> dict:
+@@ -64,0 +68,82 @@ def parse_repo(value: str) -> tuple[str, str]:
++_API = "https://api.github.com"
++_REPO_NAME = re.compile(r"^[A-Za-z0-9._-]{1,100}$")
++
++
++def _headers(token: str) -> dict:
++    return {"Authorization": "Bearer " + token, "Accept": "application/vnd.github+json"}
++
++
++async def repo_owners(token: str) -> list[dict]:
++    """Where this person may put a new repository: their own account first, then their organisations."""
++    try:
++        async with httpx.AsyncClient(timeout=20) as client:
++            me = await client.get(f"{_API}/user", headers=_headers(token))
++            orgs = await client.get(f"{_API}/user/orgs", params={"per_page": 100}, headers=_headers(token))
++    except httpx.HTTPError as exc:
++        raise RuntimeError("Could not reach GitHub") from exc
++    if me.status_code in (401, 403):
++        raise ValueError("GitHub no longer accepts your connection. Reconnect GitHub in Settings and try again.")
++    if me.status_code != 200 or orgs.status_code not in (200, 403):  # 403: an organisation policy hides the list; their own account still works
++        raise RuntimeError(f"GitHub returned {me.status_code} for your account")
++    found = [{"login": o["login"], "kind": "org"} for o in (orgs.json() if orgs.status_code == 200 else []) if isinstance(o, dict) and o.get("login")]
++    return [{"login": me.json()["login"], "kind": "user"}, *found]
++
++
++async def _target_owner(token: str, owner: str) -> dict:
++    owners = await repo_owners(token)  # only a place the person is a member of; never a name they typed
++    target = next((o for o in owners if o["login"].lower() == owner.strip().lower()), None) if owner.strip() else owners[0]
++    if target is None:
++        raise ValueError("You can only create a repository on your own account or in an organisation you belong to.")
++    return target
++
++
++def _valid_repo_name(name: str) -> str:
++    name = (name or "").strip()
++    if not _REPO_NAME.match(name) or name in (".", "..") or name.endswith(".git"):
++        raise ValueError("Name the repository with letters, numbers, dots, dashes and underscores only.")
++    return name
++
++
++async def check_new_repo(token: str, name: str, owner: str = "", private: bool = True, description: str = "") -> dict:
++    """A dry run of create_repo: every check that can be made without creating anything (the name, the place, and that no repository of that name
++    exists there yet). Raises ValueError with a message meant for the person; otherwise says what would be created."""
++    name = _valid_repo_name(name)
++    target = await _target_owner(token, owner)
++    try:
++        async with httpx.AsyncClient(timeout=30) as client:
++            r = await client.get(f"{_API}/repos/{target['login']}/{name}", headers=_headers(token))
++    except httpx.HTTPError as exc:
++        raise RuntimeError("Could not reach GitHub") from exc
++    if r.status_code == 200:
++        raise ValueError(f"{target['login']}/{name} already exists. Pick another name.")
++    if r.status_code in (401, 403):
++        raise ValueError("GitHub would not let this account look there. Check that GitHub is connected with access to it.")
++    if r.status_code not in (404,):
++        raise RuntimeError(f"GitHub returned {r.status_code} when checking the name")
++    return {"full_name": f"{target['login']}/{name}", "private": bool(private), "description": (description or "").strip()[:350]}
++
++
++async def create_repo(token: str, name: str, owner: str = "", private: bool = True, description: str = "") -> dict:
++    """Create an empty repository (with a README, so it has a first commit) on the person's account or in an organisation they belong to,
++    as them. Raises ValueError with a message meant for the person."""
++    name = _valid_repo_name(name)
++    target = await _target_owner(token, owner)
++    url = f"{_API}/user/repos" if target["kind"] == "user" else f"{_API}/orgs/{target['login']}/repos"
++    body = {"name": name, "description": (description or "").strip()[:350], "private": bool(private), "auto_init": True}
++    try:
++        async with httpx.AsyncClient(timeout=30) as client:
++            r = await client.post(url, json=body, headers=_headers(token))
++    except httpx.HTTPError as exc:
++        raise RuntimeError("Could not reach GitHub") from exc
++    if r.status_code == 422:
++        raise ValueError(f"{target['login']}/{name} already exists or the name is not allowed. Pick another name.")
++    if r.status_code in (401, 403, 404):
++        raise ValueError("GitHub would not let you create a repository there. Check that GitHub is connected with access to it "
++                         "(an organisation may restrict who can create repositories).")
++    if r.status_code != 201:
++        raise RuntimeError(f"GitHub returned {r.status_code} when creating the repository")
++    data = r.json()
++    _own_repo_cache.clear()  # the new repository belongs in the next search
++    return {"full_name": data["full_name"], "description": data.get("description") or "", "language": "", "html_url": data["html_url"], "private": bool(data.get("private"))}
++
++
+@@ -72,4 +157,35 @@ def _loads(text: str):
+-async def search_repos(query: str) -> list[dict]:
+-    """Repositories matching a name, owner/repo, or a few words."""
+-    if not is_enabled():
+-        raise RuntimeError("GitHub is not connected")
++_REPO_PAGES = 10  # of 100: a person's repositories, most recently pushed first
++_REPO_CACHE_SECONDS = 60  # a search is run as they type; their list does not change that fast
++_own_repo_cache: dict[str, tuple[float, list[dict]]] = {}
++
++
++async def _own_repos(token: str, user_id: str) -> list[dict]:
++    """The repositories in this person's GitHub account: ones they own, ones they collaborate on, and their organisations' that they can see.
++    Never anyone else's public repositories."""
++    hit = _own_repo_cache.get(user_id)
++    if hit and hit[0] > time.time():
++        return hit[1]
++    found: list[dict] = []
++    try:
++        async with httpx.AsyncClient(timeout=20) as client:
++            for page in range(1, _REPO_PAGES + 1):
++                r = await client.get(f"{_API}/user/repos", headers=_headers(token), params={
++                    "per_page": 100, "page": page, "sort": "pushed", "affiliation": "owner,collaborator,organization_member"})
++                if r.status_code in (401, 403):
++                    raise ValueError("GitHub no longer accepts your connection. Reconnect GitHub in Settings and try again.")
++                if r.status_code != 200:
++                    raise RuntimeError(f"GitHub returned {r.status_code} for your repositories")
++                batch = r.json()
++                found += [{"full_name": item["full_name"], "description": (item.get("description") or "")[:240], "language": item.get("language") or "",
++                           "html_url": item.get("html_url") or ""} for item in batch if isinstance(item, dict) and item.get("full_name")]
++                if len(batch) < 100:
++                    break
++    except httpx.HTTPError as exc:
++        raise RuntimeError("Could not reach GitHub") from exc
++    _own_repo_cache[user_id] = (time.time() + _REPO_CACHE_SECONDS, found)
++    return found
++
++
++async def search_repos(token: str, user_id: str, query: str) -> list[dict]:
++    """Repositories in the person's own GitHub account matching a name, owner/repo, or a few words. Not a search of GitHub: a repository
++    that is not in their account does not appear, even by its exact name."""
+@@ -78,0 +195 @@ async def search_repos(query: str) -> list[dict]:
++    mine = await _own_repos(token, user_id)
+@@ -81 +198,2 @@ async def search_repos(query: str) -> list[dict]:
+-        github_query = "repo:%s/%s" % (owner, name)
++        slug = f"{owner}/{name}".lower()
++        return [r for r in mine if r["full_name"].lower() == slug][:1]
+@@ -83,21 +201,9 @@ async def search_repos(query: str) -> list[dict]:
+-        github_query = raw[:200]
+-    text = await call_tool("github_search_repositories", {
+-        "query": github_query,
+-        "perPage": 8,
+-        "minimal_output": False,
+-    })
+-    data = _loads(text)
+-    repos = []
+-    for item in (data.get("items") or [])[:8]:
+-        if not isinstance(item, dict):
+-            continue
+-        full_name = (item.get("full_name") or "").strip()
+-        if not full_name:
+-            continue
+-        repos.append({
+-            "full_name": full_name,
+-            "description": (item.get("description") or "")[:240],
+-            "language": item.get("language") or "",
+-            "html_url": item.get("html_url") or "",
+-        })
+-    return repos
++        pass
++    terms = [t for t in re.split(r"[\s/]+", raw.lower()[:200]) if t]
++    named, described = [], []
++    for repo in mine:  # recent first, as listed; a match in the name comes before one only in the description
++        name_text = repo["full_name"].lower()
++        text = name_text + " " + repo["description"].lower()
++        if all(t in text for t in terms):
++            (named if all(t in name_text for t in terms) else described).append(repo)
++    return (named + described)[:8]
+@@ -183,0 +290,3 @@ async def _ask(system: str, user: str, max_tokens: int, phase: str) -> dict:
++    """One structured answer from the model, as the JSON object it was asked for. No thinking: these calls only fill in a shape, and a model that
++    spends its whole allowance thinking returns nothing to read (the setup then failed with "The reply could not be read"). If an answer still
++    comes back empty it is asked once more with twice the room."""
+@@ -187,0 +297 @@ async def _ask(system: str, user: str, max_tokens: int, phase: str) -> dict:
++    raw = ""
+@@ -189,8 +299,4 @@ async def _ask(system: str, user: str, max_tokens: int, phase: str) -> dict:
+-        raw = await asyncio.to_thread(
+-            complete,
 -            "claude-sonnet-5-5",
-+            TIERS["WORKHORSE"],
-@@ -198 +199 @@ async def _ask(system: str, user: str, max_tokens: int, phase: str) -> dict:
+-            system,
+-            user,
+-            max_tokens,
+-            thinking_budget=1024,
+-        )
++        for room in (max_tokens, max_tokens * 2):
++            raw = await asyncio.to_thread(complete, TIERS["WORKHORSE"], system, user, room)
++            if (raw or "").strip():
++                break
+@@ -198 +304 @@ async def _ask(system: str, user: str, max_tokens: int, phase: str) -> dict:
 -        log_span(phase, started, model="claude-sonnet-5-5")
 +        log_span(phase, started, model=TIERS["WORKHORSE"])

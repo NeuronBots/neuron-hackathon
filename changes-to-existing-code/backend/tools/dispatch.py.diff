@@ -1,15 +1,16 @@
 diff --git a/backend/tools/dispatch.py b/backend/tools/dispatch.py
-index 4e44231..378c71c 100644
+index 4e44231..4a9fc0d 100644
 --- a/backend/tools/dispatch.py
 +++ b/backend/tools/dispatch.py
 @@ -7,0 +8,3 @@ from integrations.atlassian_mcp import (
 +from integrations.atlassian_mcp import (
 +    owns as atlassian_owns,
 +)
-@@ -19,0 +23,2 @@ from integrations.gmail_mcp import (
+@@ -19,0 +23,3 @@ from integrations.gmail_mcp import (
 +from core.audience import guard, hold_write
++from services import first_build, first_plan
 +from integrations import connections
-@@ -24,0 +30,21 @@ from tools.web_tools import web_fetch, web_search
+@@ -24,0 +31,21 @@ from tools.web_tools import web_fetch, web_search
 +async def _missing(provider: str) -> str:
 +    """An error for the bot when this shared chat's requester has not connected `provider`; empty when the call may go ahead."""
 +    try:
@@ -31,48 +32,91 @@ index 4e44231..378c71c 100644
 +        return f"Error: {exc}"
 +
 +
-@@ -45 +71,3 @@ async def run_tool(name: str, arguments: dict, jira_key: str = "", repo: str = "
+@@ -33,0 +61,3 @@ async def run_tool(name: str, arguments: dict, jira_key: str = "", repo: str = "
++        if str(title).lower().startswith("research") and len(re.findall(r"https?://[^\s)]+", str(arguments.get("content", "")))) < 2:
++            return ("Error: a research document must rest on the web, not on memory. Call web_search for this topic, web_fetch the best pages, then save it again with "
++                    "what you found and at least two source links (full https URLs).")
+@@ -45 +75,5 @@ async def run_tool(name: str, arguments: dict, jira_key: str = "", repo: str = "
 -            await asyncio.to_thread(record, agent_id, made, str(title))
 +            raw_content = arguments.get("content", "")
 +            content_str = raw_content if isinstance(raw_content, str) else ""
 +            await asyncio.to_thread(record, agent_id, made, str(title), content_str)
-@@ -59 +87 @@ async def run_tool(name: str, arguments: dict, jira_key: str = "", repo: str = "
++            if str(title).lower().startswith(first_plan.DOC_PREFIX.lower()) and "Download:" in made:  # the project's first-build plan: a button under it starts the build
++                await asyncio.to_thread(first_build.offer_build, agent_id, made, str(title))
+@@ -57,0 +92,36 @@ async def run_tool(name: str, arguments: dict, jira_key: str = "", repo: str = "
++    if name == "publish_build":  # offered to no bot: it runs when a person allows the pull-request card that a finished build puts in the chat
++        if held := hold_write("github", name, arguments, jira_key, repo, agent_id):
++            return held
++        from core.usage import current_user
++        from services import build_publish
++        try:
++            return await build_publish.publish(repo, current_user(), agent_id, str(arguments.get("archive") or ""), str(arguments.get("guide") or ""))
++        except (ValueError, RuntimeError) as exc:
++            return f"Error: {exc}"
++    if name == "push_pr_fix":  # like publish_build: runs when a person allows the card that a finished fix puts in the chat
++        if held := hold_write("github", name, arguments, jira_key, repo, agent_id):
++            return held
++        from core.usage import current_user
++        from services import pr_fix
++        try:
++            return await pr_fix.push(repo, current_user(), agent_id, str(arguments.get("archive") or ""), int(arguments.get("number") or 0))
++        except (ValueError, RuntimeError) as exc:
++            return f"Error: {exc}"
++    if name == "start_coding_session":  # no Allow card: the person asked for it, the sandbox sends nothing outside, and saving to GitHub has its own card
++        from services import preview
++        return await preview.start_for_bot(agent_id)
++    if name == "change_code":  # only works inside a session the same person started (and so allowed)
++        from services import preview
++        return await preview.change_for_bot(agent_id, str(arguments.get("request") or ""))
++    if name == "save_coding_session":
++        from services import preview
++        return await preview.save_for_bot(agent_id)
++    if name == "build_project":  # a person asked a bot to build; it needs their Allow like any costly action, and a shared chat holds it for the asker's Proceed
++        if held := hold_write("github", name, arguments, jira_key, repo, agent_id):
++            return held
++        return await first_build.start_for_bot(agent_id, str(arguments.get("plan") or ""))
++    if name == "build_wiki":  # pushes to the repo's GitHub wiki: held in a shared chat like any write, and approved before it gets here when a bot runs it
++        if held := hold_write("github", name, arguments, jira_key, repo, agent_id):
++            return held
++        from services import wiki
++        return await wiki.start(agent_id, repo, str(arguments.get("focus") or ""))
+@@ -59 +129 @@ async def run_tool(name: str, arguments: dict, jira_key: str = "", repo: str = "
 -        return await manage_sprint(arguments, jira_key)
 +        return await _jira_local(name, manage_sprint, arguments, jira_key, agent_id)
-@@ -61 +89 @@ async def run_tool(name: str, arguments: dict, jira_key: str = "", repo: str = "
+@@ -61 +131 @@ async def run_tool(name: str, arguments: dict, jira_key: str = "", repo: str = "
 -        return await plan_sprint(arguments, jira_key)
 +        return await _jira_local(name, plan_sprint, arguments, jira_key, agent_id)
-@@ -63 +91 @@ async def run_tool(name: str, arguments: dict, jira_key: str = "", repo: str = "
+@@ -63 +133 @@ async def run_tool(name: str, arguments: dict, jira_key: str = "", repo: str = "
 -        return await attach_document(arguments, jira_key)
 +        return await _jira_local(name, attach_document, arguments, jira_key, agent_id)
-@@ -64,0 +93,4 @@ async def run_tool(name: str, arguments: dict, jira_key: str = "", repo: str = "
+@@ -64,0 +135,4 @@ async def run_tool(name: str, arguments: dict, jira_key: str = "", repo: str = "
 +        if err := await _missing("gmail"):
 +            return err
 +        if held := hold_write("gmail", name, arguments, jira_key, repo, agent_id):
 +            return held
-@@ -66 +98 @@ async def run_tool(name: str, arguments: dict, jira_key: str = "", repo: str = "
+@@ -66 +140 @@ async def run_tool(name: str, arguments: dict, jira_key: str = "", repo: str = "
 -            return await call_gmail_tool(name, arguments)
 +            return await guard("gmail", await call_gmail_tool(name, arguments))
-@@ -69,0 +102,4 @@ async def run_tool(name: str, arguments: dict, jira_key: str = "", repo: str = "
+@@ -69,0 +144,4 @@ async def run_tool(name: str, arguments: dict, jira_key: str = "", repo: str = "
 +        if err := await _missing("github"):
 +            return err
 +        if held := hold_write("github", name, arguments, jira_key, repo, agent_id):
 +            return held
-@@ -74 +110 @@ async def run_tool(name: str, arguments: dict, jira_key: str = "", repo: str = "
+@@ -74 +152 @@ async def run_tool(name: str, arguments: dict, jira_key: str = "", repo: str = "
 -            return await call_github_tool(name, scoped)
 +            return await guard("github", await call_github_tool(name, scoped), repo)
-@@ -76,0 +113,6 @@ async def run_tool(name: str, arguments: dict, jira_key: str = "", repo: str = "
+@@ -76,0 +155,6 @@ async def run_tool(name: str, arguments: dict, jira_key: str = "", repo: str = "
 +    if not atlassian_owns(name):
 +        return f"Error: unknown tool {name}."
 +    if err := await _missing("atlassian"):
 +        return err
 +    if held := hold_write("atlassian", name, arguments, jira_key, repo, agent_id):
 +        return held
-@@ -81,0 +124,3 @@ async def run_tool(name: str, arguments: dict, jira_key: str = "", repo: str = "
+@@ -81,0 +166,3 @@ async def run_tool(name: str, arguments: dict, jira_key: str = "", repo: str = "
 +        if name == "getAccessibleAtlassianResources" and agent_id:
 +            await asyncio.to_thread(remember_cloud_id, agent_id, result)
 +        return await guard("atlassian", result, jira_key if "jira" in name.lower() else "")  # Confluence and Compass have no project to check a reader against
-@@ -84,3 +128,0 @@ async def run_tool(name: str, arguments: dict, jira_key: str = "", repo: str = "
+@@ -84,3 +170,0 @@ async def run_tool(name: str, arguments: dict, jira_key: str = "", repo: str = "
 -    if name == "getAccessibleAtlassianResources" and agent_id:
 -        await asyncio.to_thread(remember_cloud_id, agent_id, result)
 -    return result

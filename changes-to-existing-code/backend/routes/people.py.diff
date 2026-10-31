@@ -1,5 +1,5 @@
 diff --git a/backend/routes/people.py b/backend/routes/people.py
-index 57c04cf..32d3498 100644
+index 57c04cf..6027948 100644
 --- a/backend/routes/people.py
 +++ b/backend/routes/people.py
 @@ -12,0 +13,2 @@ from sqlalchemy.orm import Session
@@ -84,13 +84,29 @@ index 57c04cf..32d3498 100644
 @@ -230 +277 @@ def unread_counts(body: SeenIn, user: User = Depends(get_current_user), project:
 -                    or_(DirectMessage.sender_id == user.id, DirectMessage.recipient_id == user.id),
 +                    or_(DirectMessage.sender_id == user.id, DirectMessage.recipient_id == user.id), _seen_by(user.id),
-@@ -279 +326 @@ def thread(other_id: str, user: User = Depends(get_current_user), project: Proje
+@@ -269,0 +317 @@ def get_active_typing(
++    db: Session = Depends(get_db),
+@@ -271,2 +319,11 @@ def get_active_typing(
+-    """Returns lists of user IDs and agent IDs currently typing in this project."""
+-    return typing_store.get_active_typing_for_user(project.id, user.id)
++    """People and bots currently typing in this project. A bot is also listed while it works on its own: a turn the system started for this person
++    (a project plan, a decision they answered), one from another tab, or a conversation with a teammate. `status` says what each is doing."""
++    found = typing_store.get_active_typing_for_user(project.id, user.id)
++    mine = runs.running_for(user.id)
++    busy = set(mine) | set(runs.talking)
++    if busy:
++        here = {a for (a,) in db.query(Agent.id).filter(Agent.id.in_(list(busy)), Agent.project_id == project.id)}
++        if here:
++            found["agents"] = sorted(set(found["agents"]) | here)
++            found["status"] = {a: text for a in here if (run := mine.get(a)) is not None and (text := runs.doing(run))}
++    return found
+@@ -279 +336 @@ def thread(other_id: str, user: User = Depends(get_current_user), project: Proje
 -        db.query(DirectMessage).filter(_between(project.id, user.id, other.id))
 +        db.query(DirectMessage).filter(_between(project.id, user.id, other.id), _seen_by(user.id))
-@@ -323 +370 @@ def react(other_id: str, message_id: int, body: ReactIn, user: User = Depends(ge
+@@ -323 +380 @@ def react(other_id: str, message_id: int, body: ReactIn, user: User = Depends(ge
 -    row = db.query(DirectMessage).filter(DirectMessage.id == message_id, _between(project.id, user.id, other.id)).with_for_update().first()
 +    row = _row(db, project.id, user, other.id, message_id, lock=True)
-@@ -335,0 +383,218 @@ def react(other_id: str, message_id: int, body: ReactIn, user: User = Depends(ge
+@@ -335,0 +393,218 @@ def react(other_id: str, message_id: int, body: ReactIn, user: User = Depends(ge
 +class ShareIn(BaseModel):
 +    share: bool
 +
@@ -309,24 +325,24 @@ index 57c04cf..32d3498 100644
 +                flag_modified(doc_model, "shared_with")
 +
 +    db.flush()
-@@ -341,2 +606,2 @@ async def send(other_id: str, body: DirectIn, user: User = Depends(get_current_u
+@@ -341,2 +616,2 @@ async def send(other_id: str, body: DirectIn, user: User = Depends(get_current_u
 -        target = db.query(DirectMessage).filter(DirectMessage.id == body.reply_to, _between(project.id, user.id, other.id)).first()
 -        root = db.get(DirectMessage, target.reply_to or target.id) if target else None
 +        target = _row(db, project.id, user, other.id, body.reply_to)
 +        root = _row(db, project.id, user, other.id, target.reply_to or target.id) if target else None
-@@ -350,0 +616,2 @@ async def send(other_id: str, body: DirectIn, user: User = Depends(get_current_u
+@@ -350,0 +626,2 @@ async def send(other_id: str, body: DirectIn, user: User = Depends(get_current_u
 +    _share_forwarded_documents(row.content, user.id, other, db)
 +    db.commit()
-@@ -380,0 +648,3 @@ def split_people(args: dict, agent: Agent, asker_id: str, db: Session) -> tuple[
+@@ -380,0 +658,3 @@ def split_people(args: dict, agent: Agent, asker_id: str, db: Session) -> tuple[
 +    sender = (asker_id or "").strip()
 +    if not sender:
 +        return [], args
-@@ -390,0 +661 @@ def split_people(args: dict, agent: Agent, asker_id: str, db: Session) -> tuple[
+@@ -390,0 +671 @@ def split_people(args: dict, agent: Agent, asker_id: str, db: Session) -> tuple[
 +            msg_content = f"**{subject}**\n\n{body}" if subject and not subject.lower().startswith("re:") else body
-@@ -394 +665 @@ def split_people(args: dict, agent: Agent, asker_id: str, db: Session) -> tuple[
+@@ -394 +675 @@ def split_people(args: dict, agent: Agent, asker_id: str, db: Session) -> tuple[
 -                append_history(agent, "assistant", f"**{subject}**\n\n{body}" if subject and not subject.lower().startswith("re:") else body)
 +                append_history(agent, "assistant", msg_content)
-@@ -396,0 +668,10 @@ def split_people(args: dict, agent: Agent, asker_id: str, db: Session) -> tuple[
+@@ -396,0 +678,10 @@ def split_people(args: dict, agent: Agent, asker_id: str, db: Session) -> tuple[
 +            if sender and sender != person.id:
 +                dm = DirectMessage(
 +                    project_id=agent.project_id,

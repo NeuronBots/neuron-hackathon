@@ -1,7 +1,10 @@
 diff --git a/backend/tools/documents.py b/backend/tools/documents.py
-index ae75800..279fc0b 100644
+index ae75800..68573f4 100644
 --- a/backend/tools/documents.py
 +++ b/backend/tools/documents.py
+@@ -45 +45 @@ def document_path(filename: str) -> Path | None:
+-    if Path(filename).suffix.lower() not in {".md", ".pdf", ".xlsx", ".html"}:
++    if Path(filename).suffix.lower() not in {".md", ".pdf", ".xlsx", ".html", ".zip"}:
 @@ -79,0 +80,68 @@ def replace_document(filename: str, data: bytes) -> None:
 +def _as_list(v) -> list:
 +    """Safely coerce a JSON column value, comma-delimited string, or list to a list."""
@@ -71,6 +74,9 @@ index ae75800..279fc0b 100644
 +    return False
 +
 +
+@@ -91 +159 @@ def delete_document(filename: str) -> None:
+-_NAME = r"[A-Za-z0-9][A-Za-z0-9._-]{0,120}\.(?:md|pdf|xlsx|html)"
++_NAME = r"[A-Za-z0-9][A-Za-z0-9._-]{0,120}\.(?:md|pdf|xlsx|html|zip)"
 @@ -515 +583,69 @@ def _title_of(path: Path) -> str:
 -def record(agent_id: str, result: str, title: str = "") -> None:
 +def record(agent_id: str, result: str, title: str = "", content: str = "") -> None:

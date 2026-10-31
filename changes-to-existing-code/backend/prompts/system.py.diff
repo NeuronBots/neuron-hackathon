@@ -1,0 +1,9 @@
+diff --git a/backend/prompts/system.py b/backend/prompts/system.py
+index 767e54a..df9a796 100644
+--- a/backend/prompts/system.py
++++ b/backend/prompts/system.py
+@@ -20 +20 @@ from core.models import Agent, Task, get_shared_context
+-from prompts.directory import build_directory
++from prompts.directory import build_directory, build_people
+@@ -61,0 +62 @@ def system_for(agent: Agent, db: Session) -> str:
++        + (("\n\n" + people) if (people := build_people(agent.id, db)) else "")
