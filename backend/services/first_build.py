@@ -147,6 +147,24 @@ def _refresh_goals(project_id: str, user_id: str) -> None:
     runs.spawn(asyncio.to_thread(goals.refresh_project, project_id, user_id))
 
 
+def _assign_owners(project_id: str, user_id: str, name: str, plan: str) -> None:
+    """The plan's "Who owns what" lines become each bot's core-memory draft. Never raises: the build matters more."""
+    from core.database import SessionLocal
+    from core.usage import reset_usage_user, set_usage_user
+    from services import ownership
+
+    acting = set_usage_user(user_id, project_id)
+    db = SessionLocal()
+    try:
+        ownership.assign(project_id, name, plan, db)
+    except Exception:
+        log.exception("Could not hand out who owns what for %s", name)
+        db.rollback()
+    finally:
+        db.close()
+        reset_usage_user(acting)
+
+
 async def start(project_id: str, user_id: str, plan: str, row_id: int | None = None, agent_id: str = "") -> None:
     """The button was clicked, or a bot was asked to build. Checks what can be checked at once, puts the pill in the chat (the bot's, when one was asked),
     and builds in the background. BuildError: tell the person."""
@@ -165,6 +183,7 @@ async def start(project_id: str, user_id: str, plan: str, row_id: int | None = N
     from services import next_phase
     await next_phase.begin(project_id, user_id, agent_id, info["name"], info["goal"], plan)  # the team plans the next phase while this builds
     _refresh_goals(project_id, user_id)  # every bot's goal now includes the build under way
+    await asyncio.to_thread(_assign_owners, project_id, user_id, info["name"], info["plan"])  # and each bot hears what it owns in the app
 
 
 # ── the build ────────────────────────────────────────────────────────────
