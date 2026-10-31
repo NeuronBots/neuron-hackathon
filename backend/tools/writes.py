@@ -35,6 +35,8 @@ def describe(name: str, args: dict) -> str:
         "start_coding_session": "Start a live coding session: the built app runs in a sandbox beside the chat and Muse changes it as you ask",
         "push_pr_fix": "Push the fixes for a pull request's review findings to its branch on GitHub",
         "publish_build": "Open a pull request with the project's first build on its repository",
+        "publish_site": "Publish the project's built website on Neuron: it becomes public on the internet" + (f" (build {args['archive']})" if args.get("archive") else ""),
+        "update_site": f"Change {args.get('path') or 'a file'} on the public website",
         "build_project": "Have Muse build the project's first version from its plan, in a sandbox" + (f" ({args['plan']})" if args.get("plan") else "") + ". It writes and runs the code, saves it in Docs and offers a pull request",
         "build_wiki": "Build or update this project's GitHub wiki" + (f", focusing on: {args['focus']}" if args.get("focus") else "") + ". Pages people wrote are left untouched",
     }.get(name) or _words(name)
@@ -66,6 +68,8 @@ def done_note(name: str, args: dict, result: str) -> str:
         "attachDocumentToJiraIssue": f"A document has been attached to {key or 'an issue'} in Jira.",
         "build_wiki": "The GitHub wiki is being built; it will be published in a few minutes.",
         "publish_build": "A pull request with the first build has been opened.",
+        "publish_site": "The website has been published" + (f": {m.group(0)}" if (m := re.search(r"https?://\S+", result or "")) else "."),
+        "update_site": "The public website has been changed.",
         "start_coding_session": "The coding session is starting; the app appears beside the chat.",
         "push_pr_fix": "The fixes have been pushed to the pull request's branch.",
         "build_project": "Muse has started building the first version; progress shows in the chat.",

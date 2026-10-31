@@ -1,14 +1,14 @@
 diff --git a/backend/router.py b/backend/router.py
-index 7575742..c9d5370 100644
+index 7575742..ead647c 100644
 --- a/backend/router.py
 +++ b/backend/router.py
 @@ -12 +12,2 @@ from core.database import Base, engine
 -from routes import agents, auth, billing, chat, events, misc, model_proxy, oauth, people, projects, routines, spec_proposals, tasks
-+from routes import agents, auth, billing, chat, events, misc, model_proxy, oauth, people, projects, routines, spec_proposals, tasks, webhooks
++from routes import agents, auth, billing, chat, events, misc, model_proxy, oauth, people, projects, routines, sites, spec_proposals, tasks, webhooks
 +from routers import docs as docs_router
 @@ -36 +37 @@ Base.metadata.create_all(bind=engine)
 -for module in (auth, billing, projects, agents, chat, tasks, events, misc, model_proxy, oauth, people, routines, spec_proposals):
-+for module in (auth, billing, projects, agents, chat, tasks, events, misc, model_proxy, oauth, people, routines, spec_proposals, webhooks):
++for module in (auth, billing, projects, agents, chat, tasks, events, misc, model_proxy, oauth, people, routines, sites, spec_proposals, webhooks):
 @@ -37,0 +39,2 @@ for module in (auth, billing, projects, agents, chat, tasks, events, misc, model
 +
 +app.include_router(docs_router.router, tags=["/api/docs"])

@@ -1,11 +1,11 @@
 diff --git a/backend/tools/definitions.py b/backend/tools/definitions.py
-index d2ee6ba..09fe261 100644
+index d2ee6ba..add59bc 100644
 --- a/backend/tools/definitions.py
 +++ b/backend/tools/definitions.py
 @@ -82,0 +83,2 @@ BOARD_TOOL_DEFS = [
 +                "options": {"type": "array", "items": {"type": "string"}, "description": "Two to four short answers they can pick with one tap, your recommendation first. Leave out for an open question."},
 +                "to": {"type": "string", "description": "A person from the project's People list whose field covers this decision. They are notified and named on the card. Leave out when no one's field fits."},
-@@ -266,0 +269,60 @@ DOC_TOOL_DEFS = [
+@@ -266,0 +269,80 @@ DOC_TOOL_DEFS = [
 +WIKI_TOOL = {
 +    "name": "build_wiki",
 +    "description": (
@@ -37,6 +37,26 @@ index d2ee6ba..09fe261 100644
 +        "required": [],
 +    },
 +}
++
++
++SITE_TOOLS = [
++    {
++        "name": "publish_site",
++        "description": (
++            "Publish the project's built website on Neuron, so it is public on the internet. It hosts the project's latest saved build (a static site with index.html at its root) "
++            "and replaces the version before. It needs the person's permission first. When it is live, tell the person the public address exactly as the tool returns it."
++        ),
++        "input_schema": {"type": "object", "properties": {"archive": {"type": "string", "description": "A saved build archive (.zip) to publish. Leave out for the latest."}}, "required": []},
++    },
++    {
++        "name": "update_site",
++        "description": (
++            "Change one text file (html, css, js, json, svg, txt, md) of the project's published website, for example a price, the opening hours or a heading. The whole new file goes in content. "
++            "It changes the public site, so it needs the person's permission first. Only works after publish_site."
++        ),
++        "input_schema": {"type": "object", "properties": {"path": {"type": "string", "description": "The file, relative to the site root, e.g. index.html"}, "content": {"type": "string", "description": "The complete new content of the file"}}, "required": ["path", "content"]},
++    },
++]
 +
 +
 +SESSION_TOOLS = [

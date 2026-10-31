@@ -391,6 +391,24 @@ def _offer_pull_request(project_id: str, user_id: str, agent_id: str, repo: str,
         reset_usage_user(acting)
 
 
+def _offer_publish(project_id: str, user_id: str, agent_id: str, name: str, saved: dict) -> None:
+    """Park publishing the site behind the Allow/Deny card: it makes the site public on the internet, so a person says yes first."""
+    from core.database import SessionLocal
+    from core.usage import reset_usage_user, set_usage_user
+    from tools.outbox import _park
+
+    acting = set_usage_user(user_id, project_id)
+    db = SessionLocal()
+    try:
+        call = {"tool": "publish_site", "args": {"archive": saved["zip"]}, "jira_key": "", "repo": ""}
+        detail = (f"Host the built site of {name} on Neuron. It becomes public: anyone with its address can open it, and what visitors send from its page reaches your Master. "
+                  "You can change or remove it later.")
+        _park(agent_id, f"Publish the website of {name} on Neuron", detail, call, db, interactive=True, title=f"Approve: publish {name}'s website")
+    finally:
+        db.close()
+        reset_usage_user(acting)
+
+
 def handover(name: str, result: dict | None, failure: str, saved: dict | None, repo: str) -> str:
     """What the Master is told when the build ends, so that it tells the person in its own words, with the exact commands."""
     from services.review_render import untrusted_block
@@ -402,7 +420,9 @@ def handover(name: str, result: dict | None, failure: str, saved: dict | None, r
     body = (f"Muse built the first version of {name} from the approved plan, in a sandbox: {len(result['files'])} files. The code is saved in Docs as a zip"
             + (", and the run guide is saved too" if saved and saved["guide"] else "")
             + (f"; a second Muse reviewed it against the plan and {result['team']} team document(s), and the QA report is saved too" if saved and saved.get("qa") else "")
-            + (f". A pull request on {repo} is waiting for their Allow in this chat." if repo else ".") + "\n\n")
+            + (f". A pull request on {repo} is waiting for their Allow in this chat." if repo else ".")
+            + (" It is a static site, and a second card asks them to Allow publishing it on Neuron: once they do, the site is public and you give them its address exactly as the publish tool returns it." if "index.html" in result["files"] else "")
+            + "\n\n")
     left = [f for f in (result.get("review") or {}).get("findings", []) if isinstance(f, dict)]
     if result.get("session"):
         body += "A live coding session has been started on it: the app is starting beside this chat. Tell them to say what they want changed, and that you will make each change in the running app.\n\n"
@@ -469,6 +489,11 @@ async def _build_and_tell(project_id: str, user_id: str, info: dict, pill: int) 
                 result["session"] = True
             except Exception:
                 log.exception("Could not start the coding session for %s", name)
+        if "index.html" in result["files"]:  # a static site: Neuron can host it, once a person allows it
+            try:
+                await asyncio.to_thread(_offer_publish, project_id, user_id, agent_id, name, saved)
+            except Exception:
+                log.exception("Could not offer to publish the site of %s", name)
         if repo:
             try:
                 await asyncio.to_thread(_offer_pull_request, project_id, user_id, agent_id, repo, name, saved, len(result["files"]))

@@ -1,5 +1,5 @@
 diff --git a/backend/core/models.py b/backend/core/models.py
-index 38a5312..9dc38ba 100644
+index 38a5312..1052b18 100644
 --- a/backend/core/models.py
 +++ b/backend/core/models.py
 @@ -0,0 +1 @@
@@ -26,12 +26,13 @@ index 38a5312..9dc38ba 100644
 +    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 +
 +
-@@ -217,0 +234,4 @@ class Project(Base):
+@@ -217,0 +234,5 @@ class Project(Base):
 +    # The bot that hears about pull requests on `repo`. Empty means none is chosen, so webhooks for the project are ignored.
 +    coding_bot_id = Column(String(36), nullable=False, default="", server_default="")
 +    # Off: pull request events and the poll leave this project alone. On by default, so projects set up before the switch keep reviewing.
 +    pr_reviews = Column(Boolean, nullable=False, default=True, server_default=text("true"))
-@@ -236 +256,16 @@ class UsageEvent(Base):
++    site_slug = Column(String(60), nullable=True, unique=True)  # set once Neuron hosts the project's built site at /sites/<slug>/ (services/sites.py)
+@@ -236 +257,16 @@ class UsageEvent(Base):
 -    created_at = Column(DateTime, server_default=text("(now() at time zone 'utc')"))
 +    request_id = Column(String(64), nullable=True, default=None, server_default=None, index=True)
 +    characters = Column(Integer, nullable=False, default=0, server_default="0")
@@ -49,7 +50,7 @@ index 38a5312..9dc38ba 100644
 +    """A live voice call this server started. ElevenLabs bills a call by its length, so it is settled from ElevenLabs' own record of
 +    the conversation, never from what the browser says. The id is also the conversation's ElevenLabs user_id, which is how it is found."""
 +    __tablename__ = "voice_calls"
-@@ -238 +273,7 @@ class UsageEvent(Base):
+@@ -238 +274,7 @@ class UsageEvent(Base):
 -    __table_args__ = (Index("usage_events_user_created_idx", "user_id", "created_at"),)
 +    id = Column(String(32), primary_key=True)
 +    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -58,13 +59,13 @@ index 38a5312..9dc38ba 100644
 +    conversation_id = Column(String(64), nullable=True)  # the ElevenLabs conversation the signed URL was issued for: the only one this call bills
 +    started_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 +    settled = Column(Boolean, nullable=False, default=False, server_default=text("false"))
-@@ -285,0 +327 @@ class ProjectMember(Base):
+@@ -285,0 +328 @@ class ProjectMember(Base):
 +    field = Column(String(120), nullable=False, default="", server_default="")  # what they are expert in: the bots hand them the decisions in it
-@@ -294,0 +337,3 @@ class DocumentRecord(Base):
+@@ -294,0 +338,3 @@ class DocumentRecord(Base):
 +    user_id = Column(String(36), nullable=True, index=True)  # who asked the bot to generate it
 +    created_by = Column(String(120), nullable=True, default="")
 +    shared_with = Column(JSON, nullable=False, default=list)
-@@ -329,0 +375,9 @@ class DirectMessage(Base):
+@@ -329,0 +376,9 @@ class DirectMessage(Base):
 +    # Comma-separated providers (gmail, github, atlassian) whose data the bot saw but the other person cannot access; the text is a summary.
 +    withheld = Column(String(60), nullable=False, default="", server_default="")
 +    # "" = shown to both people. A bot answer holding data the other person cannot access starts "pending", visible to the asker only,
@@ -74,28 +75,28 @@ index 38a5312..9dc38ba 100644
 +    # A write the bot prepared through the asker's account, as JSON {provider, tool, args, ...}. The row is a card only the asker sees:
 +    # share "proceed" until they approve, then "running" and "done" ("cancelled" if they decline). "private" is a bot message only the asker sees.
 +    action = Column(Text, nullable=False, default="", server_default="")
-@@ -344,0 +399 @@ class ProjectInvite(Base):
+@@ -344,0 +400 @@ class ProjectInvite(Base):
 +    field = Column(String(120), nullable=False, default="", server_default="")  # carried to their membership when they register
-@@ -400 +454,0 @@ def append_history(agent: Agent, role: str, content: str, max_messages: int = HI
+@@ -400 +455,0 @@ def append_history(agent: Agent, role: str, content: str, max_messages: int = HI
 -        OFFSET :keep
-@@ -401,0 +456 @@ def append_history(agent: Agent, role: str, content: str, max_messages: int = HI
+@@ -401,0 +457 @@ def append_history(agent: Agent, role: str, content: str, max_messages: int = HI
 +        OFFSET :keep
-@@ -460,0 +516 @@ def get_shared_context(agent: Agent, limit: int = 24, user_id: str | None = None
+@@ -460,0 +517 @@ def get_shared_context(agent: Agent, limit: int = 24, user_id: str | None = None
 +    from core.audience import readers, scrub
-@@ -474,0 +531,4 @@ def get_shared_context(agent: Agent, limit: int = 24, user_id: str | None = None
+@@ -474,0 +532,4 @@ def get_shared_context(agent: Agent, limit: int = 24, user_id: str | None = None
 +    # Accepted residual risk (NURN-132): bots keep one memory for the whole team, so other people's chats stay in a shared reply's context.
 +    # Only the name, links, emails and ids are removed; names and free text inside a message can still reach it, and the note below is the rest of the guard.
 +    # To close it, drop these lines when readers() is set, or hold every shared answer for the asker's approval.
 +    anon = {r.user_id for r in rows} - set(readers()) if readers() else set()  # in a chat shared with someone, other people's chats stay knowledge without a name
-@@ -476,2 +536,2 @@ def get_shared_context(agent: Agent, limit: int = 24, user_id: str | None = None
+@@ -476,2 +537,2 @@ def get_shared_context(agent: Agent, limit: int = 24, user_id: str | None = None
 -        who = names.get(r.user_id, "Someone")
 -        text = " ".join((r.content or "").split())[:400]
 +        who = "A teammate" if r.user_id in anon else names.get(r.user_id, "Someone")
 +        text = scrub(r.content or "", 300) if r.user_id in anon else " ".join((r.content or "").split())[:400]  # a private chat's words reach a shared reply without links, emails or ids
-@@ -478,0 +539,2 @@ def get_shared_context(agent: Agent, limit: int = 24, user_id: str | None = None
+@@ -478,0 +540,2 @@ def get_shared_context(agent: Agent, limit: int = 24, user_id: str | None = None
 +    if anon:
 +        lines.insert(0, "(Lines naming 'A teammate' are private chats. Use them as background. Do not quote them or say who said what.)")
-@@ -479,0 +542,19 @@ def get_shared_context(agent: Agent, limit: int = 24, user_id: str | None = None
+@@ -479,0 +543,19 @@ def get_shared_context(agent: Agent, limit: int = 24, user_id: str | None = None
 +
 +
 +class Doc(Base):
