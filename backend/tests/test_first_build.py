@@ -675,3 +675,9 @@ def test_a_new_project_gets_the_starter_and_muse_is_told_so_but_a_repository_doe
     run(fb.build("", "user_b", PLAN, "Lumen", "", quiet))
     (b,) = box.made
     assert b.starter and "src/main.js" in b.fs and "Lumen" in b.fs["index.html"] and "starter app is already running" in b.prompts[0]
+
+
+def test_order_routines_brief_names_the_owners_and_forbids_sending():
+    plan = "## Who owns what\n- Edith: prices and QA\n- Master: releases\n"
+    text = fb.order_routines_brief("Sunday Bakes", plan)
+    assert "- Edith: prices and QA" in text and "add_routine" in text and "Allow" in text

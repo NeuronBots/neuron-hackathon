@@ -409,6 +409,21 @@ def _offer_publish(project_id: str, user_id: str, agent_id: str, name: str, save
         reset_usage_user(acting)
 
 
+def order_routines_brief(name: str, plan: str) -> str:
+    """What the Master is told after the first build: propose what each bot does whenever an order comes in from the website."""
+    from services import ownership
+    owns = "\n".join(f"- {who}: {what}" for who, what in ownership.parse(plan).items()) or "- (the plan does not say: use each teammate's field)"
+    return (
+        f"The first version of {name} is built. When its site is published, visitors send orders and questions from the page, and each one reaches you. "
+        "Set up what happens every time one comes in, as routines.\n\n"
+        f"Who owns what, from the plan:\n{owns}\n\n"
+        "Call add_routine once for each bot whose part it is (yourself, and a teammate with `bot` set to their name), at most four in all. Each instruction is a short list of steps for that bot, "
+        "using its own tools and only what it owns, for example: read the order, check the items and prices against the site, add a board task for the owner, draft the reply for them to send. "
+        "Nothing is sent outside the app by a routine: anything that leaves it still waits for the person's Allow. They allow or decline each routine with a card, in one go. "
+        "Then say in two lines what you proposed. The message of the visitor is given to each routine as data when it runs.\n"
+    )
+
+
 def handover(name: str, result: dict | None, failure: str, saved: dict | None, repo: str) -> str:
     """What the Master is told when the build ends, so that it tells the person in its own words, with the exact commands."""
     from services.review_render import untrusted_block
@@ -504,6 +519,8 @@ async def _build_and_tell(project_id: str, user_id: str, info: dict, pill: int) 
 
     _start_kickoff(agent_id, "Neuron", project_id, handover(name, result, failure, saved, repo), user_id, no_tools=True)
     _refresh_goals(project_id, user_id)  # and again with what came of it
+    if result is not None and "index.html" in result["files"]:  # a site that takes orders: the team gets its first routines for them
+        _start_kickoff(agent_id, "Neuron", project_id, order_routines_brief(name, info["plan"]), user_id)
 
 
 async def start_for_bot(agent_id: str, plan: str = "") -> str:

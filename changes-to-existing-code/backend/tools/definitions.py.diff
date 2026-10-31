@@ -1,11 +1,11 @@
 diff --git a/backend/tools/definitions.py b/backend/tools/definitions.py
-index d2ee6ba..add59bc 100644
+index d2ee6ba..f8c77d5 100644
 --- a/backend/tools/definitions.py
 +++ b/backend/tools/definitions.py
 @@ -82,0 +83,2 @@ BOARD_TOOL_DEFS = [
 +                "options": {"type": "array", "items": {"type": "string"}, "description": "Two to four short answers they can pick with one tap, your recommendation first. Leave out for an open question."},
 +                "to": {"type": "string", "description": "A person from the project's People list whose field covers this decision. They are notified and named on the card. Leave out when no one's field fits."},
-@@ -266,0 +269,80 @@ DOC_TOOL_DEFS = [
+@@ -266,0 +269,99 @@ DOC_TOOL_DEFS = [
 +WIKI_TOOL = {
 +    "name": "build_wiki",
 +    "description": (
@@ -57,6 +57,25 @@ index d2ee6ba..add59bc 100644
 +        "input_schema": {"type": "object", "properties": {"path": {"type": "string", "description": "The file, relative to the site root, e.g. index.html"}, "content": {"type": "string", "description": "The complete new content of the file"}}, "required": ["path", "content"]},
 +    },
 +]
++
++
++ROUTINE_TOOL = {
++    "name": "add_routine",
++    "description": (
++        "Propose a standing routine: what you (or a teammate) should do every time a visitor sends an order or message from the project's website. "
++        "Write the instruction as steps for that bot, for example check the items and prices, add a board task, ask a teammate, draft the reply for the owner. "
++        "It runs by itself on every order afterwards, so the person must allow it first: a card asks them. Propose one per bot whose part it is, and only what that bot owns."
++    ),
++    "input_schema": {
++        "type": "object",
++        "properties": {
++            "title": {"type": "string", "description": "Short name, e.g. Check a new order"},
++            "instruction": {"type": "string", "description": "Steps the bot follows each time, in order, using its tools. The visitor's message is given to it with the routine."},
++            "bot": {"type": "string", "description": "A teammate's name, to give the routine to them. Leave out for your own."},
++        },
++        "required": ["title", "instruction"],
++    },
++}
 +
 +
 +SESSION_TOOLS = [
