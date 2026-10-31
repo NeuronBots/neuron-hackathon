@@ -141,6 +141,12 @@ def latest_plan(project_id: str, user_id: str) -> str:
         db.close()
 
 
+def _refresh_goals(project_id: str, user_id: str) -> None:
+    """In the background: the build changes what each bot is working towards. Never raises."""
+    from services import goals
+    runs.spawn(asyncio.to_thread(goals.refresh_project, project_id, user_id))
+
+
 async def start(project_id: str, user_id: str, plan: str, row_id: int | None = None, agent_id: str = "") -> None:
     """The button was clicked, or a bot was asked to build. Checks what can be checked at once, puts the pill in the chat (the bot's, when one was asked),
     and builds in the background. BuildError: tell the person."""
@@ -158,6 +164,7 @@ async def start(project_id: str, user_id: str, plan: str, row_id: int | None = N
     task.add_done_callback(lambda t, k=project_id: _running.get(k) is t and _running.pop(k, None))
     from services import next_phase
     await next_phase.begin(project_id, user_id, agent_id, info["name"], info["goal"], plan)  # the team plans the next phase while this builds
+    _refresh_goals(project_id, user_id)  # every bot's goal now includes the build under way
 
 
 # ── the build ────────────────────────────────────────────────────────────
@@ -452,6 +459,7 @@ async def _build_and_tell(project_id: str, user_id: str, info: dict, pill: int) 
         await asyncio.to_thread(chat_rows.write_row, agent_id, user_id, chat_rows.card("build", project=name, status="failed", reason=failure[:300]), pill)
 
     _start_kickoff(agent_id, "Neuron", project_id, handover(name, result, failure, saved, repo), user_id, no_tools=True)
+    _refresh_goals(project_id, user_id)  # and again with what came of it
 
 
 async def start_for_bot(agent_id: str, plan: str = "") -> str:

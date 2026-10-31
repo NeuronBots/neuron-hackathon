@@ -12,6 +12,11 @@ from core.usage import reset_usage_user, set_usage_user
 from services import build_prompt as bp, chat_rows, first_build as fb
 from services import code_review as cr
 
+
+@pytest.fixture(autouse=True)
+def _no_goal_refresh(monkeypatch):
+    monkeypatch.setattr(fb, "_refresh_goals", lambda *a: None)  # it builds goals with the model, in a thread, on the real database
+
 GUIDE = "# Run guide\n\n## Prerequisites\nPython 3.12\n\n## Run\n```sh\npip install -r requirements.txt\npython app.py\n```\nOpen http://127.0.0.1:5000. " + "x" * 120
 PLAN = "# First build plan: Lumen\n\nBuild a thing."
 

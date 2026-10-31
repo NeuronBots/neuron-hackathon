@@ -1,5 +1,5 @@
 diff --git a/backend/services/goals.py b/backend/services/goals.py
-index 8a1111c..05ce5c4 100644
+index 8a1111c..57e8656 100644
 --- a/backend/services/goals.py
 +++ b/backend/services/goals.py
 @@ -14,0 +15 @@ from core.models import Agent, Message, Project, Task
@@ -7,3 +7,60 @@ index 8a1111c..05ce5c4 100644
 @@ -16 +17 @@ from core.models import Agent, Message, Project, Task
 -GOALS_MODEL = os.getenv("GOALS_MODEL", "claude-sonnet-5-5").strip()
 +GOALS_MODEL = os.getenv("GOALS_MODEL", TIERS["WORKHORSE"]).strip()
+@@ -72,0 +74,19 @@ def _team_record(agent: Agent, user_id: str, db: Session) -> str:
++_PROJECT = (
++    "\nThis teammate works inside the project described in the record, so its ONE goal is its part of that project's goal, not a goal "
++    "of its own. Name the project's app or deliverable in the goal where it fits. If a first build exists or is under way (see what the "
++    "team produced), count it: a finished plan, build or report is a milestone in 'from', an unfinished build is where 'now' stands, "
++    "and the next checkpoints are what the project still needs from this teammate's field."
++)
++
++
++def _project_block(agent: Agent, db: Session) -> str:
++    """The project this bot is part of and what the team has produced for it: the plan, the build, the reports."""
++    from core.models import DocumentRecord
++    project = db.get(Project, agent.project_id)
++    made = db.query(DocumentRecord.title, DocumentRecord.filename).filter(DocumentRecord.project_id == agent.project_id).order_by(DocumentRecord.created_at.desc()).limit(10).all()
++    lines = [f"Project: {project.name}. Stated goal: {(project.goal or '(none)')[:600]}. Summary: {(project.summary or '')[:800]}"]
++    if made:
++        lines.append("What the team produced so far, newest first:\n" + "\n".join(f"- {t or f}" for t, f in made))
++    return "\n".join(lines)
++
++
+@@ -74 +94 @@ def _record(agent: Agent, user_id: str, db: Session) -> str:
+-    parts = [_team_record(agent, user_id, db)] if agent.is_master == "true" else []
++    parts = [_team_record(agent, user_id, db)] if agent.is_master == "true" else [_project_block(agent, db)]
+@@ -148 +168 @@ def build(agent: Agent, user_id: str, db: Session) -> dict:
+-    raw = memory_text(complete(GOALS_MODEL, _SYSTEM + (_MASTER if agent.is_master == "true" else ""), _record(agent, user_id, db), max_tokens=4096))
++    raw = memory_text(complete(GOALS_MODEL, _SYSTEM + (_MASTER if agent.is_master == "true" else _PROJECT), _record(agent, user_id, db), max_tokens=4096))
+@@ -167,2 +187,25 @@ _running: set[str] = set()
+-def refresh_if_stale(agent_id: str, user_id: str) -> None:
+-    """After a chat turn: rebuild this bot's goals when they are missing or over 6 hours old. Never raises; blocking, so run it in a thread."""
++def refresh_project(project_id: str, user_id: str) -> None:
++    """The project changed shape (a build started or ended): rebuild every bot's goals now so each one carries its part of it. Never raises; blocking."""
++    from concurrent.futures import ThreadPoolExecutor
++    from core.database import SessionLocal
++    from core.usage import reset_usage_user, set_usage_user
++
++    db = SessionLocal()
++    try:
++        ids = [a for (a,) in db.query(Agent.id).filter(Agent.project_id == project_id)]
++    finally:
++        db.close()
++
++    def one(agent_id: str) -> None:
++        token = set_usage_user(user_id, project_id)
++        try:
++            refresh_if_stale(agent_id, user_id, force=True)
++        finally:
++            reset_usage_user(token)
++
++    with ThreadPoolExecutor(max_workers=4) as pool:
++        list(pool.map(one, ids))
++
++
++def refresh_if_stale(agent_id: str, user_id: str, force: bool = False) -> None:
++    """After a chat turn: rebuild this bot's goals when they are missing or over 6 hours old (or at once with force). Never raises; blocking, so run it in a thread."""
+@@ -186 +229 @@ def refresh_if_stale(agent_id: str, user_id: str) -> None:
+-        if built is None or datetime.utcnow() - built >= STALE_AFTER:
++        if force or built is None or datetime.utcnow() - built >= STALE_AFTER:
