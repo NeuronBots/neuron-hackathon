@@ -1,9 +1,46 @@
 diff --git a/backend/agents/memory.py b/backend/agents/memory.py
-index 22952c3..db5e9b8 100644
+index 22952c3..bece432 100644
 --- a/backend/agents/memory.py
 +++ b/backend/agents/memory.py
 @@ -5,0 +6 @@ from prompts.identity import VENDOR_IDENTITY
 +from core.tiers import TIERS
-@@ -48 +49 @@ def form_memory(agent: Agent, material: str, reason: str) -> str:
+@@ -10,2 +11,2 @@ _CORE_MEMORY_LIMIT = 2000  # characters; the oldest facts drop first
+-def add_core_memory(agent: Agent, fact: str) -> None:
+-    """Append one fact to the bot's core memory, skipping repeats and keeping the newest."""
++def with_fact(text: str, fact: str) -> str | None:
++    """`text` with one more fact (repeats skipped, the newest kept), or None when there is nothing to add."""
+@@ -14,2 +15,2 @@ def add_core_memory(agent: Agent, fact: str) -> None:
+-        return
+-    lines = [ln for ln in (agent.core_memory or "").split("\n") if ln.strip()]
++        return None
++    lines = [ln for ln in (text or "").split("\n") if ln.strip()]
+@@ -17 +18 @@ def add_core_memory(agent: Agent, fact: str) -> None:
+-        return
++        return None
+@@ -21 +22,18 @@ def add_core_memory(agent: Agent, fact: str) -> None:
+-    agent.core_memory = "\n".join(lines)
++    return "\n".join(lines)
++
++
++def add_core_memory(agent: Agent, fact: str, source: str = "a person's answer") -> None:
++    """Append one fact to the bot's core memory at once (something a person did: it is already approved)."""
++    from agents.versions import set_prod
++    if (text := with_fact(agent.core_memory, fact)) is not None:
++        set_prod(agent, "core_memory", text, source)
++
++
++def propose_core_memory(agent: Agent, fact: str) -> bool:
++    """The bot's own wish to remember something: held as a draft until a person promotes it. False when it adds nothing."""
++    from agents.versions import draft_of, stage
++    draft = draft_of(agent, "core_memory")
++    if (text := with_fact(draft.content if draft else agent.core_memory, fact)) is None:
++        return False
++    stage(agent, "core_memory", text, "the bot's own [[REMEMBER]]")
++    return True
+@@ -48 +66 @@ def form_memory(agent: Agent, material: str, reason: str) -> str:
 -    model = agent.model or "claude-opus-5-5"
 +    model = TIERS["WORKHORSE"]
+@@ -94 +112,2 @@ def flush_memory(agent: Agent) -> None:
+-    agent.memory = formed
++    from agents.versions import set_prod
++    set_prod(agent, "memory", formed, "older turns folded in")  # notes are promoted at once

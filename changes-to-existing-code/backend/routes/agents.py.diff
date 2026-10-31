@@ -1,5 +1,5 @@
 diff --git a/backend/routes/agents.py b/backend/routes/agents.py
-index 394b967..c7bdbe3 100644
+index 394b967..e56ff78 100644
 --- a/backend/routes/agents.py
 +++ b/backend/routes/agents.py
 @@ -6 +6 @@ from typing import Literal
@@ -166,14 +166,51 @@ index 394b967..c7bdbe3 100644
 +def project_documents(user = Depends(get_current_user_optional), project: Project = Depends(get_project), db: Session = Depends(get_db)):
 @@ -200,0 +294 @@ def project_documents(project: Project = Depends(get_project), db: Session = Dep
 +    rows = [r for r in rows if _can_see_doc_record(r, user, project.id, db)]
-@@ -219 +313 @@ def build_goals(agent_id: str, user: User = Depends(get_current_user), project:
+@@ -217,0 +312,32 @@ def build_goals(agent_id: str, user: User = Depends(get_current_user), project:
++def _version_json(v) -> dict:
++    return {"id": v.id, "kind": v.kind, "content": v.content, "is_prod": v.is_prod, "is_draft": v.is_draft, "source": v.source, "created_at": v.created_at.isoformat() if v.created_at else None}
++
++
++@router.get("/api/agents/{agent_id}/memory-versions")
++def memory_versions(agent_id: str, project: Project = Depends(get_project), db: Session = Depends(get_db)):
++    """Each kind's pending draft (if any) and its saved versions, newest first."""
++    from agents.versions import KINDS
++    from core.models import MemoryVersion
++    agent_in_project(agent_id, project, db)
++    rows = db.query(MemoryVersion).filter(MemoryVersion.agent_id == agent_id).order_by(MemoryVersion.id.desc()).all()
++    return {k: [_version_json(v) for v in rows if v.kind == k] for k in KINDS}
++
++
++@router.post("/api/agents/{agent_id}/memory-versions/{version_id}/{action}", status_code=204)
++def memory_version_action(agent_id: str, version_id: int, action: str, project: Project = Depends(get_project), db: Session = Depends(get_db)):
++    """promote: approve a draft or roll back to an older version. reject: drop a draft."""
++    from agents import versions
++    from core.models import MemoryVersion
++    agent = agent_in_project(agent_id, project, db)
++    version = db.get(MemoryVersion, version_id)
++    if version is None or version.agent_id != agent_id or action not in ("promote", "reject"):
++        raise HTTPException(status_code=404, detail="Version not found")
++    if action == "reject":
++        if not version.is_draft:
++            raise HTTPException(status_code=409, detail="Only a pending change can be rejected.")
++        versions.reject(version)
++    else:
++        versions.promote(agent, version)
++    db.commit()
++
++
+@@ -219 +345 @@ def build_goals(agent_id: str, user: User = Depends(get_current_user), project:
 -def build_memory(agent_id: str, body: MemoryBuild, project: Project = Depends(get_project), db: Session = Depends(get_db)):
 +def build_memory(agent_id: str, body: MemoryBuild, user: User = Depends(get_current_user), project: Project = Depends(get_project), db: Session = Depends(get_db)):
-@@ -221,0 +316,4 @@ def build_memory(agent_id: str, body: MemoryBuild, project: Project = Depends(ge
+@@ -221,0 +348,4 @@ def build_memory(agent_id: str, body: MemoryBuild, project: Project = Depends(ge
 +    blocked = over_limit(user.id, project.id)
 +    if blocked:
 +        raise HTTPException(status_code=429, detail=blocked)
 +    token = set_usage_user(user.id, project.id)
-@@ -225,0 +324,2 @@ def build_memory(agent_id: str, body: MemoryBuild, project: Project = Depends(ge
+@@ -225,0 +356,2 @@ def build_memory(agent_id: str, body: MemoryBuild, project: Project = Depends(ge
 +    finally:
 +        reset_usage_user(token)
+@@ -228 +360,2 @@ def build_memory(agent_id: str, body: MemoryBuild, project: Project = Depends(ge
+-    agent.memory = formed
++    from agents.versions import set_prod
++    set_prod(agent, "memory", formed, "notes a person added")

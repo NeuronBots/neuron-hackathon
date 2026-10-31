@@ -1,5 +1,5 @@
 diff --git a/src/styles.css b/src/styles.css
-index 764ceee..4ca2211 100644
+index 764ceee..40d7768 100644
 --- a/src/styles.css
 +++ b/src/styles.css
 @@ -276 +276 @@ button:disabled {
@@ -243,7 +243,7 @@ index 764ceee..4ca2211 100644
 +.src-spinner { width: 14px; height: 14px; flex: none; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: src-spin 0.9s linear infinite; }
 +@keyframes src-spin { to { transform: rotate(360deg); } }
 +@media (prefers-reduced-motion: reduce) { .src-spinner { animation-duration: 3s; } }
-@@ -8261,0 +8439,632 @@ button.landing-plan-cta {
+@@ -8261,0 +8439,635 @@ button.landing-plan-cta {
 +
 +
 +/* Document Store & List Panel (NURN-152) */
@@ -876,3 +876,6 @@ index 764ceee..4ca2211 100644
 +.setup-person { display: flex; gap: 8px; }
 +.setup-person input { flex: 1; min-width: 0; }
 +.setup-people > .btn { align-self: flex-start; }
++.memory-draft { border-left: 3px solid #e0a030; padding-left: 10px; }
++.memory-history { margin-top: 12px; }
++.memory-version { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; padding: 8px 0; border-top: 1px solid var(--line); font-size: 0.85rem; }

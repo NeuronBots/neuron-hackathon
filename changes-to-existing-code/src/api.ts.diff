@@ -1,5 +1,5 @@
 diff --git a/src/api.ts b/src/api.ts
-index c214349..54aed2c 100644
+index c214349..3adfa26 100644
 --- a/src/api.ts
 +++ b/src/api.ts
 @@ -56 +56 @@ export async function fetchAgents(): Promise<
@@ -24,21 +24,31 @@ index c214349..54aed2c 100644
 @@ -102 +100 @@ export async function updateAgent(
 -  return handleResponse(res) as Promise<{ id: string; name: string; system_prompt: string; model: string; parent_id: string | null; is_master: boolean; field: string; label: string; color: string; peer_partner_ids?: string[]; memory?: string; created_at: string; last_active?: number | null }>
 +  return handleResponse(res) as Promise<{ id: string; name: string; system_prompt: string; parent_id: string | null; is_master: boolean; field: string; label: string; color: string; peer_partner_ids?: string[]; memory?: string; created_at: string; last_active?: number | null }>
-@@ -169 +167 @@ export async function clearAgentHistory(agentId: string): Promise<void> {
+@@ -149,0 +148,9 @@ export async function buildMemory(agentId: string, text: string): Promise<string
++export async function fetchMemoryVersions(agentId: string): Promise<Record<"core_memory" | "memory", import("./types").MemoryVersion[]>> {
++  return handleResponse(await apiFetch(`/agents/${encodeURIComponent(agentId)}/memory-versions`)) as Promise<Record<"core_memory" | "memory", import("./types").MemoryVersion[]>>
++}
++
++/** promote approves a pending change or rolls back to an older version; reject drops a pending change. */
++export async function actOnMemoryVersion(agentId: string, versionId: number, action: "promote" | "reject"): Promise<void> {
++  await handleResponse(await apiFetch(`/agents/${encodeURIComponent(agentId)}/memory-versions/${versionId}/${action}`, { method: "POST" }))
++}
++
+@@ -169 +176 @@ export async function clearAgentHistory(agentId: string): Promise<void> {
 -type VoiceSession = { signed_url: string; prompt: string; first_message: string; voice_id: string; llm: string; voice_token: string }
 +type VoiceSession = { signed_url: string; prompt: string; first_message: string; voice_id: string; llm: string; voice_token: string; call_id: string }
-@@ -184 +182 @@ const CALL_LINES_MAX = 200
+@@ -184 +191 @@ const CALL_LINES_MAX = 200
 -export async function saveVoiceCall(agentId: string, secs: number, lines: VoiceLine[]): Promise<void> {
 +export async function saveVoiceCall(agentId: string, secs: number, lines: VoiceLine[], callId: string): Promise<void> {
-@@ -187 +185 @@ export async function saveVoiceCall(agentId: string, secs: number, lines: VoiceL
+@@ -187 +194 @@ export async function saveVoiceCall(agentId: string, secs: number, lines: VoiceL
 -  const body = JSON.stringify({ secs, lines: kept })
 +  const body = JSON.stringify({ secs, lines: kept, call_id: callId })
-@@ -203,0 +202,4 @@ export async function fetchTasks(params?: { status?: string; agentId?: string })
+@@ -203,0 +211,4 @@ export async function fetchTasks(params?: { status?: string; agentId?: string })
 +export async function fetchTask(taskId: string): Promise<import("./types").TaskRead> {
 +  return handleResponse(await apiFetch(`/tasks/${encodeURIComponent(taskId)}`)) as Promise<import("./types").TaskRead>
 +}
 +
-@@ -287,2 +289,8 @@ export async function fetchDocumentText(path: string): Promise<string> {
+@@ -287,2 +298,8 @@ export async function fetchDocumentText(path: string): Promise<string> {
 -export async function saveDocument(path: string, html: string): Promise<void> {
 -  await handleResponse(await apiFetch(path.replace(/^\/api/, ""), { method: "PUT", body: html, headers: { "Content-Type": "text/html; charset=utf-8" } }))
 +export async function fetchSheets(path: string): Promise<Array<{ name: string; rows: string[][] }>> {
@@ -49,7 +59,7 @@ index c214349..54aed2c 100644
 +  const isHtml = path.endsWith(".html")
 +  const contentType = isHtml ? "text/html; charset=utf-8" : "text/markdown; charset=utf-8"
 +  await handleResponse(await apiFetch(path.replace(/^\/api/, ""), { method: "PUT", body: content, headers: { "Content-Type": contentType } }))
-@@ -315,0 +324,12 @@ export async function isChatRunning(agentId: string): Promise<boolean> {
+@@ -315,0 +333,12 @@ export async function isChatRunning(agentId: string): Promise<boolean> {
 +// "Allow in this session" for a bot's outward actions (Jira, mail, GitHub): remembered for this browser tab only, per bot.
 +const OUTWARD_KEY = "neuron.allowOutward."
 +export function allowedThisSession(agentId: string): boolean {
@@ -62,24 +72,24 @@ index c214349..54aed2c 100644
 +  try { Object.keys(sessionStorage).filter((k) => k.startsWith(OUTWARD_KEY)).forEach((k) => sessionStorage.removeItem(k)) } catch { /* nothing stored */ }
 +}
 +
-@@ -324 +344 @@ export async function chatStream(
+@@ -324 +353 @@ export async function chatStream(
 -  body: { content: string; model_override?: string; allow_spawn: boolean; voice?: boolean; voice_token?: string; attachments?: Array<{ id: string; name: string }> } | null,
 +  body: { content: string; allow_spawn: boolean; voice?: boolean; voice_token?: string; attachments?: Array<{ id: string; name: string }> } | null,
-@@ -327 +347 @@ export async function chatStream(
+@@ -327 +356 @@ export async function chatStream(
 -  onSpawn: (agents: Array<{ id: string; name: string; model: string; identity: string }>) => void,
 +  onSpawn: (agents: Array<{ id: string; name: string; identity: string }>) => void,
-@@ -363 +383 @@ export async function chatStream(
+@@ -363 +392 @@ export async function chatStream(
 -        resume ? { signal } : { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), signal },
 +        resume ? { signal } : { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...body, outward_ok: allowedThisSession(agentId) }), signal },
-@@ -426 +446 @@ export async function chatStream(
+@@ -426 +455 @@ export async function chatStream(
 -              agents?: Array<{ id: string; name: string; model: string; identity: string }>
 +              agents?: Array<{ id: string; name: string; identity: string }>
-@@ -653,0 +674 @@ export async function logoutAccount(): Promise<void> {
+@@ -653,0 +683 @@ export async function logoutAccount(): Promise<void> {
 +  forgetSessionAllowances()
-@@ -678,0 +700,2 @@ export async function createProject(body: {
+@@ -678,0 +709,2 @@ export async function createProject(body: {
 +  start_plan?: boolean // the team starts on a plan for the first build (the server's default is yes)
 +  new_repo?: { name: string; owner?: string; description?: string; private?: boolean } // created with the project, not before
-@@ -697,0 +721,35 @@ export async function searchRepos(query: string): Promise<RepoHit[]> {
+@@ -697,0 +730,35 @@ export async function searchRepos(query: string): Promise<RepoHit[]> {
 +// The person approves the project's first-build plan: Muse builds it in a sandbox, in the background, and the chat shows how it goes.
 +export async function startBuild(projectId: string, plan: string, row?: number): Promise<void> {
 +  const res = await apiFetch(`/projects/${encodeURIComponent(projectId)}/build`, {
@@ -115,7 +125,7 @@ index c214349..54aed2c 100644
 +  return handleResponse(res) as Promise<{ full_name: string; private: boolean; description: string }>
 +}
 +
-@@ -757,0 +816,20 @@ export async function linkRepo(projectId: string, repo: string): Promise<string>
+@@ -757,0 +825,20 @@ export async function linkRepo(projectId: string, repo: string): Promise<string>
 +export async function setCodingBot(projectId: string, agentId: string): Promise<string> {
 +  const res = await apiFetch(`/projects/${encodeURIComponent(projectId)}/coding-bot`, {
 +    method: "PUT",
@@ -136,24 +146,24 @@ index c214349..54aed2c 100644
 +  return data.pr_reviews
 +}
 +
-@@ -770 +848 @@ export async function fetchMembers(projectId: string): Promise<ProjectMember[]>
+@@ -770 +857 @@ export async function fetchMembers(projectId: string): Promise<ProjectMember[]>
 -export async function addMember(projectId: string, email: string): Promise<ProjectMember> {
 +export async function addMember(projectId: string, email: string, field = ""): Promise<ProjectMember> {
-@@ -774 +852 @@ export async function addMember(projectId: string, email: string): Promise<Proje
+@@ -774 +861 @@ export async function addMember(projectId: string, email: string): Promise<Proje
 -    body: JSON.stringify({ email }),
 +    body: JSON.stringify({ email, field }),
-@@ -784 +862 @@ export async function deleteInvite(projectId: string, email: string): Promise<vo
+@@ -784 +871 @@ export async function deleteInvite(projectId: string, email: string): Promise<vo
 -export type DirectMessage = { id: number; from: string; to: string; content: string; at: string | null; reactions?: Record<string, string>; reply_to?: number | null }
 +export type DirectMessage = { id: number; from: string; to: string; content: string; at: string | null; reactions?: Record<string, string>; reply_to?: number | null; withheld?: string[]; share?: "" | "pending" | "sharing" | "shared" | "declined" | "drafted" | "draft" | "sent" | "dropped" | "proceed" | "running" | "done" | "cancelled" | "private"; action?: boolean }
-@@ -810 +888,3 @@ export async function sendDirectTyping(personId: string, typing = true): Promise
+@@ -810 +897,3 @@ export async function sendDirectTyping(personId: string, typing = true): Promise
 -export async function fetchActiveTyping(): Promise<{ people: string[]; agents: string[] }> {
 +// agents: bots typing in a people chat, or working on their own (a turn the system started, one from another tab, a talk with a teammate).
 +// status: for those working on their own, what each is doing right now.
 +export async function fetchActiveTyping(): Promise<{ people: string[]; agents: string[]; status?: Record<string, string> }> {
-@@ -812 +892 @@ export async function fetchActiveTyping(): Promise<{ people: string[]; agents: s
+@@ -812 +901 @@ export async function fetchActiveTyping(): Promise<{ people: string[]; agents: s
 -  return handleResponse(res) as Promise<{ people: string[]; agents: string[] }>
 +  return handleResponse(res) as Promise<{ people: string[]; agents: string[]; status?: Record<string, string> }>
-@@ -823,0 +904,27 @@ export async function sendDirect(personId: string, content: string, replyTo?: nu
+@@ -823,0 +913,27 @@ export async function sendDirect(personId: string, content: string, replyTo?: nu
 +export async function shareDirect(personId: string, messageId: number, share: boolean): Promise<DirectMessage> {
 +  const res = await apiFetch(`/direct/${encodeURIComponent(personId)}/${messageId}/share`, {
 +    method: "POST",
@@ -181,9 +191,9 @@ index c214349..54aed2c 100644
 +  return handleResponse(res) as Promise<DirectMessage>
 +}
 +
-@@ -932 +1038,0 @@ export type SpecProposal = {
+@@ -932 +1047,0 @@ export type SpecProposal = {
 -  model: string
-@@ -969,0 +1076,110 @@ export async function savePushSubscription(subscription: PushSubscriptionJSON):
+@@ -969,0 +1085,110 @@ export async function savePushSubscription(subscription: PushSubscriptionJSON):
 +
 +
 +export interface DocItem {

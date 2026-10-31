@@ -1,0 +1,14 @@
+diff --git a/backend/markers/remember.py b/backend/markers/remember.py
+index a364e47..7b58cdc 100644
+--- a/backend/markers/remember.py
++++ b/backend/markers/remember.py
+@@ -6 +6 @@ from sqlalchemy.orm import Session
+-from agents.memory import add_core_memory
++from agents.memory import propose_core_memory
+@@ -28,2 +28,4 @@ def apply_remember_markers(text: str, agent_id: str, db: Session) -> None:
+-    for fact in facts if owner is not None else []:
+-        add_core_memory(owner, fact)
++    staged = [propose_core_memory(owner, fact) for fact in facts] if owner is not None else []
++    if any(staged):  # the change waits for a person, so tell them
++        from tools.outbox import notify_pending
++        notify_pending(owner.id, "wants to add to its core memory", db)

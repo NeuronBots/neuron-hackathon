@@ -1,9 +1,69 @@
 diff --git a/src/BotProfile.tsx b/src/BotProfile.tsx
-index e341aac..e7b3419 100644
+index e341aac..fa4411f 100644
 --- a/src/BotProfile.tsx
 +++ b/src/BotProfile.tsx
-@@ -11 +11 @@ type Props = {
+@@ -2,2 +2,3 @@ import { avatarUri } from "./Avatar"
+-import { useState } from "react"
+-import type { AgentRecord } from "./types"
++import { useEffect, useState } from "react"
++import { actOnMemoryVersion, fetchMemoryVersions } from "./api"
++import type { AgentRecord, MemoryVersion } from "./types"
+@@ -11 +12 @@ type Props = {
 -  onEditSave: (draft: { id: string; name: string; system_prompt: string; model: string; field: string; label: string }) => Promise<boolean>
 +  onEditSave: (draft: { id: string; name: string; system_prompt: string; field: string; label: string }) => Promise<boolean>
-@@ -60 +59,0 @@ export function BotProfile({ agent, onClose, onEditSave, onDeleteAgent, onBuildM
+@@ -25 +26,18 @@ export function BotProfile({ agent, onClose, onEditSave, onDeleteAgent, onBuildM
+-  const hasMemory = Boolean((agent.memory && agent.memory.trim()) || (agent.core_memory && agent.core_memory.trim()))
++  const [versions, setVersions] = useState<Record<"core_memory" | "memory", MemoryVersion[]> | null>(null)
++  const [versionError, setVersionError] = useState("")
++  const loadVersions = () => fetchMemoryVersions(agent.id).then(setVersions).catch(() => {})
++  useEffect(() => { void loadVersions() }, [agent.id, agent.core_memory, agent.memory]) // eslint-disable-line react-hooks/exhaustive-deps
++  const prodCore = versions?.core_memory.find((v) => v.is_prod)
++  const draft = versions?.core_memory.find((v) => v.is_draft)
++  const history = (versions?.core_memory ?? []).filter((v) => !v.is_draft && !v.is_prod)
++  const coreMemory = prodCore ? prodCore.content : agent.core_memory // right after a promote the page's copy is a moment behind
++  const hasMemory = Boolean((agent.memory && agent.memory.trim()) || (coreMemory && coreMemory.trim()) || draft)
++  async function act(id: number, action: "promote" | "reject") {
++    setVersionError("")
++    try {
++      await actOnMemoryVersion(agent.id, id, action)
++      await loadVersions()
++    } catch (err) {
++      setVersionError(err instanceof Error ? err.message : "Could not do that")
++    }
++  }
+@@ -60 +77,0 @@ export function BotProfile({ agent, onClose, onEditSave, onDeleteAgent, onBuildM
 -      model: agent.model,
+@@ -248 +265 @@ export function BotProfile({ agent, onClose, onEditSave, onDeleteAgent, onBuildM
+-            {agent.core_memory?.trim() && (
++            {coreMemory?.trim() && (
+@@ -251 +268,12 @@ export function BotProfile({ agent, onClose, onEditSave, onDeleteAgent, onBuildM
+-                <p className="profile-identity memory-core">{agent.core_memory}</p>
++                <p className="profile-identity memory-core">{coreMemory}</p>
++              </>
++            )}
++            {draft && (
++              <>
++                <h3 className="memory-heading">Waiting for you</h3>
++                <p className="hint">{agent.name} wants its core memory to read:</p>
++                <p className="profile-identity memory-core memory-draft">{draft.content}</p>
++                <div className="profile-footer">
++                  <button className="btn btn-primary btn-sm" type="button" onClick={() => void act(draft.id, "promote")}>Promote</button>
++                  <button className="btn btn-quiet btn-sm" type="button" onClick={() => void act(draft.id, "reject")}>Reject</button>
++                </div>
+@@ -253,0 +282,13 @@ export function BotProfile({ agent, onClose, onEditSave, onDeleteAgent, onBuildM
++            {versionError && <p className="project-error">{versionError}</p>}
++            {history.length > 0 && (
++              <details className="memory-history">
++                <summary>Earlier versions of core memory ({history.length})</summary>
++                {history.map((v) => (
++                  <div className="memory-version" key={v.id}>
++                    <span>{v.created_at ? new Date(v.created_at).toLocaleString() : ""} · {v.source}</span>
++                    <p className="profile-identity">{v.content}</p>
++                    <button className="btn btn-quiet btn-sm" type="button" onClick={() => void act(v.id, "promote")}>Roll back to this</button>
++                  </div>
++                ))}
++              </details>
++            )}
+@@ -256 +297 @@ export function BotProfile({ agent, onClose, onEditSave, onDeleteAgent, onBuildM
+-                {agent.core_memory?.trim() && <h3 className="memory-heading">Earlier chats</h3>}
++                {coreMemory?.trim() && <h3 className="memory-heading">Earlier chats</h3>}
