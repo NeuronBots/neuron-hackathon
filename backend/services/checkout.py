@@ -62,6 +62,37 @@ def _ask_owner(project_id: str, agent_id: str) -> None:
         db.close()
 
 
+async def turn_on(agent_id: str) -> str:
+    """The add_payments tool, after the person has allowed it: payments on for the project, and Muse adds checkout. Returns what the bot is told."""
+    from core.database import SessionLocal
+    from core.models import Agent, Project, ProjectMember
+    from core.usage import current_user
+    from services import payments, runs
+
+    user = current_user()
+    db = SessionLocal()
+    try:
+        agent = db.get(Agent, agent_id)
+        project = db.get(Project, agent.project_id) if agent else None
+        if project is None or not user:
+            return "Error: payments need a signed-in person on a project."
+        if not db.query(ProjectMember).filter(ProjectMember.project_id == project.id, ProjectMember.user_id == user, ProjectMember.role == "owner").first():
+            return "Error: only the project owner can turn on payments."
+        if project.payments_enabled:
+            return "Payments are already on for this project. If the site has no checkout yet, the owner can press \"Add checkout to my site\" in the Wallet. Do not ask them for anything else."
+        if not payments.has_build(db, project.id):
+            return "Error: there is no built site to add checkout to yet. Build the first version, then turn payments on."
+        runner = project.coding_bot_id or (db.query(Agent).filter(Agent.project_id == project.id, Agent.is_master == "true").first() or Agent()).id
+        project.payments_enabled = True
+        db.commit()
+        project_id = project.id
+    finally:
+        db.close()
+    runs.spawn(add_checkout(project_id, user, runner or agent_id))
+    return ("Payments are on. Muse is adding checkout to the site's order form in a coding session, which takes a few minutes; a card in the chat asks the person to allow publishing it when it is done. "
+            "Tell them to review the prices Muse finds in the Wallet. Do not ask for a payment page, a link or any account: Neuron makes the payment pages itself.")
+
+
 async def add_checkout(project_id: str, user_id: str, agent_id: str) -> None:
     """Never raises: it runs in the background, and the person is told in the chat what came of it. Saving and publishing still wait for their Allow."""
     from core.usage import reset_usage_user, set_usage_user
@@ -69,6 +100,9 @@ async def add_checkout(project_id: str, user_id: str, agent_id: str) -> None:
 
     acting = set_usage_user(user_id, project_id)
     try:
+        from services import chat_rows
+
+        await asyncio.to_thread(chat_rows.phase, agent_id, user_id, "payments", "Muse adds checkout to the site's order form.")
         _, name, _, archive = await asyncio.to_thread(preview._context, agent_id)
         session = preview.session_of(project_id, user_id)
         if session is None:

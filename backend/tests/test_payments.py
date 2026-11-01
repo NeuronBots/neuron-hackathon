@@ -298,3 +298,40 @@ def test_the_plan_brief_says_payments_are_neurons_so_no_provider_gets_planned():
     from services import first_plan
     text = first_plan.brief("Shop", "a shop", "", "", [("Amber", "Ops", "does ops")], "Tanay")
     assert "Payments are Neuron's" in text and "Do not plan or research a payment provider" in text
+
+
+def test_a_paid_order_tells_the_owner_in_the_masters_chat(db):
+    import json as _json
+    from core.models import Agent, Message, Payment, Project, ProjectMember, ProjectRecord, User
+    from services import payments, chat_rows
+
+    db.add_all([User(id="u", name="U", email="u@x", password_hash=""), Project(id="p", name="Shop")])
+    db.commit()
+    db.add_all([Agent(id="m", name="Master", system_prompt="", project_id="p", is_master="true"), ProjectMember(project_id="p", user_id="u", role="owner")])
+    db.add(ProjectRecord(id="r1", project_id="p", collection="orders", status="paid", data={"name": "Asha", "items": [{"name": "Candle", "qty": 2}], "total": 500}))
+    pay = Payment(id="abcdef123456", project_id="p", record_id="r1", amount=50000, platform_fee=1500, gateway_fee=1000, status="paid", paid_at=datetime(2026, 11, 1))
+    db.add(pay)
+    db.commit()
+    payments.announce(db, pay)
+    card = _json.loads(db.query(Message).filter(Message.agent_id == "m").one().content[len("[[SOURCES:"):-2])
+    assert (card["kind"], card["amount"], card["net"], card["fee"], card["who"], card["items"], card["ref"], card["payout"]) == ("payment", 50000, 47500, 2500, "Asha", ["2× Candle"], "abcdef12", "08 Nov")
+
+
+def test_the_offer_opens_once_the_first_build_is_saved_and_only_until_payments_are_on(db):
+    from core.models import DocumentRecord, Project, ProjectMember, User
+    from routes import wallet as wallet_route
+
+    db.add_all([User(id="u", name="U", email="u@x", password_hash=""), Project(id="p", name="Shop")])
+    db.commit()
+    from core.models import Agent
+
+    db.add_all([ProjectMember(project_id="p", user_id="u", role="owner"), Agent(id="m", name="Master", system_prompt="", project_id="p", is_master="true")])
+    db.commit()
+    project, user = db.get(Project, "p"), db.get(User, "u")
+    assert wallet_route.get_wallet(project, user, db)["offer"] is False  # nothing built yet
+    db.add(DocumentRecord(filename="shop-first-build-20261101-100000.zip", title="x", project_id="p", agent_id="m"))
+    db.commit()
+    assert wallet_route.get_wallet(project, user, db)["offer"] is True
+    project.payments_enabled = True
+    db.commit()
+    assert wallet_route.get_wallet(project, user, db)["offer"] is False  # already on

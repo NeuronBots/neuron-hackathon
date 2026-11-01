@@ -14,7 +14,7 @@ import logging
 import os
 import shlex
 
-from services import imagegen, review_sandbox as rs, starter
+from services import imagegen, muse_usage, review_sandbox as rs, starter
 
 log = logging.getLogger(__name__)
 
@@ -50,6 +50,9 @@ def _image():
 class BuildBox(rs.SandboxBox):
     """One build's sandbox: `load` the repository and the skills, `build` once, then read the result out."""
 
+    on_line = None  # called with what Muse prints while it works (the build card's terminal)
+    owner: str | None = None  # whose plan the tokens of this build are counted toward; None: whoever the current task is acting for
+
     def _spec(self) -> dict:
         return {"image": _image(), "timeout": LIFETIME, "memory": MEMORY_MB, "cpu": CPU, "domains": DOMAINS}
 
@@ -60,17 +63,20 @@ class BuildBox(rs.SandboxBox):
         it holds nothing of ours, reaches only the registries and the model, and is destroyed afterwards."""
         await self.sb.filesystem.write_text.aio(prompt, f"{rs.WORK}/build-prompt.txt")
         for attempt, wait in enumerate(CATALOG_WAITS, 1):
+            feed = muse_usage.Feed(self.on_line) if self.on_line else None
             try:
                 rc, out, err = await self._exec(
-                    "muse", "exec", "--prompt-file", f"{rs.WORK}/build-prompt.txt", "--workspace", rs.REPO, "--trust-workspace", "--disable-web-tools",
+                    "muse", "exec", "--json", "--prompt-file", f"{rs.WORK}/build-prompt.txt", "--workspace", rs.REPO, "--trust-workspace", "--disable-web-tools",
                     "--disable-sandbox", "--no-session-log", "--approval-mode", "never", "--reasoning-effort", self.effort, "--api-key-stdin",
-                    stdin=os.environ["META_API_KEY"] + "\n", timeout=self.timeout, workdir=rs.REPO, env=imagegen.env(),
+                    stdin=os.environ["META_API_KEY"] + "\n", timeout=self.timeout, workdir=rs.REPO, env=imagegen.env(), on_line=feed.feed if feed else None,
                 )
             except Exception as exc:
                 if "imeout" in type(exc).__name__ or isinstance(exc, TimeoutError):
                     raise RuntimeError("the build took too long and was stopped") from exc
                 log.exception("the build sandbox failed")
                 raise RuntimeError("the build sandbox failed") from exc
+            if feed:
+                feed.close()
             if rc != 0 and "model catalog" in err and wait:  # Muse sometimes cannot fetch its model list at start-up, in bursts of about a minute; it stopped before writing anything
                 log.warning("muse could not fetch its model catalog (try %s of %s), trying again in %ss", attempt, len(CATALOG_WAITS), wait)
                 await asyncio.sleep(wait)
@@ -80,7 +86,9 @@ class BuildBox(rs.SandboxBox):
             log.error("muse exited %s while building: %s", rc, err.replace(os.environ["META_API_KEY"], "<key>")[-1500:])
             raise RuntimeError("Muse's service could not start (its model list was unavailable for several minutes). Try the build again in a few minutes." if "model catalog" in err
                                else "Muse stopped before the build was finished")
-        return out
+        closing, tokens = muse_usage.parse(out)
+        await asyncio.to_thread(muse_usage.record, tokens, self.owner)  # counted toward the person's plan, like a bot's own turn
+        return closing
 
     @staticmethod
     def _skip() -> str:

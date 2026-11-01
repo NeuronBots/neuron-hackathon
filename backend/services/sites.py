@@ -6,6 +6,7 @@ from __future__ import annotations
 import asyncio
 import io
 import json
+import logging
 import os
 import re
 import shutil
@@ -13,7 +14,10 @@ import zipfile
 from pathlib import Path
 
 from core.models import Agent, DocumentRecord, Project, ProjectMember
+from services import chat_rows
 from tools.documents import DOC_DIR, document_path
+
+log = logging.getLogger(__name__)
 
 SITES = Path(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data", "sites")))
 MAX_FILE, MAX_TOTAL, MAX_FILES = 5_000_000, 50_000_000, 500
@@ -150,7 +154,13 @@ def run(name: str, args: dict, agent_id: str) -> str:
             archive = str(args.get("archive") or "") or latest_archive(project_id)
             if not archive:
                 return "Error: this project has no saved build to publish yet."
-            return f"The site is live and public at {publish(project_id, archive)}. Give people exactly this address."
+            address = publish(project_id, archive)
+            from core.usage import current_user
+            from services import chat_rows
+
+            if current_user():
+                chat_rows.phase(agent_id, current_user(), "live", address)
+            return f"The site is live and public at {address}. Give people exactly this address."
         address = write_file(project_id, str(args.get("path") or ""), str(args.get("content") or ""))
         return f"Changed {args.get('path')}. It is live now at {address}"
     except ValueError as exc:
@@ -191,6 +201,18 @@ def save_order(project_id: str, message: str, status: str = "new") -> str:
         return ""
     finally:
         db.close()
+
+
+def order_card(message: str, order_id: str, test: bool, routines: int) -> str:
+    """The chat card for an order that has come in: who it is from, what is in it, and what happens to it now. Read from what the page sent, shown as text."""
+    data = order_data(message)
+    who = next((str(data[k])[:60] for k in ("name", "customer", "email") if data.get(k)), "")
+    items = [f"{l.get('qty', 1)}× {l.get('name', '')}"[:60] for l in data.get("items", []) if isinstance(l, dict)][:4] if isinstance(data.get("items"), list) else []
+    total = data.get("total") if isinstance(data.get("total"), (int, float)) else None
+    shown = {"name", "customer", "email", "items", "total", "currency"}
+    more = [f"{k}: {str(v)[:60]}" for k, v in data.items() if k not in shown and isinstance(v, (str, int, float)) and str(v).strip()][:4]
+    return chat_rows.card("order", who=who, items=items, total=total, currency=str(data.get("currency") or "")[:3], details=more, test=test, ref=order_id[:8],
+                          next=f"{routines} order routine{'s' if routines != 1 else ''} started" if routines else "The Master is looking at it")
 
 
 def _order_routine_ids(project_id: str) -> list[str]:
@@ -235,7 +257,13 @@ async def dispatch(project: Project, message: str, order_id: str, test: bool = F
     master_id, owner_id = await asyncio.to_thread(who)
     if not master_id:
         return
-    if _run_order_routines(await asyncio.to_thread(_order_routine_ids, project.id), message, order_id, test):
+    ids = await asyncio.to_thread(_order_routine_ids, project.id)
+    try:
+        if owner_id:
+            await asyncio.to_thread(chat_rows.write_row, master_id, owner_id, order_card(message, order_id, test, len(ids)))
+    except Exception:
+        log.exception("Could not show the order in the owner's chat")
+    if _run_order_routines(ids, message, order_id, test):
         return  # the owner allowed these routines: they are what happens when an order comes in
     text = (f"A visitor of the {'preview (a TEST, before publishing)' if test else 'live website'} of {project.name} just sent this from the page (an order, a question or a form). Tell the person what came in, in one or two lines, "
             "and what you suggest doing about it. You cannot act on it yourself: they decide.\n\n" + untrusted_block("Visitor message", message[:ACTION_MAX]))

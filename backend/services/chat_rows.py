@@ -9,6 +9,17 @@ def card(kind: str, **fields) -> str:
     return "[[SOURCES:" + json.dumps({"kind": kind, **fields}).replace("]]", "] ]").replace("[[", "[ [") + "]]"
 
 
+PHASES = {"plan": "Planning", "build": "Building", "live": "Live", "orders": "Order routines", "payments": "Payments"}
+
+
+def phase(agent_id: str, user_id: str, phase_id: str, note: str = "") -> int:
+    """A heading in this person's chat with the bot, where a flow starts: the chat draws it as a divider. Never raises: a heading is not worth stopping a flow for."""
+    try:
+        return write_row(agent_id, user_id, card("phase", phase=phase_id, label=PHASES.get(phase_id, phase_id), note=note[:160]))
+    except Exception:
+        return 0
+
+
 def write_row(agent_id: str, user_id: str, text: str, row_id: int | None = None) -> int:
     """Add a row to this person's chat with the bot, or overwrite row_id in place. Returns the row's id."""
     from core.database import SessionLocal

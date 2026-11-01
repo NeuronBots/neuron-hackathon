@@ -1,29 +1,43 @@
 diff --git a/src/ChatView.tsx b/src/ChatView.tsx
-index 5d6e699..3b19fc8 100644
+index 5d6e699..c168a71 100644
 --- a/src/ChatView.tsx
 +++ b/src/ChatView.tsx
 @@ -1 +1 @@
 -import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 +import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
-@@ -6 +6 @@ import remarkGfm from "remark-gfm"
+@@ -3,0 +4,5 @@ const VoiceButton = lazy(() => import("./VoiceButton"))
++import { NeedsYou } from "./NeedsYou"
++import { TeamCard } from "./TeamCard"
++import { COST_NOTE, costText } from "./pathCost"
++import { StepsLine } from "./StepsLine"
++import { NeuralThread } from "./NeuralThread"
+@@ -6 +11 @@ import remarkGfm from "remark-gfm"
 -import type { ChatMessage, AgentRecord, Attachment, UsageBucket, UsageReport } from "./types"
-+import { usageUnits, type ChatMessage, type AgentRecord, type Attachment, type UsageReport } from "./types"
-@@ -9 +9,2 @@ import { TeamButton } from "./Sidebar"
++import { usageUnits, type ChatMessage, type AgentRecord, type Attachment, type PhaseCost, type UsageReport } from "./types"
+@@ -9 +14,2 @@ import { TeamButton } from "./Sidebar"
 -import { changeSlide, documentExists, fetchDocumentText, fetchUsage, saveDocument, splitFiles, uploadFile } from "./api"
-+import { changeSlide, documentExists, fetchDevSession, fetchDocumentText, fetchSheets, fetchTasks, fetchUsage, getPreview, saveDocument, splitFiles, uploadFile } from "./api"
++import { changeSlide, documentExists, fetchDevSession, fetchDocumentText, fetchPath, fetchSheets, fetchTasks, fetchUsage, getPreview, saveDocument, splitFiles, uploadFile } from "./api"
 +import { openPreview } from "./PreviewPanel"
-@@ -19,0 +21 @@ type Props = {
+@@ -19,0 +26 @@ type Props = {
 +  agentTyping?: boolean
-@@ -24,2 +25,0 @@ type Props = {
+@@ -24,2 +30,0 @@ type Props = {
 -  onOpenCalendar?: () => void
 -  onOpenBoard?: () => void
-@@ -87 +87 @@ function isPeerMessage(msg: ChatMessage): boolean {
+@@ -44,0 +50 @@ type Props = {
++  onSelectAgent?: (id: string) => void
+@@ -51 +57 @@ type Row =
+-  | { kind: "peer"; key: string; partner: { id: string; name: string } }
++  | { kind: "team"; key: string; partners: { id: string; name: string }[] }
+@@ -52,0 +59,2 @@ type Row =
++  | { kind: "steps"; key: string; steps: string[] }
++  | { kind: "phase"; key: string; dbId?: number; phase: string; label: string; note?: string }
+@@ -87 +95 @@ function isPeerMessage(msg: ChatMessage): boolean {
 -function openableDocs(text: string): string {
 +export function openableDocs(text: string): string {
-@@ -89 +89 @@ function openableDocs(text: string): string {
+@@ -89 +97 @@ function openableDocs(text: string): string {
 -    /(?:sandbox:|https?:\/\/[^/\s)]+)?(\/api\/documents\/[A-Za-z0-9][A-Za-z0-9._-]{0,120})/g,
 +    /(?:sandbox:|https?:\/\/[^/\s)]+)?(\/api\/(?:documents\/[A-Za-z0-9][A-Za-z0-9._-]{0,120}|docs\/[A-Za-z0-9._-]+))/g,
-@@ -94,2 +94,16 @@ function openableDocs(text: string): string {
+@@ -94,2 +102,16 @@ function openableDocs(text: string): string {
 -const DOC_PATH = "/api/documents/[A-Za-z0-9][A-Za-z0-9._-]{0,120}\\.(?:md|pdf|xlsx|html)"
 -const DOC_LINK = new RegExp(`\\[[^\\]]*\\]\\((${DOC_PATH})\\)`, "gi")
 +export function safeHref(href?: string): string {
@@ -42,10 +56,10 @@ index 5d6e699..3b19fc8 100644
 +
 +const DOC_PATH = "/api/(?:documents/[A-Za-z0-9][A-Za-z0-9._-]{0,120}\\.(?:md|pdf|xlsx|html|zip)|docs/[A-Za-z0-9._-]+)"
 +const DOC_LINK = new RegExp(`\\[([^\\]]*)\\]\\((${DOC_PATH})\\)`, "gi")
-@@ -97 +111 @@ const DOC_BARE = new RegExp(`(${DOC_PATH})`, "gi")
+@@ -97 +119 @@ const DOC_BARE = new RegExp(`(${DOC_PATH})`, "gi")
 -const DOC_LABEL_LINE = /^[\s>*_`-]*(?:download(?: link)?|file|link|here)?[\s:*_`-]*$/i
 +const DOC_LABEL_LINE = /^[\s>*_`-]*(?:(?:forwarded|shared)\s+(?:file|document)|download(?:\s+link)?|file|document|link|here)\s*:[\s*_`-]*$/i
-@@ -100,4 +114,10 @@ const DOC_LABEL_LINE = /^[\s>*_`-]*(?:download(?: link)?|file|link|here)?[\s:*_`
+@@ -100,4 +122,10 @@ const DOC_LABEL_LINE = /^[\s>*_`-]*(?:download(?: link)?|file|link|here)?[\s:*_`
 -function splitDocs(text: string): { text: string; files: string[] } {
 -  const files: string[] = []
 -  const take = (_: string, path: string) => {
@@ -60,7 +74,7 @@ index 5d6e699..3b19fc8 100644
 +      seen.add(path)
 +      files.push({ path, label: label ? label.trim() : undefined })
 +    }
-@@ -105,2 +125,11 @@ function splitDocs(text: string): { text: string; files: string[] } {
+@@ -105,2 +133,11 @@ function splitDocs(text: string): { text: string; files: string[] } {
 -  }
 -  const cleaned = text.replace(DOC_LINK, take).replace(DOC_BARE, take)
 +  })
@@ -74,10 +88,10 @@ index 5d6e699..3b19fc8 100644
 +    return ""
 +  })
 +
-@@ -113 +142 @@ function splitDocs(text: string): { text: string; files: string[] } {
+@@ -113 +150 @@ function splitDocs(text: string): { text: string; files: string[] } {
 -const FILE_KIND: Record<string, string> = { pdf: "PDF document", md: "Markdown note", xlsx: "Excel spreadsheet", html: "Slideshow" }
 +const FILE_KIND: Record<string, string> = { pdf: "PDF document", md: "Markdown note", xlsx: "Excel spreadsheet", html: "Slideshow", zip: "Code archive" }
-@@ -118 +147,51 @@ const CHAT_PRE = mermaidPre(true)
+@@ -118 +155,51 @@ const CHAT_PRE = mermaidPre(true)
 -export function FileCard({ path, label, detail, bot }: { path: string; label?: string; detail?: string; bot?: { id: string; name: string } }) {
 +
 +export const EYE_ICON = (
@@ -130,7 +144,7 @@ index 5d6e699..3b19fc8 100644
 +  onShare?: () => void
 +  onDelete?: () => void
 +}) {
-@@ -128,0 +208,8 @@ export function FileCard({ path, label, detail, bot }: { path: string; label?: s
+@@ -128,0 +216,8 @@ export function FileCard({ path, label, detail, bot }: { path: string; label?: s
 +
 +  function handleView() {
 +    if (missing) return
@@ -139,7 +153,7 @@ index 5d6e699..3b19fc8 100644
 +    }
 +  }
 +
-@@ -131,2 +218,24 @@ export function FileCard({ path, label, detail, bot }: { path: string; label?: s
+@@ -131,2 +226,24 @@ export function FileCard({ path, label, detail, bot }: { path: string; label?: s
 -      <span className={`file-card-icon file-card-${ext}`} aria-hidden="true">{ext === "html" ? "SLIDE" : ext.toUpperCase()}</span>
 -      <span className="file-card-info">
 +      <span
@@ -166,7 +180,7 @@ index 5d6e699..3b19fc8 100644
 +        title="Click to view file"
 +        style={{ cursor: missing ? "default" : "pointer" }}
 +      >
-@@ -135,5 +244,27 @@ export function FileCard({ path, label, detail, bot }: { path: string; label?: s
+@@ -135,5 +252,27 @@ export function FileCard({ path, label, detail, bot }: { path: string; label?: s
 -      </span>
 -      {!missing && ext === "pdf" && <a className="btn btn-sm btn-quiet" href={path} target="_blank" rel="noreferrer">View</a>}
 -      {!missing && (ext === "md" || ext === "html") && <button className="btn btn-sm btn-quiet" onClick={() => setOpen(true)}>View</button>}
@@ -199,7 +213,10 @@ index 5d6e699..3b19fc8 100644
 +        </>
 +      )}
 +      {open && (ext === "html" ? <SlideViewer path={path} bot={bot} onClose={() => setOpen(false)} /> : ext === "xlsx" ? <SheetViewer path={path} name={name} onClose={() => setOpen(false)} /> : ext === "pdf" ? <PdfViewer path={path} name={name} onClose={() => setOpen(false)} /> : <DocViewer path={path} name={name} bot={bot} onClose={() => setOpen(false)} />)}
-@@ -336 +467,109 @@ function SlideViewer({ path, bot, onClose }: { path: string; bot?: { id: string;
+@@ -256 +395 @@ function SlideViewer({ path, bot, onClose }: { path: string; bot?: { id: string;
+-              <div className="msg-bubble"><span className="typing" aria-label={`Changing slide ${slideRef.current}`}><span /><span /><span /></span></div>
++              <div className="msg-bubble"><span className="typing" aria-label={`Changing slide ${slideRef.current}`}><NeuralThread /></span></div>
+@@ -336 +475,109 @@ function SlideViewer({ path, bot, onClose }: { path: string; bot?: { id: string;
 -function DocViewer({ path, name, onClose }: { path: string; name: string; onClose: () => void }) {
 +// ponytail: values as text, no formulas or styling; the backend caps rows at 2000 per sheet
 +const colName = (i: number): string => (i >= 26 ? colName(Math.floor(i / 26) - 1) : "") + String.fromCharCode(65 + (i % 26))
@@ -310,18 +327,18 @@ index 5d6e699..3b19fc8 100644
 +}
 +
 +function DocViewer({ path, name, bot, onClose }: { path: string; name: string; bot?: { id: string; name: string }; onClose: () => void }) {
-@@ -338,0 +578,5 @@ function DocViewer({ path, name, onClose }: { path: string; name: string; onClos
+@@ -338,0 +586,5 @@ function DocViewer({ path, name, onClose }: { path: string; name: string; onClos
 +  const [editing, setEditing] = useState(false)
 +  const [draft, setDraft] = useState("")
 +  const [previewTab, setPreviewTab] = useState<"write" | "preview">("write")
 +  const [saving, setSaving] = useState(false)
 +  const [saveError, setSaveError] = useState("")
-@@ -342,0 +587 @@ function DocViewer({ path, name, onClose }: { path: string; name: string; onClos
+@@ -342,0 +595 @@ function DocViewer({ path, name, onClose }: { path: string; name: string; onClos
 +
-@@ -345,0 +591,2 @@ function DocViewer({ path, name, onClose }: { path: string; name: string; onClos
+@@ -345,0 +599,2 @@ function DocViewer({ path, name, onClose }: { path: string; name: string; onClos
 +
 +  // Keep document fetch effect dependent ONLY on [path]
-@@ -347,2 +594,44 @@ function DocViewer({ path, name, onClose }: { path: string; name: string; onClos
+@@ -347,2 +602,44 @@ function DocViewer({ path, name, onClose }: { path: string; name: string; onClos
 -    fetchDocumentText(path).then(setText).catch(() => setText("Could not load this document."))
 -    const onKey = (e: globalThis.KeyboardEvent) => { if (e.key === "Escape") onClose() }
 +    let active = true
@@ -368,7 +385,7 @@ index 5d6e699..3b19fc8 100644
 +        }
 +      }
 +    }
-@@ -351 +640,16 @@ function DocViewer({ path, name, onClose }: { path: string; name: string; onClos
+@@ -351 +648,16 @@ function DocViewer({ path, name, onClose }: { path: string; name: string; onClos
 -  }, [path])
 +  }, [requestClose])
 +
@@ -386,10 +403,10 @@ index 5d6e699..3b19fc8 100644
 +    }
 +  }
 +
-@@ -354 +658 @@ function DocViewer({ path, name, onClose }: { path: string; name: string; onClos
+@@ -354 +666 @@ function DocViewer({ path, name, onClose }: { path: string; name: string; onClos
 -    <div className="doc-overlay" onClick={onClose}>
 +    <div className="doc-overlay" onClick={editing ? undefined : requestClose}>
-@@ -356,16 +660,47 @@ function DocViewer({ path, name, onClose }: { path: string; name: string; onClos
+@@ -356,16 +668,47 @@ function DocViewer({ path, name, onClose }: { path: string; name: string; onClos
 -      <button className="doc-back" type="button" onClick={onClose}>Back</button>
 -      <article className={dark ? "doc-page is-dark" : "doc-page"}>
 -        <header className="doc-bar">
@@ -453,7 +470,7 @@ index 5d6e699..3b19fc8 100644
 +                  {saving ? "Saving…" : "Save"}
 +                </button>
 +              </div>
-@@ -373,3 +708,47 @@ function DocViewer({ path, name, onClose }: { path: string; name: string; onClos
+@@ -373,3 +716,47 @@ function DocViewer({ path, name, onClose }: { path: string; name: string; onClos
 -              <svg viewBox="0 0 24 24" aria-hidden="true">
 -                <path d="M21 14.5A8.5 8.5 0 1 1 9.5 3a7 7 0 0 0 11.5 11.5z" />
 -              </svg>
@@ -504,7 +521,7 @@ index 5d6e699..3b19fc8 100644
 +                </button>
 +                <button className="btn btn-sm btn-quiet" type="button" onClick={requestClose}>Close</button>
 +              </div>
-@@ -377,20 +756,43 @@ function DocViewer({ path, name, onClose }: { path: string; name: string; onClos
+@@ -377,20 +764,43 @@ function DocViewer({ path, name, onClose }: { path: string; name: string; onClos
 -          </button>
 -          <button
 -            className="btn btn-sm btn-quiet"
@@ -568,16 +585,26 @@ index 5d6e699..3b19fc8 100644
 +            )}
 +          </div>
 +        </article>
-@@ -440,2 +842 @@ const WARN_STEP = 5 // percent: a dismissed warning comes back each time usage c
+@@ -403,6 +813 @@ function DocViewer({ path, name, onClose }: { path: string; name: string; onClos
+-export function askingNames(people: { name: string }[]): string {
+-  const names = people.map((person) => person.name)
+-  if (names.length < 2) return names[0] ?? ""
+-  if (names.length === 2) return `${names[0]} and ${names[1]}`
+-  return `${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]}`
+-}
++export { askingNames } from "./askingNames"
+@@ -440,2 +845 @@ const WARN_STEP = 5 // percent: a dismissed warning comes back each time usage c
 -// The enforced count in limits.py: input + output + cache read + cache write.
 -const tokens = (b: UsageBucket) => b.input_tokens + b.output_tokens + b.cache_read_tokens + b.cache_write_tokens
 +const tokens = usageUnits
-@@ -469,0 +871 @@ export function ChatView({
+@@ -469,0 +874 @@ export function ChatView({
 +  agentTyping,
-@@ -475,2 +876,0 @@ export function ChatView({
+@@ -475,2 +879,0 @@ export function ChatView({
 -  onOpenCalendar,
 -  onOpenBoard,
-@@ -513,16 +912,0 @@ export function ChatView({
+@@ -494,0 +898 @@ export function ChatView({
++  onSelectAgent,
+@@ -513,16 +916,0 @@ export function ChatView({
 -  // The board icon glows when a bot adds a task.
 -  const [boardGlow, setBoardGlow] = useState(false)
 -  useEffect(() => {
@@ -594,7 +621,7 @@ index 5d6e699..3b19fc8 100644
 -      window.clearTimeout(timer)
 -    }
 -  }, [])
-@@ -725,0 +1110,37 @@ export function ChatView({
+@@ -725,0 +1114,57 @@ export function ChatView({
 +  // A coding session running on this bot (only the coding bot has one): a badge in the header that opens the preview panel again
 +  const [dev, setDev] = useState<{ preview_id: string; status: string } | null>(null)
 +  const devAgentId = agent?.id
@@ -623,6 +650,26 @@ index 5d6e699..3b19fc8 100644
 +  }, [devAgentId])
 +
 +  // Questions and approvals still waiting on me always sit at the bottom of the chat, below anything said after them
++  const [phaseCosts, setPhaseCosts] = useState<Map<number, PhaseCost>>(new Map())
++  const hasPhases = messages.some((m) => m.content.includes('"kind": "phase"'))
++  useEffect(() => {
++    if (!hasPhases) return
++    let live = true
++    fetchPath().then((p) => { if (live) setPhaseCosts(new Map(p.phases.map((c) => [c.id, c]))) }).catch(() => {})  // not the owner: headings without costs
++    return () => { live = false }
++  }, [hasPhases, messages.length, streaming])
++  useEffect(() => {  // the Path rail in the sidebar asks to see where a stage began
++    const jump = (event: Event) => {
++      const marks = document.querySelectorAll<HTMLElement>(`.phase-marker[data-phase="${(event as CustomEvent<string>).detail}"]`)
++      const mark = marks[marks.length - 1]
++      if (!mark) return
++      mark.scrollIntoView({ block: "center", behavior: "smooth" })
++      mark.classList.add("is-called")
++      window.setTimeout(() => mark.classList.remove("is-called"), 1400)
++    }
++    window.addEventListener("neuron:jump-phase", jump)
++    return () => window.removeEventListener("neuron:jump-phase", jump)
++  }, [])
 +  const [waitingTasks, setWaitingTasks] = useState<Set<string>>(new Set())
 +  const waitingAgentId = agent?.id
 +  useEffect(() => {
@@ -632,12 +679,29 @@ index 5d6e699..3b19fc8 100644
 +    return () => { live = false }
 +  }, [waitingAgentId, messages.length, streaming])
 +
-@@ -804 +1225 @@ export function ChatView({
+@@ -766 +1211,5 @@ export function ChatView({
+-      if (partner && otherName !== prevOther) rows.push({ kind: "peer", key: msg.id, partner })
++      if (partner && otherName !== prevOther) {
++        const before = rows[rows.length - 1]
++        if (before?.kind === "team") { if (!before.partners.some((p) => p.id === partner.id)) before.partners.push(partner) }  // one card for a run of asks, not a chip each
++        else rows.push({ kind: "team", key: `team-${msg.id}`, partners: [partner] })
++      }
+@@ -793,0 +1243,10 @@ export function ChatView({
++        if (piece.card.kind === "phase") {
++          rows.push({ kind: "phase", key: `${msg.id}-phase-${pieceIndex}`, dbId: msg.db_id, phase: piece.card.phase, label: piece.card.label, note: piece.card.note })
++          return
++        }
++        if (piece.card.kind === "step") {
++          const before = rows[rows.length - 1]
++          if (before?.kind === "steps") before.steps.push(piece.card.text)  // one line for a run of status updates, not a bubble each
++          else rows.push({ kind: "steps", key: `${msg.id}-steps-${pieceIndex}`, steps: [piece.card.text] })
++          return
++        }
+@@ -804 +1263 @@ export function ChatView({
 -        if (piece.card.kind === "call") {  // a call sits in the middle of the chat, between the two sides
-+        if (piece.card.kind === "call" || piece.card.kind === "pr" || piece.card.kind === "wiki" || piece.card.kind === "build" || piece.card.kind === "prfix" || piece.card.kind === "session" || piece.card.kind === "decision" || piece.card.kind === "buildplan" || piece.card.kind === "approval") {  // a call, a PR review, a wiki or code build, or a request for approval sits in the middle of the chat, between the two sides
-@@ -837,0 +1259,18 @@ export function ChatView({
++        if (piece.card.kind === "call" || piece.card.kind === "pr" || piece.card.kind === "wiki" || piece.card.kind === "build" || piece.card.kind === "payment" || piece.card.kind === "order" || piece.card.kind === "prfix" || piece.card.kind === "session" || piece.card.kind === "decision" || piece.card.kind === "buildplan" || piece.card.kind === "approval") {  // a call, a PR review, a wiki or code build, or a request for approval sits in the middle of the chat, between the two sides
+@@ -837,0 +1297,23 @@ export function ChatView({
 +  const isWaiting = (r: Row) => r.kind === "call" && (r.card.kind === "decision" || r.card.kind === "approval") && waitingTasks.has(r.card.task_id)
-+  rows.push(...rows.splice(0).sort((a, b) => Number(isWaiting(a)) - Number(isWaiting(b))))  // stable: only the waiting ones move down
 +  const askKey = (r: Row) => r.kind === "call" && r.card.kind === "approval" ? `a${r.card.title}\n${r.card.detail}` : r.kind === "call" && r.card.kind === "decision" ? `d${r.card.question}` : ""
 +  const latestAsk = new Map<string, Row>()
 +  rows.forEach((r) => { if (isWaiting(r)) latestAsk.set(askKey(r), r) })
@@ -654,29 +718,74 @@ index 5d6e699..3b19fc8 100644
 +    if (lastOfTask.get(r.card.task_id) !== r) return []
 +    return [{ ...r, card: { ...r.card, batch: batches.get(r.card.task_id) } }]
 +  }))
-@@ -841 +1280,2 @@ export function ChatView({
++  // while asking, the card of the run so far is the live one: the teammates who already answered show on it with a tick
++  const lastUserAt = rows.map((r) => r.kind === "bubble" && r.out && !r.typing).lastIndexOf(true)
++  const runTeamAt = asking.length > 0 && !peerThread ? rows.map((r) => r.kind).lastIndexOf("team") : -1
++  const runTeam = runTeamAt > lastUserAt ? rows[runTeamAt] : undefined
++  const answeredThisRun = runTeam?.kind === "team" ? runTeam.partners : []
++  if (runTeam) rows.splice(runTeamAt, 1)
+@@ -841 +1323,2 @@ export function ChatView({
 -  if (!peerThread && streaming && (lastMsg?.role !== "assistant" || replyText)) {
 +  // A bot working in the background (a PR it was told about) is typing even though no turn of mine is streaming.
 +  if (!peerThread && ((streaming && (lastMsg?.role !== "assistant" || replyText)) || (!streaming && agentTyping))) {
-@@ -871,0 +1312,6 @@ export function ChatView({
+@@ -866,0 +1350 @@ export function ChatView({
++              working={streaming && !peerThread}
+@@ -871,0 +1356,6 @@ export function ChatView({
 +                {dev && !peerThread && (
 +                  <button type="button" className={`dev-badge dev-${dev.status}`} title={dev.status === "running" ? "Coding session running. Open the preview." : "Coding session starting. Open the preview."} onClick={() => { getPreview(dev.preview_id).then(openPreview).catch(() => {}) }}>
 +                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 7-5 5 5 5M16 7l5 5-5 5M14 5l-4 14" /></svg>
 +                    <span className="sr-only">{dev.status === "running" ? ", session running" : ", session starting"}. Open the preview.</span>
 +                  </button>
 +                )}
-@@ -930 +1376 @@ export function ChatView({
+@@ -914 +1404,7 @@ export function ChatView({
+-            if (row.kind === "peer") {
++            if (row.kind === "team") {
++              return <div key={row.key} className="chat-peer-divider chat-ask-row"><TeamCard lead={{ id: agent.id, name: agent.name }} done={row.partners} talking={[]} onOpen={onSelectPeer} /></div>
++            }
++            if (row.kind === "call") {
++              return <div key={row.key} id={row.card.kind === "approval" || row.card.kind === "decision" ? `ask-${row.card.task_id}` : undefined} className={`chat-peer-divider chat-call-row${["approval", "decision", "payment", "order", "buildplan", "build", "prfix", "session", "pr"].includes(row.card.kind) ? " chat-ask-row" : ""}`}><SourceCards card={row.card} /></div>
++            }
++            if (row.kind === "phase") {
+@@ -916,10 +1412,4 @@ export function ChatView({
+-                <div key={row.key} className="chat-peer-divider">
+-                  <button
+-                    className="peer-avatar"
+-                    onClick={() => onSelectPeer(row.partner.id)}
+-                    title={`Read what ${agent.name} and ${row.partner.name} said`}
+-                    type="button"
+-                  >
+-                    <Avatar name={row.partner.name} id={row.partner.id} size={22} />
+-                    <span className="peer-avatar-label">Asked {row.partner.name}</span>
+-                  </button>
++                <div key={row.key} data-phase={row.phase} className={`phase-marker phase-${row.phase}`} role="separator" aria-label={row.label}>
++                  <span className="phase-label"><span className="phase-dot" aria-hidden="true" />{row.label}</span>
++                  {row.dbId !== undefined && phaseCosts.get(row.dbId) && <span className="phase-cost" title={COST_NOTE}>{costText(phaseCosts.get(row.dbId)!)}</span>}
++                  {row.note && <span className="phase-note">{row.note}</span>}
+@@ -929,2 +1419,2 @@ export function ChatView({
+-            if (row.kind === "call") {
 -              return <div key={row.key} className="chat-peer-divider chat-call-row"><SourceCards card={row.card} /></div>
-+              return <div key={row.key} className={`chat-peer-divider chat-call-row${row.card.kind === "approval" || row.card.kind === "decision" ? " chat-ask-row" : ""}`}><SourceCards card={row.card} /></div>
-@@ -1013,0 +1460 @@ export function ChatView({
++            if (row.kind === "steps") {
++              return <StepsLine key={row.key} steps={row.steps} live={streaming && index === rows.length - 1} />
+@@ -962 +1452 @@ export function ChatView({
+-                    {last && <Avatar name={incoming.name} id={incoming.id} size={28} />}
++                    {last && <Avatar name={incoming.name} id={incoming.id} size={28} working={!!row.typing} />}
+@@ -972 +1462 @@ export function ChatView({
+-                  style={row.out && !peerThread && agent?.color ? { background: agent.color } : undefined}
++                  style={row.out && !peerThread && agent?.color ? { ["--agent" as string]: agent.color } : undefined}
+@@ -987 +1477 @@ export function ChatView({
+-                        <span /><span /><span />
++                        <NeuralThread label={`${row.speaker} is typing`} />
+@@ -1013,0 +1504 @@ export function ChatView({
 +                            const { text: fwdClean, files: fwdDocs } = splitDocs(openableDocs(forwarded[3]))
-@@ -1018 +1465 @@ export function ChatView({
+@@ -1018 +1509 @@ export function ChatView({
 -                                  <b>Forwarded from {forwarded[2]}</b>{forwarded[3]}
 +                                  <b>Forwarded from {forwarded[2]}</b>{fwdClean}
-@@ -1019,0 +1467 @@ export function ChatView({
+@@ -1019,0 +1511,12 @@ export function ChatView({
 +                                {fwdDocs.map((f) => <FileCard key={f.path} path={f.path} label={f.label} />)}
-@@ -1024 +1472,13 @@ export function ChatView({
--                          return quoted ? (
++                                {chips}
++                              </>
++                            )
++                          }
 +                          if (quoted) {
 +                            const { text: replyClean, files: replyDocs } = splitDocs(openableDocs(quoted[3]))
 +                            return (
@@ -684,27 +793,46 @@ index 5d6e699..3b19fc8 100644
 +                                <blockquote className="msg-quote"><b>{quoted[1]}</b>{quoted[2]}</blockquote>
 +                                {replyClean}
 +                                {replyDocs.map((f) => <FileCard key={f.path} path={f.path} label={f.label} />)}
-+                                {chips}
-+                              </>
-+                            )
-+                          }
+@@ -1024 +1527,2 @@ export function ChatView({
+-                          return quoted ? (
 +                          const { text: textClean, files: textDocs } = splitDocs(openableDocs(shownText))
 +                          return (
-@@ -1026,2 +1486,2 @@ export function ChatView({
+@@ -1026,2 +1530,2 @@ export function ChatView({
 -                              <blockquote className="msg-quote"><b>{quoted[1]}</b>{quoted[2]}</blockquote>
 -                              {quoted[3]}
 +                              {textClean}
 +                              {textDocs.map((f) => <FileCard key={f.path} path={f.path} label={f.label} />)}
-@@ -1030 +1490 @@ export function ChatView({
+@@ -1030 +1534 @@ export function ChatView({
 -                          ) : <>{shownText}{chips}</>
 +                          )
-@@ -1042 +1502 @@ export function ChatView({
+@@ -1042 +1546 @@ export function ChatView({
 -                                    <a href={openableDocs(href || "")} target="_blank" rel="noopener noreferrer">{children}</a>
 +                                    <a href={safeHref(href)} target="_blank" rel="noopener noreferrer">{children}</a>
-@@ -1047 +1507 @@ export function ChatView({
+@@ -1047 +1551 @@ export function ChatView({
 -                            {files.map((path) => <FileCard key={path} path={path} bot={incoming} />)}
 +                            {files.map((f) => <FileCard key={f.path} path={f.path} label={f.label} bot={incoming} />)}
-@@ -1311,10 +1770,0 @@ export function ChatView({
+@@ -1205,12 +1709 @@ export function ChatView({
+-          {asking.length > 0 && !peerThread && (
+-            <div className="ask-chip" role="status" aria-label={`Asking ${askingNames(asking)}`}>
+-              <span className="ask-faces">
+-                {asking.map((person, index) => (
+-                  <span className="ask-face" key={person.id} style={{ zIndex: index + 1 }}>
+-                    <Avatar name={person.name} id={person.id} size={22} />
+-                  </span>
+-                ))}
+-              </span>
+-              <span className="ask-chip-label">Asking {askingNames(asking)}</span>
+-            </div>
+-          )}
++          {asking.length > 0 && !peerThread && <div className="chat-peer-divider chat-ask-row"><TeamCard lead={{ id: agent.id, name: agent.name }} done={answeredThisRun} talking={asking} onOpen={onSelectPeer} /></div>}
+@@ -1245,0 +1739 @@ export function ChatView({
++          {!peerThread && onSelectAgent && <NeedsYou here={agent.id} crew={crew} refresh={`${messages.length}-${streaming}`} onSelectAgent={onSelectAgent} />}
+@@ -1282,0 +1777,2 @@ export function ChatView({
++              <div className="chat-prompt">
++              <span className="chat-prompt-tag" aria-hidden="true">prompt&gt;</span>
+@@ -1309,0 +1806 @@ export function ChatView({
++              </div>
+@@ -1311,10 +1807,0 @@ export function ChatView({
 -                {onOpenCalendar && (
 -                  <button type="button" className="chat-attach" aria-label="Open calendar" title="Calendar" onClick={onOpenCalendar}>
 -                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>
@@ -715,3 +843,6 @@ index 5d6e699..3b19fc8 100644
 -                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M8 7v7M12 7v4M16 7v9" /></svg>
 -                  </button>
 -                )}
+@@ -1348 +1835 @@ export function ChatView({
+-                    {streaming ? "Stop" : "Send"}
++                    {streaming ? "Stop" : <>Send <span className="send-key" aria-hidden="true">↵</span></>}

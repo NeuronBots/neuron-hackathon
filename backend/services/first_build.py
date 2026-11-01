@@ -16,16 +16,17 @@ import tarfile
 import time
 
 from core.timeutil import request_timezone
-from services import build_prompt, chat_rows, code_review as cr, imagegen, runs, starter
+from services import build_log, build_prompt, chat_rows, code_review as cr, imagegen, runs, starter
 from services.build_sandbox import BuildBox
 
 log = logging.getLogger(__name__)
 
 EFFORT = os.getenv("BUILD_EFFORT", "high")
 TIMEOUT = int(os.getenv("BUILD_TIMEOUT_SECONDS", "7200"))  # Muse's run; the sandbox itself lives a little longer
-PARALLEL = int(os.getenv("BUILD_PARALLEL", "2"))  # builds at once on this server; each holds a sandbox for a long time
+PARALLEL = int(os.getenv("BUILD_PARALLEL", "1"))  # builds at once on this server: one. Each holds a sandbox for a long time, and the next waits ("Waiting for another build to finish")
 TICK_SECONDS = 45
 MAX_REVIEWS = int(os.getenv("BUILD_MAX_REVIEWS", "2"))  # review rounds; the last one only reports
+REVIEW_FIRST_BUILD = os.getenv("BUILD_REVIEW", "0") == "1"  # off: a first build is handed over as it is; a person asks for a review when they want one
 _slots = asyncio.Semaphore(PARALLEL)
 _running: dict[str, asyncio.Task] = {}  # project id -> its build
 
@@ -176,6 +177,7 @@ async def start(project_id: str, user_id: str, plan: str, row_id: int | None = N
     agent_id = agent_id or info["agent_id"]
     info["agent_id"] = agent_id
     info["tz"] = request_timezone.get()  # '' when the build was not started from the person's browser
+    await asyncio.to_thread(chat_rows.phase, agent_id, user_id, "build", "Muse builds the first version in a sandbox, then reviews and fixes it.")
     pill = await asyncio.to_thread(chat_rows.write_row, agent_id, user_id, chat_rows.card("build", project=info["name"], status="running", stage="Starting"))
     if row_id:
         await asyncio.to_thread(_mark_started, agent_id, user_id, row_id)
@@ -298,7 +300,7 @@ async def review_and_fix(box: BuildBox, name: str, has_team: bool, progress) -> 
     return review, done, fixed
 
 
-async def build(repo: str, user_id: str, plan: str, name: str, goal: str, progress, team: list[tuple[str, str]] | None = None, live=None, tz: str = "") -> dict:
+async def build(repo: str, user_id: str, plan: str, name: str, goal: str, progress, team: list[tuple[str, str]] | None = None, live=None, tz: str = "", output=None) -> dict:
     """Muse builds the plan in a sandbox, a second Muse reviews it, and the first fixes what the review verified wrong. Returns
     {archive, files, guide, summary, review, qa}. Raises RuntimeError with something the person can read. `live` is the project's coding session
     (services/preview.py): the build then runs in its sandbox, where the app is started as soon as it can be and goes on as the session afterwards."""
@@ -311,6 +313,8 @@ async def build(repo: str, user_id: str, plan: str, name: str, goal: str, progre
     team = team or []
 
     async def steps(box) -> dict:
+        box.on_line = output
+        box.owner = user_id
         await progress("Setting up the sandbox")
         await box.load(tarball or empty_tarball(), {**build_prompt.skill_files(), build_prompt.PLAN_PATH: plan, **team_files(team), **imagegen.files()})
         present = await box.files()
@@ -333,9 +337,14 @@ async def build(repo: str, user_id: str, plan: str, name: str, goal: str, progre
         if not _usable(guide):  # a build with no usable run guide is half a build: ask for the guide, from commands that are run
             await progress("Writing the run guide")
             await box.build(build_prompt.run_guide_prompt(name))
-        review, rounds, fixed = await review_and_fix(box, name, bool(team), progress)
+        review, rounds, fixed = await review_and_fix(box, name, bool(team), progress) if REVIEW_FIRST_BUILD else (None, 0, 0)
         guide = await box.read(build_prompt.RUN_GUIDE)
         await box.write("AGENTS.md", build_prompt.without_rules(await box.read("AGENTS.md"), own_rules is not None))
+        made = imagegen.pictures_made(await box.read(".neuron/images.count"))
+        if made:  # pictures are counted toward the plan like the rest of Muse's work
+            from services import muse_usage
+
+            await asyncio.to_thread(muse_usage.record, {"input": 0, "cached": 0, "output": made * imagegen.TOKENS_PER_IMAGE}, user_id)
         await progress("Packaging the code")
         files = await box.files()
         archive = await box.export()
@@ -464,12 +473,15 @@ async def _build_and_tell(project_id: str, user_id: str, info: dict, pill: int) 
     from routes.chat import _start_kickoff
 
     name, repo, agent_id = info["name"], info["repo"], info["agent_id"]
+    from core.usage import set_usage_user
+
+    set_usage_user(user_id, project_id)  # this task acts for the owner: Muse's tokens are counted toward their plan and shown on the phase headings
     last = [""]
 
     async def progress(stage: str) -> None:
         if stage != last[0]:
             last[0] = stage
-            await asyncio.to_thread(chat_rows.write_row, agent_id, user_id, chat_rows.card("build", project=name, status="running", stage=stage), pill)
+            await asyncio.to_thread(chat_rows.write_row, agent_id, user_id, chat_rows.card("build", project=name, status="running", stage=stage, row=pill), pill)
 
     result, saved, failure, live = None, None, "", None
     log.info("Build of %s started for user %s", name, user_id)
@@ -482,13 +494,13 @@ async def _build_and_tell(project_id: str, user_id: str, info: dict, pill: int) 
                 live = await preview.begin_live(project_id, user_id, agent_id, name)
             except Exception:
                 log.exception("Could not start the live session for %s: the build goes on without it", name)
-            result = await build(repo, user_id, info["plan"], name, info["goal"], progress, info.get("team"), live, info.get("tz", ""))
+            result = await build(repo, user_id, info["plan"], name, info["goal"], progress, info.get("team"), live, info.get("tz", ""), lambda text: build_log.add(pill, text))
             if live is not None:
                 result["session"] = live.status in ("starting", "running")
         saved = await asyncio.to_thread(_save, project_id, user_id, agent_id, name, result["archive"], result["guide"], result["qa"])
         log.info("Build of %s finished: %s files, guide=%s", name, len(result["files"]), bool(result["guide"]))
     except asyncio.CancelledError:
-        await asyncio.to_thread(chat_rows.write_row, agent_id, user_id, chat_rows.card("build", project=name, status="failed", reason="Stopped: the server was restarting."), pill)
+        await asyncio.to_thread(chat_rows.write_row, agent_id, user_id, chat_rows.card("build", project=name, status="failed", reason="Stopped: the server was restarting.", row=pill), pill)
         raise
     except Exception as exc:
         log.exception("Build of %s failed", name)
@@ -498,7 +510,7 @@ async def _build_and_tell(project_id: str, user_id: str, info: dict, pill: int) 
             from services import preview
             await preview.abandon(live, failure)
     if result is not None and saved is not None:
-        done = chat_rows.card("build", project=name, status="done", files=len(result["files"]), guide=bool(result["guide"]), repo=repo, archive=saved["zip"], project_id=project_id)
+        done = chat_rows.card("build", project=name, status="done", files=len(result["files"]), guide=bool(result["guide"]), repo=repo, archive=saved["zip"], project_id=project_id, row=pill)
         await asyncio.to_thread(chat_rows.write_row, agent_id, user_id, done, pill)
         from tools.documents import document_url
         await asyncio.to_thread(chat_rows.write_row, agent_id, user_id, f"[{name}: first build (code)]({document_url(saved['zip'])})")
@@ -524,11 +536,12 @@ async def _build_and_tell(project_id: str, user_id: str, info: dict, pill: int) 
             except Exception:
                 log.exception("Could not offer the pull request for %s", name)
     else:
-        await asyncio.to_thread(chat_rows.write_row, agent_id, user_id, chat_rows.card("build", project=name, status="failed", reason=failure[:300]), pill)
+        await asyncio.to_thread(chat_rows.write_row, agent_id, user_id, chat_rows.card("build", project=name, status="failed", reason=failure[:300], row=pill), pill)
 
     _start_kickoff(agent_id, "Neuron", project_id, handover(name, result, failure, saved, repo), user_id, no_tools=True)
     _refresh_goals(project_id, user_id)  # and again with what came of it
     if result is not None and "index.html" in result["files"]:  # a site that takes orders: the team gets its first routines for them
+        await asyncio.to_thread(chat_rows.phase, agent_id, user_id, "orders", "What each bot does when an order comes in from the site.")
         _start_kickoff(agent_id, "Neuron", project_id, order_routines_brief(name, info["plan"]), user_id)
 
 

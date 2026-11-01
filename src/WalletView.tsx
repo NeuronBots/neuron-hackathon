@@ -43,7 +43,12 @@ export function WalletView({ onClose, onOpenTeam, teamOpen }: Props) {
       </header>
       <div className="data-body">
         {error && <p className="data-empty">{error}</p>}
-        {wallet && !wallet.enabled && <p className="data-empty">Payments are not turned on for this project yet.</p>}
+        {wallet && !wallet.enabled && (
+          <p className="data-empty">
+            Payments are not turned on for this project yet.
+            {wallet.offer && <> <button type="button" className="btn btn-primary" onClick={() => window.dispatchEvent(new Event("neuron:payments-offer"))}>See how payments work</button></>}
+          </p>
+        )}
         {wallet?.enabled && (
           <p className="wallet-line">
             Muse adds checkout to your site in the coding session, then saves it and asks you to allow publishing it. Set your prices below first, so the page has something to sell.{" "}

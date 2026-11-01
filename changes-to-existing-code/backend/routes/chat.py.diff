@@ -1,5 +1,5 @@
 diff --git a/backend/routes/chat.py b/backend/routes/chat.py
-index df62b39..f0a3ca5 100644
+index df62b39..73a0aa5 100644
 --- a/backend/routes/chat.py
 +++ b/backend/routes/chat.py
 @@ -22 +22 @@ from agents.memory import flush_memory
@@ -8,9 +8,15 @@ index df62b39..f0a3ca5 100644
 @@ -28 +28 @@ from board.tasks import begin_agent_work, finish_agent_work, record_exchange
 -from llm.client import cached
 +from llm.client import BUSY, TRIES, apost_retry, backoff, cached
+@@ -37 +37 @@ from llm.text_tools import cut_tool_call_at, parse_text_tool_calls, strip_text_t
+-from markers.display import marker_blocks, progress_line, visible_reply
++from markers.display import friendly_failure, marker_blocks, progress_line, visible_reply
 @@ -47 +47 @@ from tools.gating import gate_tools
 -from tools.outbox import GH_PUSHES, is_mail_send, run_queue_mail, run_queue_push
 +from tools.outbox import queue_outward
+@@ -50 +50 @@ from tools.scoping import jira_key_for, repo_for
+-from services import goals
++from services import chat_rows, goals
 @@ -52 +52 @@ from integrations import notifications
 -from tools import calendar_tools
 +from tools import calendar_tools, records
@@ -32,6 +38,9 @@ index df62b39..f0a3ca5 100644
 @@ -113 +116 @@ def _start_kickoff(target_id: str, source_name: str, project_id: str, text: str,
 -                own.get(Project, project_id), own, kickoff=True,
 +                own.get(Project, project_id), own, kickoff=True, no_tools=no_tools,
+@@ -132 +135 @@ def _start_kickoff(target_id: str, source_name: str, project_id: str, text: str,
+-                    append_history(own.get(Agent, target_id), "assistant", f"I could not finish this: {failure}")
++                    append_history(own.get(Agent, target_id), "assistant", friendly_failure(failure))
 @@ -178 +181 @@ def jsonl_key_check() -> str:
 -def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: Session, kickoff: bool = False) -> AsyncGenerator[str, None]:
 +def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: Session, kickoff: bool = False, no_tools: bool = False) -> AsyncGenerator[str, None]:
@@ -76,6 +85,9 @@ index df62b39..f0a3ca5 100644
 -                                },
 -                            )
 +                            resp = await apost_retry(follow_client, {"model": model, "max_tokens": CHAT_MAX_TOKENS, **cached(system, tool_defs, api_messages)}, tries=1)  # the turn goes on without it, so no waiting
+@@ -598 +591 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
+-                append_history(agent, "assistant", update)
++                append_history(agent, "assistant", chat_rows.card("step", text=update[:200]))  # a card: the chat folds a run of them into one line, and the model's history leaves them out
 @@ -628 +621 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
 -                    log_span("chat.peer", peer_started, agent=agent.name, model=ASK_MODEL or "own", to=target.name)
 +                    log_span("chat.peer", peer_started, agent=agent.name, model=ASK_MODEL or CHAT_MODEL, to=target.name)

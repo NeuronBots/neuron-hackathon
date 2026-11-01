@@ -1,0 +1,11 @@
+diff --git a/src/main.tsx b/src/main.tsx
+index c69ea92..5c73855 100644
+--- a/src/main.tsx
++++ b/src/main.tsx
+@@ -5,0 +6 @@ import "./styles.css"
++import "./neuron-theme.css"
+@@ -53 +54,3 @@ if (!root) throw new Error("Missing root element")
+-if (new URLSearchParams(location.search).has("demo")) {
++if (import.meta.env.DEV && new URLSearchParams(location.search).has("fixtures")) {
++  import("./Fixtures").then(({ Fixtures }) => createRoot(root).render(<Fixtures />))
++} else if (new URLSearchParams(location.search).has("demo")) {

@@ -1,11 +1,11 @@
 diff --git a/backend/tools/definitions.py b/backend/tools/definitions.py
-index d2ee6ba..de64d1d 100644
+index d2ee6ba..80ef1d9 100644
 --- a/backend/tools/definitions.py
 +++ b/backend/tools/definitions.py
 @@ -82,0 +83,2 @@ BOARD_TOOL_DEFS = [
 +                "options": {"type": "array", "items": {"type": "string"}, "description": "Two to four short answers they can pick with one tap, your recommendation first. Leave out for an open question."},
 +                "to": {"type": "string", "description": "A person from the project's People list whose field covers this decision. They are notified and named on the card. Leave out when no one's field fits."},
-@@ -266,0 +269,131 @@ DOC_TOOL_DEFS = [
+@@ -266,0 +269,142 @@ DOC_TOOL_DEFS = [
 +WIKI_TOOL = {
 +    "name": "build_wiki",
 +    "description": (
@@ -105,6 +105,17 @@ index d2ee6ba..de64d1d 100644
 +        "Work out with the person what each bot does every time an order or message comes in from the project's website, and set it up as routines. "
 +        "Call it when the user asks you (or another bot) to set up, review or refine the order routines. It returns the steps to follow: "
 +        "ask the owning teammates, ask the person about what is undecided, then add_routine. Needs the project's first-build plan."
++    ),
++    "input_schema": {"type": "object", "properties": {}, "required": []},
++}
++
++
++PAYMENTS_TOOL = {
++    "name": "add_payments",
++    "description": (
++        "Turn on online payments for this project's site. Call it when the person asks to add or take payments, a Pay button or a checkout. Muse then adds checkout to the site's existing order form, "
++        "customers pay on a Razorpay page Neuron creates, the owner sets prices in the Wallet, and Neuron takes 5%. It needs the person's Allow. The site must already be built. "
++        "Do not plan or describe a payment integration yourself and do not ask for any account, key or link: this does all of it."
 +    ),
 +    "input_schema": {"type": "object", "properties": {}, "required": []},
 +}

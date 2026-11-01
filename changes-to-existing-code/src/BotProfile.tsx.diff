@@ -1,5 +1,5 @@
 diff --git a/src/BotProfile.tsx b/src/BotProfile.tsx
-index e341aac..fa4411f 100644
+index e341aac..32b4c3d 100644
 --- a/src/BotProfile.tsx
 +++ b/src/BotProfile.tsx
 @@ -2,2 +2,3 @@ import { avatarUri } from "./Avatar"
@@ -33,10 +33,14 @@ index e341aac..fa4411f 100644
 +  }
 @@ -60 +77,0 @@ export function BotProfile({ agent, onClose, onEditSave, onDeleteAgent, onBuildM
 -      model: agent.model,
-@@ -248 +265 @@ export function BotProfile({ agent, onClose, onEditSave, onDeleteAgent, onBuildM
+@@ -105 +122,2 @@ export function BotProfile({ agent, onClose, onEditSave, onDeleteAgent, onBuildM
+-              borderRadius: "50%",
++              borderRadius: "22%",
++              overflow: "hidden",
+@@ -248 +266 @@ export function BotProfile({ agent, onClose, onEditSave, onDeleteAgent, onBuildM
 -            {agent.core_memory?.trim() && (
 +            {coreMemory?.trim() && (
-@@ -251 +268,12 @@ export function BotProfile({ agent, onClose, onEditSave, onDeleteAgent, onBuildM
+@@ -251 +269,12 @@ export function BotProfile({ agent, onClose, onEditSave, onDeleteAgent, onBuildM
 -                <p className="profile-identity memory-core">{agent.core_memory}</p>
 +                <p className="profile-identity memory-core">{coreMemory}</p>
 +              </>
@@ -50,7 +54,7 @@ index e341aac..fa4411f 100644
 +                  <button className="btn btn-primary btn-sm" type="button" onClick={() => void act(draft.id, "promote")}>Promote</button>
 +                  <button className="btn btn-quiet btn-sm" type="button" onClick={() => void act(draft.id, "reject")}>Reject</button>
 +                </div>
-@@ -253,0 +282,13 @@ export function BotProfile({ agent, onClose, onEditSave, onDeleteAgent, onBuildM
+@@ -253,0 +283,13 @@ export function BotProfile({ agent, onClose, onEditSave, onDeleteAgent, onBuildM
 +            {versionError && <p className="project-error">{versionError}</p>}
 +            {history.length > 0 && (
 +              <details className="memory-history">
@@ -64,6 +68,6 @@ index e341aac..fa4411f 100644
 +                ))}
 +              </details>
 +            )}
-@@ -256 +297 @@ export function BotProfile({ agent, onClose, onEditSave, onDeleteAgent, onBuildM
+@@ -256 +298 @@ export function BotProfile({ agent, onClose, onEditSave, onDeleteAgent, onBuildM
 -                {agent.core_memory?.trim() && <h3 className="memory-heading">Earlier chats</h3>}
 +                {coreMemory?.trim() && <h3 className="memory-heading">Earlier chats</h3>}

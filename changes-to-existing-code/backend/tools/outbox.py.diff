@@ -1,5 +1,5 @@
 diff --git a/backend/tools/outbox.py b/backend/tools/outbox.py
-index 940deda..178ab3c 100644
+index 940deda..2a0f62c 100644
 --- a/backend/tools/outbox.py
 +++ b/backend/tools/outbox.py
 @@ -1 +1 @@
@@ -134,7 +134,7 @@ index 940deda..178ab3c 100644
 +
 +
 +_LOCAL_JIRA_WRITES = ("manageJiraSprint", "planSprint", "attachDocumentToJiraIssue")  # built on raw Atlassian calls, run in tools/dispatch.py
-+_LOCAL_OUTWARD = _LOCAL_JIRA_WRITES + ("build_wiki", "publish_build", "build_project", "push_pr_fix", "publish_site", "update_site", "add_routine", "update_routine")  # publish_site and update_site change the public website; build_wiki publishes to the repo's GitHub wiki; publish_build pushes a branch and opens a pull request; build_project starts a long, costly build
++_LOCAL_OUTWARD = _LOCAL_JIRA_WRITES + ("build_wiki", "publish_build", "build_project", "push_pr_fix", "publish_site", "update_site", "add_routine", "update_routine", "add_payments")  # publish_site and update_site change the public website; build_wiki publishes to the repo's GitHub wiki; publish_build pushes a branch and opens a pull request; build_project starts a long, costly build
 +
 +
 +def is_outward(name: str) -> bool:

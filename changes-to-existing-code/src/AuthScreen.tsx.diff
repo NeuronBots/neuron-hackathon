@@ -1,0 +1,7 @@
+diff --git a/src/AuthScreen.tsx b/src/AuthScreen.tsx
+index bc78721..7905eff 100644
+--- a/src/AuthScreen.tsx
++++ b/src/AuthScreen.tsx
+@@ -57 +57 @@ export function AuthScreen({ onSignedIn, initialEmail = "" }: Props) {
+-        <p className="auth-logo">Neuron</p>
++        <img className="auth-logo brand-lockup" src="/brand/neuron-lockup.png" alt="Neuron" width="116" height="30" />

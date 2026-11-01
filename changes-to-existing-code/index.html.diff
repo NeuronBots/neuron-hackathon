@@ -1,0 +1,13 @@
+diff --git a/index.html b/index.html
+index 86913c2..08b6006 100644
+--- a/index.html
++++ b/index.html
+@@ -8,2 +8,3 @@
+-    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+-    <meta name="theme-color" content="#101412" />
++    <link rel="icon" href="/brand/favicon-64.png" type="image/png" sizes="64x64" />
++    <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png" />
++    <meta name="theme-color" content="#000000" />
+@@ -18 +19 @@
+-      href="https://fonts.googleapis.com/css2?family=Michroma&family=Be+Vietnam+Pro:wght@400;500;600;700&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&display=swap"
++      href="https://fonts.googleapis.com/css2?family=Michroma&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"

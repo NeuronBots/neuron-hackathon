@@ -39,11 +39,13 @@ def describe(name: str, args: dict) -> str:
         "update_site": f"Change {args.get('path') or 'a file'} on the public website",
         "add_routine": f"Add the routine “{args.get('title') or ''}”" + (f" for {args['bot']}" if args.get("bot") else "") + ": it runs by itself every time an order comes in from the website",
         "update_routine": f"Change the routine “{args.get('title') or ''}”" + (f" of {args['bot']}" if args.get("bot") else "") + ": this is what runs by itself on every order from the website",
+        "add_payments": "Turn on online payments for the project's site: Muse adds checkout to its order form, customers pay on a Razorpay page, and Neuron takes 5% of each payment (3% Neuron, about 2% gateway). Money is held 7 days for refunds",
         "build_project": "Have Muse build the project's first version from its plan, in a sandbox" + (f" ({args['plan']})" if args.get("plan") else "") + ". It writes and runs the code, saves it in Docs and offers a pull request",
         "build_wiki": "Build or update this project's GitHub wiki" + (f", focusing on: {args['focus']}" if args.get("focus") else "") + ". Pages people wrote are left untouched",
     }.get(name) or _words(name)
     if name.startswith("gmail_") and args.get("to"):
-        head += f" to {args['to']}"
+        to = args["to"]
+        head += " to " + (", ".join(str(t) for t in to) if isinstance(to, (list, tuple)) else str(to))
     body = json.dumps(args, ensure_ascii=False, indent=2)
     fence = "~~~"
     while fence in body:
@@ -74,6 +76,7 @@ def done_note(name: str, args: dict, result: str) -> str:
         "update_site": "The public website has been changed.",
         "add_routine": f"The routine “{_text(args.get('title'))}” has been added: it runs on every new order.",
         "update_routine": f"The routine “{_text(args.get('title'))}” has been changed.",
+        "add_payments": "Payments are on: Muse is adding checkout to the site.",
         "start_coding_session": "The coding session is starting; the app appears beside the chat.",
         "push_pr_fix": "The fixes have been pushed to the pull request's branch.",
         "build_project": "Muse has started building the first version; progress shows in the chat.",

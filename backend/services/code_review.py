@@ -339,7 +339,7 @@ class LocalBox:
         # Muse reads the PR author's files, so it gets a minimal environment: the one model key it needs, a PATH and an empty home. It runs from
         # outside the checkout (workspace config is not loaded: the workspace is untrusted, and --trust-workspace is never passed).
         proc = await asyncio.create_subprocess_exec(
-            MUSE, "exec", "--prompt-file", prompt_path, "--output-schema", schema_path,
+            MUSE, "exec", "--json", "--prompt-file", prompt_path, "--output-schema", schema_path,
             "--workspace", self.repo_dir, "--disable-write", "--disable-shell", "--disable-web-tools", "--no-session-log",
             "--approval-mode", "never", "--reasoning-effort", self.effort,
             cwd=workdir, env=_clean_env(workdir, META_API_KEY=os.environ.get("META_API_KEY", "")),
@@ -352,7 +352,11 @@ class LocalBox:
         if proc.returncode != 0:
             log.error("muse exec exited %s: %s", proc.returncode, err.decode(errors="replace")[:500])
             raise RuntimeError("Muse failed to run")
-        return out.decode()
+        from services import muse_usage
+
+        answer, tokens = muse_usage.parse(out.decode())
+        await asyncio.to_thread(muse_usage.record, tokens)  # counted toward the plan of whoever this review is running for
+        return answer
 
 
 async def run_muse(text: str, schema: dict, cleaner, box) -> dict:

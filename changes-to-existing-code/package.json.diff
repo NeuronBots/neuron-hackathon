@@ -1,0 +1,9 @@
+diff --git a/package.json b/package.json
+index 5501c80..07f896c 100644
+--- a/package.json
++++ b/package.json
+@@ -17,2 +17,2 @@
+-    "@dicebear/collection": "^9.4.2",
+-    "@dicebear/core": "^9.4.3",
++    "@dicebear/core": "^10.7.0",
++    "@dicebear/styles": "^10.6.0",

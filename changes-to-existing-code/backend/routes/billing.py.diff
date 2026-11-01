@@ -1,8 +1,8 @@
 diff --git a/backend/routes/billing.py b/backend/routes/billing.py
-index b0d1466..5a8fdce 100644
+index b0d1466..3eff9c4 100644
 --- a/backend/routes/billing.py
 +++ b/backend/routes/billing.py
-@@ -258,0 +259,11 @@ def cancel_subscription(user: User = Depends(get_current_user), db: Session = De
+@@ -258,0 +259,13 @@ def cancel_subscription(user: User = Depends(get_current_user), db: Session = De
 +async def _site_payment_event(event: dict, db: Session) -> None:
 +    """A payment that has just been confirmed starts the project's team on the order, like a form sent from the site does."""
 +    import asyncio
@@ -10,11 +10,13 @@ index b0d1466..5a8fdce 100644
 +    from services import payments, sites
 +
 +    paid = payments.apply_event(db, event)
++    if paid is not None:
++        await asyncio.to_thread(payments.announce, db, paid)
 +    if paid is not None and (project := await asyncio.to_thread(sites.project_of, paid.project_id)) is not None:
 +        await sites.dispatch(project, payments.order_message(db, paid), paid.record_id, paid.test)
 +
 +
-@@ -267,0 +279,3 @@ async def webhook(request: Request, db: Session = Depends(get_db)):
+@@ -267,0 +281,3 @@ async def webhook(request: Request, db: Session = Depends(get_db)):
 +    if (event.get("event") or "") in ("payment_link.paid", "payment_link.expired", "refund.processed", "refund.created"):
 +        await _site_payment_event(event, db)  # a customer's payment on a project's site, not a plan
 +        return {"ok": True}

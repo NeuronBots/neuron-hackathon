@@ -567,9 +567,13 @@ async def _change_and_tell(session: Preview, agent_id: str, name: str, request: 
     from routes.chat import _start_kickoff
     from services.review_render import untrusted_block
 
+    from core.usage import set_usage_user
+
+    set_usage_user(session.user_id, session.project_id)  # Muse's tokens for this change are counted toward their plan
     summary, failure = "", ""
     try:
         async with session.lock:
+            session.box.owner = session.user_id
             summary = (await session.box.build(build_prompt.change_prompt(name, request))).strip()[-1500:]
     except asyncio.CancelledError:
         raise

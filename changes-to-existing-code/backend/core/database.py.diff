@@ -1,5 +1,5 @@
 diff --git a/backend/core/database.py b/backend/core/database.py
-index 20e3807..16ac554 100644
+index 20e3807..c478178 100644
 --- a/backend/core/database.py
 +++ b/backend/core/database.py
 @@ -25,0 +26,2 @@ engine = create_engine(
@@ -83,17 +83,19 @@ index 20e3807..16ac554 100644
 +        if "direct_messages" in existing:  # a summary or a write in progress when the server stopped never finishes; let its asker send it again
 +            conn.execute(text("UPDATE direct_messages SET share = 'pending' WHERE share = 'sharing'"))
 +            conn.execute(text("UPDATE direct_messages SET share = 'proceed' WHERE share = 'running' AND action <> ''"))
-@@ -207,0 +283,4 @@ def migrate() -> None:
+@@ -207,0 +283,6 @@ def migrate() -> None:
 +        if "projects" in existing and "proposed_prices" not in project_cols:
 +            conn.execute(text("ALTER TABLE projects ADD COLUMN proposed_prices TEXT NOT NULL DEFAULT ''"))
++        if "projects" in existing and "flow_intro" not in project_cols:
++            conn.execute(text("ALTER TABLE projects ADD COLUMN flow_intro TEXT NOT NULL DEFAULT ''"))
 +        if "projects" in existing and "payments_enabled" not in project_cols:
 +            conn.execute(text("ALTER TABLE projects ADD COLUMN payments_enabled BOOLEAN NOT NULL DEFAULT false"))
-@@ -215,0 +295,4 @@ def migrate() -> None:
+@@ -215,0 +297,4 @@ def migrate() -> None:
 +        if "projects" in existing and "coding_bot_id" not in project_cols:
 +            conn.execute(text("ALTER TABLE projects ADD COLUMN coding_bot_id VARCHAR(36) NOT NULL DEFAULT ''"))
 +        if "projects" in existing and "pr_reviews" not in project_cols:
 +            conn.execute(text("ALTER TABLE projects ADD COLUMN pr_reviews BOOLEAN NOT NULL DEFAULT true"))
-@@ -239,0 +323,10 @@ def migrate() -> None:
+@@ -239,0 +325,10 @@ def migrate() -> None:
 +        if "documents" in existing:
 +            doc_rec_cols = {c["name"] for c in insp.get_columns("documents")}
 +            shared_ddl = "ALTER TABLE documents ADD COLUMN shared_with JSON DEFAULT '[]'::json" if engine.dialect.name == "postgresql" else "ALTER TABLE documents ADD COLUMN shared_with TEXT DEFAULT '[]'"
@@ -104,5 +106,5 @@ index 20e3807..16ac554 100644
 +            ):
 +                if name not in doc_rec_cols:
 +                    conn.execute(text(ddl))
-@@ -314,0 +408 @@ USER_CASCADE_FKS = (
+@@ -314,0 +410 @@ USER_CASCADE_FKS = (
 +    ("voice_calls", "user_id", "voice_calls_user_id_fkey"),

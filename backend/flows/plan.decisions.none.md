@@ -1,0 +1,1 @@
+4. Take no decisions with the person. Do not call request_decision. Settle every choice yourself with the most common sensible option, and list each one as an assumption in the plan so the person can correct it afterwards.

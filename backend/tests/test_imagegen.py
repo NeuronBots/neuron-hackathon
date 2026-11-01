@@ -74,3 +74,8 @@ def test_it_is_off_without_a_key_or_with_a_zero_limit(monkeypatch):
     monkeypatch.setattr(imagegen, "MAX", 3)
     monkeypatch.delenv("META_API_KEY")
     assert imagegen.files() == {} and imagegen.env() == {}
+
+
+def test_pictures_made_reads_the_scripts_counter_and_ignores_junk():
+    from services import imagegen
+    assert (imagegen.pictures_made("7"), imagegen.pictures_made(" 3\n"), imagegen.pictures_made(None), imagegen.pictures_made("x"), imagegen.pictures_made("-2")) == (7, 3, 0, 0, 0)

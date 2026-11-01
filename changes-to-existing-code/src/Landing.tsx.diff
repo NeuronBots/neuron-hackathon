@@ -1,0 +1,7 @@
+diff --git a/src/Landing.tsx b/src/Landing.tsx
+index a4fda17..707314d 100644
+--- a/src/Landing.tsx
++++ b/src/Landing.tsx
+@@ -562 +562 @@ export function Landing({ onSignedIn }: { onSignedIn: (account: Account, isNew?:
+-        <p className="landing-logo">Neuron</p>
++        <img className="landing-logo brand-lockup" src="/brand/neuron-lockup.png" alt="Neuron" width="155" height="40" />

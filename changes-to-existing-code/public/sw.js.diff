@@ -1,0 +1,9 @@
+diff --git a/public/sw.js b/public/sw.js
+index 4ede078..9d4cd96 100644
+--- a/public/sw.js
++++ b/public/sw.js
+@@ -13,2 +13,2 @@ self.addEventListener("push", (event) => {
+-        icon: "/icon.svg",
+-        badge: "/icon.svg",
++        icon: "/brand/icon-192.png",
++        badge: "/brand/neuron-mark.png",

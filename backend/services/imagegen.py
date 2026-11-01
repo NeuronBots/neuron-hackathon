@@ -13,6 +13,7 @@ ENV = "NEURON_IMAGE_KEY"
 MODEL = os.getenv("BUILD_IMAGE_MODEL", "muse-image-1.0")
 BASE = os.getenv("META_BASE_URL", "https://api.meta.ai/v1").rstrip("/")
 MAX = int(os.getenv("BUILD_IMAGES_MAX", "12"))
+TOKENS_PER_IMAGE = int(os.getenv("BUILD_IMAGE_TOKENS", "2000"))  # the image call reports no tokens we can read, so each picture counts toward the plan as this many output tokens
 
 SCRIPT = '''"""Make a picture for this project: python3 .neuron/genimage.py "<prompt>" <path inside the project, e.g. public/images/hero.webp>"""
 import base64, json, os, pathlib, sys, urllib.error, urllib.request
@@ -70,6 +71,14 @@ def main(argv):
 if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))
 '''
+
+
+def pictures_made(count_file: str | None) -> int:
+    """How many pictures the sandbox made, from the script's own counter file."""
+    try:
+        return max(0, int((count_file or "0").strip() or 0))
+    except ValueError:
+        return 0
 
 
 def enabled() -> bool:

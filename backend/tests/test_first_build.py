@@ -54,10 +54,13 @@ def plan_doc(db, tmp_path, project_id="proj_b", agent_id="agent_m", owner="user_
     return name
 
 
-def cards(db, agent_id="agent_m"):
+def cards(db, agent_id="agent_m", phases=False):
+    """The chat's rows as the page gets them. Phase headings are left out unless asked for: they sit between the cards a test is about."""
     out = []
     for m in db.query(Message).filter(Message.agent_id == agent_id).order_by(Message.id).all():
-        out.append(json.loads(m.content[len("[[SOURCES:"):-2]) if m.content.startswith("[[SOURCES:") else m.content)
+        row = json.loads(m.content[len("[[SOURCES:"):-2]) if m.content.startswith("[[SOURCES:") else m.content
+        if phases or not (isinstance(row, dict) and row.get("kind") == "phase"):
+            out.append(row)
     return out
 
 
@@ -166,6 +169,7 @@ def test_starting_shows_the_pill_marks_the_card_and_builds_in_the_background_onc
     db.expire_all()
     rows = cards(db)
     assert rows[0]["status"] == "started" and rows[1] == {"kind": "build", "project": "Lumen", "status": "running", "stage": "Starting"}
+    assert [r["phase"] for r in cards(db, phases=True) if isinstance(r, dict) and r["kind"] == "phase"] == ["build"]  # the build is headed in the chat
     assert db.get(Message, pill).id == pill and not fb._running  # finished and forgotten
 
 
@@ -262,7 +266,8 @@ def test_the_plan_the_skills_and_the_rules_go_into_the_sandbox_and_the_prompt_sa
     assert out["guide"].startswith("# Run guide") and out["archive"] == b"PK-zip" and "Built it" in out["summary"]
 
 
-def test_a_repository_with_code_is_extended_and_its_own_rules_are_kept(box):
+def test_a_repository_with_code_is_extended_and_its_own_rules_are_kept(box, monkeypatch):
+    monkeypatch.setattr(fb, "REVIEW_FIRST_BUILD", True)  # the review is off by default
     box.project_files = {"README.md": "x", "src/main.py": "code", "AGENTS.md": "# Ours\nUse tabs."}
     box.script = [{"RUN.md": GUIDE}]
     seen = {}
@@ -385,7 +390,7 @@ def test_a_finished_build_tells_the_person_and_the_master(db, world, tmp_path, m
     told = []
     monkeypatch.setattr("routes.chat._start_kickoff", lambda *a, **k: told.append((a, k)))
 
-    async def fake_build(repo, uid, plan, name, goal, progress, team=None, live=None, tz=""):
+    async def fake_build(repo, uid, plan, name, goal, progress, team=None, live=None, tz="", output=None):
         await progress("Muse is building")
         return {"archive": b"PK", "files": ["app.py", "RUN.md"], "guide": GUIDE, "summary": "Built.", "review": None, "qa": "# QA report: Lumen\n\nS.\n", "team": 0}
     monkeypatch.setattr(fb, "build", fake_build)
@@ -395,7 +400,7 @@ def test_a_finished_build_tells_the_person_and_the_master(db, world, tmp_path, m
     run(fb._build_and_tell(proj.id, user.id, info, pill))
 
     rows = cards(db)
-    assert rows[0] == {"kind": "build", "project": "Lumen", "status": "done", "files": 2, "guide": True, "repo": "acme/lumen", "archive": rows[0]["archive"], "project_id": proj.id}
+    assert rows[0] == {"kind": "build", "project": "Lumen", "status": "done", "files": 2, "guide": True, "repo": "acme/lumen", "archive": rows[0]["archive"], "project_id": proj.id, "row": pill}
     assert rows[0]["archive"].endswith(".zip")  # what the Run-it-live button starts from
     assert rows[1].startswith("[Lumen: first build (code)](/api/documents/") and rows[2].startswith("[Run guide: Lumen](/api/documents/") and rows[3].startswith("[QA report: Lumen](/api/documents/")  # file cards, like any document
     kinds = [r["kind"] for r in rows[4:] if isinstance(r, dict)]
@@ -535,6 +540,7 @@ def test_a_bot_asked_to_build_starts_it_in_its_own_chat(db, world, tmp_path, mon
     assert where == ["agent_o"]  # the progress shows where the person asked, not in the plan writer's chat
     (card,) = cards(db, "agent_o")
     assert card["kind"] == "build" and card["status"] == "running" and plan
+    assert cards(db, "agent_o", phases=True)[0]["phase"] == "build"  # headed where the person asked
 
 
 def test_the_tool_says_why_when_it_cannot_build(db, world, tmp_path, monkeypatch):
@@ -632,7 +638,8 @@ def test_only_blockers_majors_and_failed_checks_are_fixed():
     assert fb.parse_review("Here you go: " + review() + " done")["summary"] == "S."
 
 
-def test_a_review_that_finds_a_problem_has_it_fixed_and_is_run_again(box):
+def test_a_review_that_finds_a_problem_has_it_fixed_and_is_run_again(box, monkeypatch):
+    monkeypatch.setattr(fb, "REVIEW_FIRST_BUILD", True)  # the review is off by default
     FakeBox.reviews[:] = [review([finding("blocker")]), review()]
     result = run(fb.build("", "u", "# plan", "Lumen", "g", noop, [("Test cases", "T")]))
     box = FakeBox.made[-1]
@@ -640,7 +647,8 @@ def test_a_review_that_finds_a_problem_has_it_fixed_and_is_run_again(box):
     assert "1 of 1 checks passed after 2 reviews; 1 problem found and fixed" in result["qa"] and result["team"] == 1 and "Still open\n\n- Nothing." in result["qa"]
 
 
-def test_the_last_round_only_reports_and_a_broken_reviewer_never_fails_the_build(box):
+def test_the_last_round_only_reports_and_a_broken_reviewer_never_fails_the_build(box, monkeypatch):
+    monkeypatch.setattr(fb, "REVIEW_FIRST_BUILD", True)  # the review is off by default
     FakeBox.reviews[:] = [review([finding("blocker")]), review([finding("major", "Still wrong")])]
     result = run(fb.build("", "u", "# plan", "Lumen", "g", noop))
     assert len(FakeBox.made[-1].reviewed) == 2 and "[major] Still wrong" in result["qa"]
@@ -755,3 +763,13 @@ def test_data_view_lists_collections_and_the_newest_records_of_one(db):
     assert [c["name"] for c in snap["collections"]] == ["bookings", "orders"] and snap["collection"] == "bookings"
     assert [r["data"] for r in rr.list_records("orders", p, db)["records"]] == [{"item": "mat"}]  # never another project's
     assert rr.list_records("nope", q, db)["collection"] == "orders"
+
+
+def test_one_build_runs_at_a_time_and_a_first_build_is_not_reviewed_unless_asked():
+    assert fb.PARALLEL == 1 and fb._slots._value == 1
+    assert fb.REVIEW_FIRST_BUILD is False
+
+
+def test_every_build_is_told_to_make_real_pictures():
+    assert "every project ships with real pictures" in bp.RULES and "genimage.py" in bp.RULES and "six to ten" in bp.RULES
+    assert "Never leave a box, gradient or grey block where a picture belongs" in bp.RULES

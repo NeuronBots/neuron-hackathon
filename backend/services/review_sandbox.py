@@ -130,13 +130,27 @@ class SandboxBox:
             except Exception:
                 log.exception("could not stop the review sandbox")  # it still ends at its own timeout
 
-    async def _exec(self, *args: str, stdin: str | None = None, timeout: int | None = None, workdir: str = WORK, env: dict[str, str] | None = None) -> tuple[int, str, str]:
+    async def _exec(self, *args: str, stdin: str | None = None, timeout: int | None = None, workdir: str = WORK, env: dict[str, str] | None = None, on_line=None) -> tuple[int, str, str]:
         p = await self.sb.exec.aio(*args, workdir=workdir, env={"HOME": WORK, **(env or {})}, timeout=timeout)
         if stdin is not None:
             p.stdin.write(stdin)
             p.stdin.write_eof()
             await p.stdin.drain.aio()
-        out, err = await p.stdout.read.aio(), await p.stderr.read.aio()
+        if on_line is None:
+            out, err = await p.stdout.read.aio(), await p.stderr.read.aio()
+            return await p.wait.aio(), out, err
+
+        async def pump(stream) -> str:  # both streams at once, so a full pipe cannot stall the other; each line goes to on_line as it arrives
+            got = []
+            async for chunk in stream:
+                got.append(chunk)
+                try:
+                    on_line(chunk)
+                except Exception:
+                    pass  # a broken listener must not fail the build
+            return "".join(got)
+
+        out, err = await asyncio.gather(pump(p.stdout), pump(p.stderr))
         return await p.wait.aio(), out, err
 
     async def load(self, tarball: bytes, files: dict[str, str], _retry: int = 2) -> None:
@@ -177,7 +191,7 @@ class SandboxBox:
             # is never loaded (the workspace is untrusted; --trust-workspace is never passed). The key arrives on stdin, so it is in no file or environment.
             for attempt in range(1, MUSE_TRIES + 1):
                 rc, out, err = await self._exec(
-                    "muse", "exec", "--prompt-file", prompt_path, "--output-schema", schema_path, "--workspace", REPO,
+                    "muse", "exec", "--json", "--prompt-file", prompt_path, "--output-schema", schema_path, "--workspace", REPO,
                     "--disable-write", "--disable-shell", "--disable-web-tools", "--no-session-log", "--approval-mode", "never",
                     "--reasoning-effort", self.effort, "--api-key-stdin", stdin=os.environ["META_API_KEY"] + "\n", timeout=self.timeout,
                 )
@@ -193,4 +207,8 @@ class SandboxBox:
             raise RuntimeError("the review sandbox failed") from exc
         if rc != 0:
             raise RuntimeError("Muse failed to run")
-        return out
+        from services import muse_usage
+
+        answer, tokens = muse_usage.parse(out)  # the answer is the same text as before; the tokens are counted toward the person's plan
+        await asyncio.to_thread(muse_usage.record, tokens, getattr(self, "owner", None))
+        return answer

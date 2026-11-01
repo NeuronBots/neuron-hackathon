@@ -1,39 +1,44 @@
 diff --git a/src/Sidebar.tsx b/src/Sidebar.tsx
-index c1bfb19..4e3c6f9 100644
+index c1bfb19..9697075 100644
 --- a/src/Sidebar.tsx
 +++ b/src/Sidebar.tsx
-@@ -2 +2 @@ import { Fragment, useEffect, useRef, useState, type FormEvent } from "react"
+@@ -2 +2,2 @@ import { Fragment, useEffect, useRef, useState, type FormEvent } from "react"
 -import type { AgentRecord, ConnectionRecord, ProjectMember, ProjectRecord, UsageReport } from "./types"
++import { PathRail } from "./PathRail"
 +import { usageUnits, type AgentRecord, type ConnectionRecord, type ProjectMember, type ProjectRecord, type UsageReport } from "./types"
-@@ -30,0 +31,4 @@ type Props = {
+@@ -30,0 +32,6 @@ type Props = {
 +  onOpenCalendar?: () => void
 +  onOpenData?: () => void
 +  onOpenWallet?: () => void
++  onOpenFlows?: () => void
++  onJumpPhase?: (phase: string) => void
 +  onOpenBoard?: () => void
-@@ -43,0 +48,2 @@ type Props = {
+@@ -43,0 +51,2 @@ type Props = {
 +  onSetCodingBot: (agentId: string) => Promise<void>
 +  onSetPrReviews: (enabled: boolean) => Promise<void>
-@@ -79,0 +86,2 @@ function resetWhen(iso: string): string {
+@@ -79,0 +89,2 @@ function resetWhen(iso: string): string {
 +const bucketUnits = usageUnits
 +
-@@ -82,0 +91,2 @@ function UsageMeter({ label, used, cap, resets }: { label: string; used: number;
+@@ -82,0 +94,2 @@ function UsageMeter({ label, used, cap, resets }: { label: string; used: number;
 +  const percentLabel = open ? "—" : percent === 0 && used > 0 ? "< 1%" : `${percent}%`
 +  const progressValue = !open && used > 0 && percent === 0 ? 1 : percent
-@@ -87 +97 @@ function UsageMeter({ label, used, cap, resets }: { label: string; used: number;
+@@ -87 +100 @@ function UsageMeter({ label, used, cap, resets }: { label: string; used: number;
 -        <span>{open ? "—" : `${percent}%`}</span>
 +        <span>{percentLabel}</span>
-@@ -89 +99 @@ function UsageMeter({ label, used, cap, resets }: { label: string; used: number;
+@@ -89 +102 @@ function UsageMeter({ label, used, cap, resets }: { label: string; used: number;
 -      {!open && <progress value={percent} max={100} aria-label={`${label}, ${percent}% used`} />}
 +      {!open && <progress value={progressValue} max={100} aria-label={`${label}, ${percentLabel} used`} />}
-@@ -132,0 +143,4 @@ export function Sidebar({
+@@ -132,0 +146,6 @@ export function Sidebar({
 +  onOpenCalendar,
 +  onOpenData,
 +  onOpenWallet,
++  onOpenFlows,
++  onJumpPhase,
 +  onOpenBoard,
-@@ -145,0 +160,2 @@ export function Sidebar({
+@@ -145,0 +165,2 @@ export function Sidebar({
 +  onSetCodingBot,
 +  onSetPrReviews,
-@@ -155,0 +172,16 @@ export function Sidebar({
+@@ -155,0 +177,16 @@ export function Sidebar({
 +  // The board button glows when a bot adds a task.
 +  const [boardGlow, setBoardGlow] = useState(false)
 +  useEffect(() => {
@@ -50,7 +55,7 @@ index c1bfb19..4e3c6f9 100644
 +      window.clearTimeout(timer)
 +    }
 +  }, [])
-@@ -226,0 +259,9 @@ export function Sidebar({
+@@ -226,0 +264,9 @@ export function Sidebar({
 +  useEffect(() => {
 +    if (!settingsOpen) return
 +    const onVoiceSaved = () => {
@@ -60,7 +65,20 @@ index c1bfb19..4e3c6f9 100644
 +    return () => window.removeEventListener("voice-saved", onVoiceSaved)
 +  }, [settingsOpen])
 +
-@@ -514,4 +555,28 @@ export function Sidebar({
+@@ -338,0 +385 @@ export function Sidebar({
++            working={isTyping}
+@@ -394 +441,3 @@ export function Sidebar({
+-        <h1 className="sidebar-title">Neuron</h1>
++        <h1 className="sidebar-title">
++          <img className="brand-lockup" src="/brand/neuron-lockup.png" alt="Neuron" width="93" height="24" />
++        </h1>
+@@ -429 +478 @@ export function Sidebar({
+-                      <Avatar name={agent.name} id={agent.id} size={56} />
++                      <Avatar name={agent.name} id={agent.id} size={56} working={isTyping} />
+@@ -465,0 +515,2 @@ export function Sidebar({
++      {onJumpPhase && <PathRail projectId={project?.id ?? ""} refresh={`${workingIds.length}-${typingAgentIds.length}`} onJump={onJumpPhase} />}
++
+@@ -514,4 +565,28 @@ export function Sidebar({
 -        {onOpenDocuments && (
 -          <button className="sidebar-board-btn sidebar-board-btn-full" onClick={onOpenDocuments} type="button">
 -            Documents
@@ -93,13 +111,19 @@ index c1bfb19..4e3c6f9 100644
 +              </button>
 +            )}
 +          </div>
-@@ -612 +677 @@ export function Sidebar({
+@@ -526,0 +602,5 @@ export function Sidebar({
++          {isAdmin && onOpenFlows && (
++            <button className="sidebar-me-settings" type="button" aria-label="Flows" title="Flows" onClick={onOpenFlows}>
++              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="6" r="2.5" /><circle cx="18" cy="12" r="2.5" /><circle cx="6" cy="18" r="2.5" /><path d="M8.5 6H12a3 3 0 0 1 3 3v0M8.5 18H12a3 3 0 0 0 3-3v0" /></svg>
++            </button>
++          )}
+@@ -612 +692 @@ export function Sidebar({
 -                    used={usage.six_hour.input_tokens + usage.six_hour.output_tokens + usage.six_hour.cache_read_tokens + usage.six_hour.cache_write_tokens}
 +                    used={bucketUnits(usage.six_hour)}
-@@ -618 +683 @@ export function Sidebar({
+@@ -618 +698 @@ export function Sidebar({
 -                    used={usage.week.input_tokens + usage.week.output_tokens + usage.week.cache_read_tokens + usage.week.cache_write_tokens}
 +                    used={bucketUnits(usage.week)}
-@@ -784,0 +850,55 @@ export function Sidebar({
+@@ -784,0 +865,55 @@ export function Sidebar({
 +                <div className="tweak">
 +                  <div className="tweak-head">
 +                    <div className="tweak-copy">

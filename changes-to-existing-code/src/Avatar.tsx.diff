@@ -1,0 +1,39 @@
+diff --git a/src/Avatar.tsx b/src/Avatar.tsx
+index 140fa81..70d80be 100644
+--- a/src/Avatar.tsx
++++ b/src/Avatar.tsx
+@@ -1,2 +1,4 @@
+-import { createAvatar } from "@dicebear/core"
+-import { adventurerNeutral } from "@dicebear/collection"
++import { Avatar as DiceAvatar, Style } from "@dicebear/core"
++import pixelbotDefinition from "@dicebear/styles/pixelbot.json"
++
++const pixelbot = new Style(pixelbotDefinition)
+@@ -17 +19 @@ const cache = new Map<string, string>()
+-// Bots and people get a generated DiceBear avatar, seeded by id so it never changes.
++// Bots and people get a DiceBear pixelbot, seeded by id so it never changes. While a bot is working it is the animated one.
+@@ -26 +28,8 @@ export function setAvatarSeed(id: string, seed?: string) {
+-export function avatarUri(id: string): string {
++// The animated pixelbot keeps its animations paused until --dbpb-p says running, and a custom property cannot cross into an <img>:
++// so it is set on the SVG itself. --dbpb-t scales the blink and the smile (1 is the default pace; lower is livelier).
++function workingUri(seed: string): string {
++  const svg = new DiceAvatar(pixelbot, { seed, tags: ["animation"] }).toString().replace("<svg ", '<svg style="--dbpb-p:running;--dbpb-t:0.5" ')
++  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
++}
++
++export function avatarUri(id: string, working = false): string {
+@@ -28 +37,2 @@ export function avatarUri(id: string): string {
+-  let uri = cache.get(seed)
++  const key = `${seed}|${working ? "work" : "idle"}`
++  let uri = cache.get(key)
+@@ -30,2 +40,2 @@ export function avatarUri(id: string): string {
+-    uri = createAvatar(adventurerNeutral, { seed }).toDataUri()
+-    cache.set(seed, uri)
++    uri = working ? workingUri(seed) : new DiceAvatar(pixelbot, { seed }).toDataUri()
++    cache.set(key, uri)
+@@ -36 +46 @@ export function avatarUri(id: string): string {
+-export function Avatar({ name, id, size = 36, onClick }: { name: string; id: string; size?: number; onClick?: () => void }) {
++export function Avatar({ name, id, size = 36, onClick, working = false }: { name: string; id: string; size?: number; onClick?: () => void; working?: boolean }) {
+@@ -43 +53 @@ export function Avatar({ name, id, size = 36, onClick }: { name: string; id: str
+-  const initials = <img src={avatarUri(id)} alt="" width={size} height={size} style={{ borderRadius: "50%" }} />
++  const initials = <img src={avatarUri(id, working)} alt="" width={size} height={size} style={{ borderRadius: "22%" }} />

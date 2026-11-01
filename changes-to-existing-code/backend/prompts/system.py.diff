@@ -1,11 +1,11 @@
 diff --git a/backend/prompts/system.py b/backend/prompts/system.py
-index 767e54a..ec8cf9a 100644
+index 767e54a..9fcdf82 100644
 --- a/backend/prompts/system.py
 +++ b/backend/prompts/system.py
 @@ -20 +20 @@ from core.models import Agent, Task, get_shared_context
 -from prompts.directory import build_directory
 +from prompts.directory import build_directory, build_people
-@@ -25,0 +26,13 @@ from core.usage import current_user
+@@ -25,0 +26,28 @@ from core.usage import current_user
 +def site_block(agent: Agent, db: Session) -> str:
 +    """The project's public website, once Neuron hosts it: its address, and what the bot may do with it."""
 +    from core.models import Project
@@ -19,6 +19,22 @@ index 767e54a..ec8cf9a 100644
 +            "To change the site call update_site with the whole new file; the person must allow it first. To republish a new build call publish_site.")
 +
 +
-@@ -61,0 +75,2 @@ def system_for(agent: Agent, db: Session) -> str:
++def platform_block(agent: Agent, db: Session) -> str:
++    """What Neuron itself does, so no bot asks the owner for it or plans it again (flows/platform.md, read at every turn)."""
++    from pathlib import Path
++
++    from core.models import Project
++
++    project = db.get(Project, agent.project_id)
++    state = "Payments are ON for this project." if getattr(project, "payments_enabled", False) else "Payments are OFF for this project."
++    try:
++        text = (Path(__file__).resolve().parents[1] / "flows" / "platform.md").read_text(encoding="utf-8")
++    except OSError:
++        return ""
++    return "\n\n" + text.replace("{payments_state}", state).strip()
++
++
+@@ -61,0 +90,3 @@ def system_for(agent: Agent, db: Session) -> str:
 +        + (("\n\n" + people) if (people := build_people(agent.id, db)) else "")
 +        + site_block(agent, db)
++        + platform_block(agent, db)

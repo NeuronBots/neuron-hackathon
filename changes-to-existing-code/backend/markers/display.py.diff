@@ -1,0 +1,16 @@
+diff --git a/backend/markers/display.py b/backend/markers/display.py
+index a8fb4ef..94d5f42 100644
+--- a/backend/markers/display.py
++++ b/backend/markers/display.py
+@@ -14,0 +15,11 @@ _JIRA_WRITE = ("create", "edit", "transition", "add", "update", "manage", "attac
++def friendly_failure(failure: str) -> str:
++    """What the chat says when a bot's turn did not finish: a sentence a person can act on, not an exception."""
++    low = (failure or "").lower()
++    if "token limit" in low or "usage limit" in low or "rate limit" in low or "429" in low:
++        return "This didn't finish: the plan's token limit has been reached. It will work again when the limit resets."
++    if any(w in low for w in ("queuepool", "timeout", "timed out", "connection", "connecttimeout", "temporarily")):
++        return "This didn't finish: the server was busy for a moment. Ask again and it will pick it up."
++    detail = (failure or "").split(": ", 1)[-1].strip()
++    return f"This didn't finish: {detail[:140]}" if detail else "This didn't finish. Ask again and it will pick it up."
++
++

@@ -1,5 +1,5 @@
 diff --git a/src/api.ts b/src/api.ts
-index c214349..161aae3 100644
+index c214349..8abcb4d 100644
 --- a/src/api.ts
 +++ b/src/api.ts
 @@ -6,0 +7 @@ let activeProjectId = ""
@@ -55,7 +55,7 @@ index c214349..161aae3 100644
 +  return handleResponse(await apiFetch(`/tasks/${encodeURIComponent(taskId)}`)) as Promise<import("./types").TaskRead>
 +}
 +
-@@ -249,0 +265,31 @@ export async function deleteTask(taskId: string): Promise<void> {
+@@ -249,0 +265,58 @@ export async function deleteTask(taskId: string): Promise<void> {
 +export async function fetchWallet(): Promise<import("./types").Wallet> {
 +  return (await handleResponse(await apiFetch(`/wallet`))) as import("./types").Wallet
 +}
@@ -66,6 +66,33 @@ index c214349..161aae3 100644
 +
 +export async function savePrices(prices: { sku: string; name: string; amount: number; currency: string }[]): Promise<void> {
 +  await handleResponse(await apiFetch(`/wallet/prices`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(prices) }))
++}
++
++export async function fetchBuildLog(row: number, after: number): Promise<{ lines: string[]; next: number; running: boolean }> {
++  return (await handleResponse(await apiFetch(`/builds/${row}/log?after=${after}`))) as { lines: string[]; next: number; running: boolean }
++}
++
++export async function fetchFlowIntro(): Promise<import("./types").FlowIntroData> {
++  return (await handleResponse(await apiFetch(`/flows/intro`))) as import("./types").FlowIntroData
++}
++
++export async function fetchPath(): Promise<import("./types").FlowPath> {
++  return (await handleResponse(await apiFetch(`/flows/path`))) as import("./types").FlowPath
++}
++
++export async function previewPlan(research: string, decisions: number): Promise<import("./types").PlanPreview> {
++  const q = new URLSearchParams({ research, decisions: String(decisions) })
++  return (await handleResponse(await apiFetch(`/flows/plan/preview?${q}`))) as import("./types").PlanPreview
++}
++
++export async function runPlan(research: string, decisions: number): Promise<{ since: string }> {
++  return (await handleResponse(await apiFetch(`/flows/plan/run`, {
++    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ research, decisions }),
++  }))) as { since: string }
++}
++
++export async function flowUsage(since: string): Promise<import("./types").FlowUsage> {
++  return (await handleResponse(await apiFetch(`/flows/usage?since=${encodeURIComponent(since)}`))) as import("./types").FlowUsage
 +}
 +
 +export async function enablePayments(): Promise<void> {
@@ -87,7 +114,7 @@ index c214349..161aae3 100644
 +  return handleResponse(res) as Promise<import("./types").DataSnapshot>
 +}
 +
-@@ -287,2 +333,8 @@ export async function fetchDocumentText(path: string): Promise<string> {
+@@ -287,2 +360,8 @@ export async function fetchDocumentText(path: string): Promise<string> {
 -export async function saveDocument(path: string, html: string): Promise<void> {
 -  await handleResponse(await apiFetch(path.replace(/^\/api/, ""), { method: "PUT", body: html, headers: { "Content-Type": "text/html; charset=utf-8" } }))
 +export async function fetchSheets(path: string): Promise<Array<{ name: string; rows: string[][] }>> {
@@ -98,7 +125,7 @@ index c214349..161aae3 100644
 +  const isHtml = path.endsWith(".html")
 +  const contentType = isHtml ? "text/html; charset=utf-8" : "text/markdown; charset=utf-8"
 +  await handleResponse(await apiFetch(path.replace(/^\/api/, ""), { method: "PUT", body: content, headers: { "Content-Type": contentType } }))
-@@ -315,0 +368,12 @@ export async function isChatRunning(agentId: string): Promise<boolean> {
+@@ -315,0 +395,12 @@ export async function isChatRunning(agentId: string): Promise<boolean> {
 +// "Allow in this session" for a bot's outward actions (Jira, mail, GitHub): remembered for this browser tab only, per bot.
 +const OUTWARD_KEY = "neuron.allowOutward."
 +export function allowedThisSession(agentId: string): boolean {
@@ -111,24 +138,24 @@ index c214349..161aae3 100644
 +  try { Object.keys(sessionStorage).filter((k) => k.startsWith(OUTWARD_KEY)).forEach((k) => sessionStorage.removeItem(k)) } catch { /* nothing stored */ }
 +}
 +
-@@ -324 +388 @@ export async function chatStream(
+@@ -324 +415 @@ export async function chatStream(
 -  body: { content: string; model_override?: string; allow_spawn: boolean; voice?: boolean; voice_token?: string; attachments?: Array<{ id: string; name: string }> } | null,
 +  body: { content: string; allow_spawn: boolean; voice?: boolean; voice_token?: string; attachments?: Array<{ id: string; name: string }> } | null,
-@@ -327 +391 @@ export async function chatStream(
+@@ -327 +418 @@ export async function chatStream(
 -  onSpawn: (agents: Array<{ id: string; name: string; model: string; identity: string }>) => void,
 +  onSpawn: (agents: Array<{ id: string; name: string; identity: string }>) => void,
-@@ -363 +427 @@ export async function chatStream(
+@@ -363 +454 @@ export async function chatStream(
 -        resume ? { signal } : { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), signal },
 +        resume ? { signal } : { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...body, outward_ok: allowedThisSession(agentId) }), signal },
-@@ -426 +490 @@ export async function chatStream(
+@@ -426 +517 @@ export async function chatStream(
 -              agents?: Array<{ id: string; name: string; model: string; identity: string }>
 +              agents?: Array<{ id: string; name: string; identity: string }>
-@@ -653,0 +718 @@ export async function logoutAccount(): Promise<void> {
+@@ -653,0 +745 @@ export async function logoutAccount(): Promise<void> {
 +  forgetSessionAllowances()
-@@ -678,0 +744,2 @@ export async function createProject(body: {
+@@ -678,0 +771,2 @@ export async function createProject(body: {
 +  start_plan?: boolean // the team starts on a plan for the first build (the server's default is yes)
 +  new_repo?: { name: string; owner?: string; description?: string; private?: boolean } // created with the project, not before
-@@ -697,0 +765,35 @@ export async function searchRepos(query: string): Promise<RepoHit[]> {
+@@ -697,0 +792,35 @@ export async function searchRepos(query: string): Promise<RepoHit[]> {
 +// The person approves the project's first-build plan: Muse builds it in a sandbox, in the background, and the chat shows how it goes.
 +export async function startBuild(projectId: string, plan: string, row?: number): Promise<void> {
 +  const res = await apiFetch(`/projects/${encodeURIComponent(projectId)}/build`, {
@@ -164,7 +191,7 @@ index c214349..161aae3 100644
 +  return handleResponse(res) as Promise<{ full_name: string; private: boolean; description: string }>
 +}
 +
-@@ -757,0 +860,20 @@ export async function linkRepo(projectId: string, repo: string): Promise<string>
+@@ -757,0 +887,20 @@ export async function linkRepo(projectId: string, repo: string): Promise<string>
 +export async function setCodingBot(projectId: string, agentId: string): Promise<string> {
 +  const res = await apiFetch(`/projects/${encodeURIComponent(projectId)}/coding-bot`, {
 +    method: "PUT",
@@ -185,24 +212,24 @@ index c214349..161aae3 100644
 +  return data.pr_reviews
 +}
 +
-@@ -770 +892 @@ export async function fetchMembers(projectId: string): Promise<ProjectMember[]>
+@@ -770 +919 @@ export async function fetchMembers(projectId: string): Promise<ProjectMember[]>
 -export async function addMember(projectId: string, email: string): Promise<ProjectMember> {
 +export async function addMember(projectId: string, email: string, field = ""): Promise<ProjectMember> {
-@@ -774 +896 @@ export async function addMember(projectId: string, email: string): Promise<Proje
+@@ -774 +923 @@ export async function addMember(projectId: string, email: string): Promise<Proje
 -    body: JSON.stringify({ email }),
 +    body: JSON.stringify({ email, field }),
-@@ -784 +906 @@ export async function deleteInvite(projectId: string, email: string): Promise<vo
+@@ -784 +933 @@ export async function deleteInvite(projectId: string, email: string): Promise<vo
 -export type DirectMessage = { id: number; from: string; to: string; content: string; at: string | null; reactions?: Record<string, string>; reply_to?: number | null }
 +export type DirectMessage = { id: number; from: string; to: string; content: string; at: string | null; reactions?: Record<string, string>; reply_to?: number | null; withheld?: string[]; share?: "" | "pending" | "sharing" | "shared" | "declined" | "drafted" | "draft" | "sent" | "dropped" | "proceed" | "running" | "done" | "cancelled" | "private"; action?: boolean }
-@@ -810 +932,3 @@ export async function sendDirectTyping(personId: string, typing = true): Promise
+@@ -810 +959,3 @@ export async function sendDirectTyping(personId: string, typing = true): Promise
 -export async function fetchActiveTyping(): Promise<{ people: string[]; agents: string[] }> {
 +// agents: bots typing in a people chat, or working on their own (a turn the system started, one from another tab, a talk with a teammate).
 +// status: for those working on their own, what each is doing right now.
 +export async function fetchActiveTyping(): Promise<{ people: string[]; agents: string[]; status?: Record<string, string> }> {
-@@ -812 +936 @@ export async function fetchActiveTyping(): Promise<{ people: string[]; agents: s
+@@ -812 +963 @@ export async function fetchActiveTyping(): Promise<{ people: string[]; agents: s
 -  return handleResponse(res) as Promise<{ people: string[]; agents: string[] }>
 +  return handleResponse(res) as Promise<{ people: string[]; agents: string[]; status?: Record<string, string> }>
-@@ -823,0 +948,27 @@ export async function sendDirect(personId: string, content: string, replyTo?: nu
+@@ -823,0 +975,27 @@ export async function sendDirect(personId: string, content: string, replyTo?: nu
 +export async function shareDirect(personId: string, messageId: number, share: boolean): Promise<DirectMessage> {
 +  const res = await apiFetch(`/direct/${encodeURIComponent(personId)}/${messageId}/share`, {
 +    method: "POST",
@@ -230,9 +257,9 @@ index c214349..161aae3 100644
 +  return handleResponse(res) as Promise<DirectMessage>
 +}
 +
-@@ -932 +1082,0 @@ export type SpecProposal = {
+@@ -932 +1109,0 @@ export type SpecProposal = {
 -  model: string
-@@ -969,0 +1120,115 @@ export async function savePushSubscription(subscription: PushSubscriptionJSON):
+@@ -969,0 +1147,115 @@ export async function savePushSubscription(subscription: PushSubscriptionJSON):
 +
 +
 +export interface DocItem {

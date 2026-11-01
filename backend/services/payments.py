@@ -233,6 +233,28 @@ def apply_event(db: Session, event: dict) -> Payment | None:
     return None
 
 
+def announce(db: Session, payment: Payment) -> None:
+    """Tell the owner, in their chat with the project's Master, that a payment has come in. Never raises: the order's routines must still run."""
+    try:
+        from core.models import Agent, ProjectMember
+        from services import chat_rows
+
+        owner = db.query(ProjectMember).filter(ProjectMember.project_id == payment.project_id, ProjectMember.role == "owner").first()
+        master = db.query(Agent).filter(Agent.project_id == payment.project_id, Agent.is_master == "true").first()
+        if owner is None or master is None:
+            return
+        record = db.get(ProjectRecord, payment.record_id) if payment.record_id else None
+        data = record.data if record and isinstance(record.data, dict) else {}
+        items = [f"{l.get('qty', 1)}× {l.get('name', '')}" for l in data.get("items", []) if isinstance(l, dict)][:4]
+        who = next((str(data[k])[:60] for k in ("name", "customer", "email") if data.get(k)), "")
+        paid_at = payment.paid_at or datetime.utcnow()
+        chat_rows.write_row(master.id, owner.user_id, chat_rows.card(
+            "payment", amount=payment.amount, currency=payment.currency, net=net(payment), fee=payment.platform_fee + payment.gateway_fee, test=payment.test,
+            who=who, items=items, ref=payment.id[:8], payout=(paid_at + timedelta(days=REFUND_DAYS)).strftime("%d %b")))
+    except Exception:
+        log.exception("Could not tell the owner about payment %s", payment.id)
+
+
 def order_message(db: Session, payment: Payment) -> str:
     """What the order routines are given when an order has been paid: the order as the customer made it."""
     record = db.get(ProjectRecord, payment.record_id)

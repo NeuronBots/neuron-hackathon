@@ -1,10 +1,10 @@
 diff --git a/backend/router.py b/backend/router.py
-index 7575742..63ff583 100644
+index 7575742..68477a5 100644
 --- a/backend/router.py
 +++ b/backend/router.py
 @@ -12 +12,2 @@ from core.database import Base, engine
 -from routes import agents, auth, billing, chat, events, misc, model_proxy, oauth, people, projects, routines, spec_proposals, tasks
-+from routes import agents, auth, billing, chat, events, misc, model_proxy, oauth, people, projects, records, routines, sites, wallet, spec_proposals, tasks, webhooks
++from routes import agents, auth, billing, chat, events, misc, model_proxy, oauth, people, projects, flows, records, routines, sites, wallet, spec_proposals, tasks, webhooks
 +from routers import docs as docs_router
 @@ -15,0 +17,2 @@ load_dotenv()
 +from core.timeutil import set_request_timezone
@@ -18,7 +18,7 @@ index 7575742..63ff583 100644
 +
 @@ -36 +45 @@ Base.metadata.create_all(bind=engine)
 -for module in (auth, billing, projects, agents, chat, tasks, events, misc, model_proxy, oauth, people, routines, spec_proposals):
-+for module in (auth, billing, projects, agents, chat, tasks, events, misc, model_proxy, oauth, people, routines, sites, spec_proposals, webhooks, records, wallet):
++for module in (auth, billing, projects, agents, chat, tasks, events, misc, model_proxy, oauth, people, routines, sites, spec_proposals, webhooks, records, wallet, flows):
 @@ -37,0 +47,2 @@ for module in (auth, billing, projects, agents, chat, tasks, events, misc, model
 +
 +app.include_router(docs_router.router, tags=["/api/docs"])
