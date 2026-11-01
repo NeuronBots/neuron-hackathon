@@ -38,6 +38,7 @@ def describe(name: str, args: dict) -> str:
         "publish_site": "Publish the project's built website on Neuron: it becomes public on the internet" + (f" (build {args['archive']})" if args.get("archive") else ""),
         "update_site": f"Change {args.get('path') or 'a file'} on the public website",
         "add_routine": f"Add the routine “{args.get('title') or ''}”" + (f" for {args['bot']}" if args.get("bot") else "") + ": it runs by itself every time an order comes in from the website",
+        "update_routine": f"Change the routine “{args.get('title') or ''}”" + (f" of {args['bot']}" if args.get("bot") else "") + ": this is what runs by itself on every order from the website",
         "build_project": "Have Muse build the project's first version from its plan, in a sandbox" + (f" ({args['plan']})" if args.get("plan") else "") + ". It writes and runs the code, saves it in Docs and offers a pull request",
         "build_wiki": "Build or update this project's GitHub wiki" + (f", focusing on: {args['focus']}" if args.get("focus") else "") + ". Pages people wrote are left untouched",
     }.get(name) or _words(name)
@@ -72,6 +73,7 @@ def done_note(name: str, args: dict, result: str) -> str:
         "publish_site": "The website has been published" + (f": {m.group(0)}" if (m := re.search(r"https?://\S+", result or "")) else "."),
         "update_site": "The public website has been changed.",
         "add_routine": f"The routine “{_text(args.get('title'))}” has been added: it runs on every new order.",
+        "update_routine": f"The routine “{_text(args.get('title'))}” has been changed.",
         "start_coding_session": "The coding session is starting; the app appears beside the chat.",
         "push_pr_fix": "The fixes have been pushed to the pull request's branch.",
         "build_project": "Muse has started building the first version; progress shows in the chat.",

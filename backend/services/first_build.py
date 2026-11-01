@@ -15,6 +15,7 @@ import re
 import tarfile
 import time
 
+from core.timeutil import request_timezone
 from services import build_prompt, chat_rows, code_review as cr, imagegen, runs, starter
 from services.build_sandbox import BuildBox
 
@@ -174,6 +175,7 @@ async def start(project_id: str, user_id: str, plan: str, row_id: int | None = N
     info = await asyncio.to_thread(_load, project_id, user_id, plan)
     agent_id = agent_id or info["agent_id"]
     info["agent_id"] = agent_id
+    info["tz"] = request_timezone.get()  # '' when the build was not started from the person's browser
     pill = await asyncio.to_thread(chat_rows.write_row, agent_id, user_id, chat_rows.card("build", project=info["name"], status="running", stage="Starting"))
     if row_id:
         await asyncio.to_thread(_mark_started, agent_id, user_id, row_id)
@@ -296,7 +298,7 @@ async def review_and_fix(box: BuildBox, name: str, has_team: bool, progress) -> 
     return review, done, fixed
 
 
-async def build(repo: str, user_id: str, plan: str, name: str, goal: str, progress, team: list[tuple[str, str]] | None = None, live=None) -> dict:
+async def build(repo: str, user_id: str, plan: str, name: str, goal: str, progress, team: list[tuple[str, str]] | None = None, live=None, tz: str = "") -> dict:
     """Muse builds the plan in a sandbox, a second Muse reviews it, and the first fixes what the review verified wrong. Returns
     {archive, files, guide, summary, review, qa}. Raises RuntimeError with something the person can read. `live` is the project's coding session
     (services/preview.py): the build then runs in its sandbox, where the app is started as soon as it can be and goes on as the session afterwards."""
@@ -324,7 +326,7 @@ async def build(repo: str, user_id: str, plan: str, name: str, goal: str, progre
         await progress("Muse is building")
         ticker = asyncio.create_task(_ticker(box, progress, len(starter.files(name)) if seeded else 0))
         try:
-            summary = await box.build(build_prompt.build_prompt(name, goal, has_code, bool(team), seeded))
+            summary = await box.build(build_prompt.build_prompt(name, goal, has_code, bool(team), seeded, tz))
         finally:
             ticker.cancel()
         guide = await box.read(build_prompt.RUN_GUIDE)
@@ -415,12 +417,19 @@ def order_routines_brief(name: str, plan: str) -> str:
     owns = "\n".join(f"- {who}: {what}" for who, what in ownership.parse(plan).items()) or "- (the plan does not say: use each teammate's field)"
     return (
         f"The first version of {name} is built. When its site is published, visitors send orders and questions from the page, and each one reaches you. "
-        "Set up what happens every time one comes in, as routines.\n\n"
+        "Work out with the person what happens every time one comes in, then set it up as routines. Do not guess it alone.\n\n"
         f"Who owns what, from the plan:\n{owns}\n\n"
-        "Call add_routine once for each bot whose part it is (yourself, and a teammate with `bot` set to their name), at most four in all. Each instruction is a short list of steps for that bot, "
-        "using its own tools and only what it owns, for example: read the order, check the items and prices against the site, add a board task for the owner, draft the reply for them to send. "
-        "Nothing is sent outside the app by a routine: anything that leaves it still waits for the person's Allow. They allow or decline each routine with a card, in one go. "
-        "Then say in two lines what you proposed. The message of the visitor is given to each routine as data when it runs.\n"
+        "1. Ask each owning teammate (ask_teammate) for the steps they would take on a new order, using their own tools and only what they own.\n"
+        "2. Put what you could not settle yourself to the person with request_decision, one question at a time, your recommendation first and two to four options: "
+        "for example who confirms an order, what to do when an item is unavailable, what the reply to the visitor should say, and whether to email the customer a confirmation. Stop and wait for the answer, then carry on with it.\n"
+        "3. Then call add_routine once for each bot whose part it is (yourself, and a teammate with `bot` set to their name), at most four in all. Each instruction is a short list of steps "
+        "that reflects what the person decided, for example: read the order, check the items and prices against the site, add a board task for the owner, draft the reply for them to send. "
+        "Every order is already saved as a record in the orders collection with status new, and each routine is told its id: steps should move its status along (confirmed, ready, done) with save_record, and may keep other data (stock, bookings) in collections of their own with save_record and list_records. "
+        "A step may use any connected tool the bot has, not only board tasks: email the customer a confirmation (the address comes from their message), open a Jira ticket, and so on. Name the action plainly in the steps (say \"email\", say \"Jira\") "
+        "so that bot has those tools when the routine runs, and ask the person in step 2 which of them they want. "
+        "Nothing leaves the app by itself: each email or ticket a routine makes waits for the person's Allow, with the whole message shown, and the routine carries on once they answer. "
+        "They allow or decline each routine with a card, in one go.\n"
+        "4. Say in two lines what you proposed, and that they can tell you what to change in any of them. The message of the visitor is given to each routine as data when it runs.\n"
     )
 
 
@@ -473,7 +482,7 @@ async def _build_and_tell(project_id: str, user_id: str, info: dict, pill: int) 
                 live = await preview.begin_live(project_id, user_id, agent_id, name)
             except Exception:
                 log.exception("Could not start the live session for %s: the build goes on without it", name)
-            result = await build(repo, user_id, info["plan"], name, info["goal"], progress, info.get("team"), live)
+            result = await build(repo, user_id, info["plan"], name, info["goal"], progress, info.get("team"), live, info.get("tz", ""))
             if live is not None:
                 result["session"] = live.status in ("starting", "running")
         saved = await asyncio.to_thread(_save, project_id, user_id, agent_id, name, result["archive"], result["guide"], result["qa"])
@@ -521,6 +530,32 @@ async def _build_and_tell(project_id: str, user_id: str, info: dict, pill: int) 
     _refresh_goals(project_id, user_id)  # and again with what came of it
     if result is not None and "index.html" in result["files"]:  # a site that takes orders: the team gets its first routines for them
         _start_kickoff(agent_id, "Neuron", project_id, order_routines_brief(name, info["plan"]), user_id)
+
+
+async def order_routines_for_bot(agent_id: str) -> str:
+    """The plan_order_routines tool: any bot can be asked to set up or refine the order routines. Returns what the bot is told."""
+    from core.database import SessionLocal
+    from core.models import Agent
+    from core.usage import current_user
+
+    user = current_user()
+    db = SessionLocal()
+    try:
+        agent = db.get(Agent, agent_id)
+        project_id = agent.project_id if agent else ""
+    finally:
+        db.close()
+    plan = user and project_id and await asyncio.to_thread(latest_plan, project_id, user)
+    if not plan:
+        return "Error: there is no first-build plan on this project yet, so there is no one to give the order steps to. Write the plan first."
+    try:
+        info = await asyncio.to_thread(_load, project_id, user, plan)
+    except BuildError as exc:
+        return f"Error: {exc}"
+    from services import routines
+    have = await asyncio.to_thread(routines.existing_for_order, project_id)
+    return order_routines_brief(info["name"], info["plan"]) + (
+        f"\nOrder routines that already exist (change these with update_routine, do not add a second one):\n{have}\n" if have else "")
 
 
 async def start_for_bot(agent_id: str, plan: str = "") -> str:

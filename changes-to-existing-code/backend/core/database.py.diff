@@ -1,8 +1,11 @@
 diff --git a/backend/core/database.py b/backend/core/database.py
-index 20e3807..8c1d3c3 100644
+index 20e3807..16ac554 100644
 --- a/backend/core/database.py
 +++ b/backend/core/database.py
-@@ -65,0 +66,8 @@ BACKFILL_CHILD_ID = f"""
+@@ -25,0 +26,2 @@ engine = create_engine(
++    pool_size=int(os.getenv("DB_POOL_SIZE", "15")),  # ponytail: one worker; a published site's order starts several bots at once, each holding a connection while it works
++    max_overflow=int(os.getenv("DB_MAX_OVERFLOW", "15")),  # 30 in all, well under Postgres's 100
+@@ -65,0 +68,8 @@ BACKFILL_CHILD_ID = f"""
 +# Old rows hold a JSON list, a comma-separated list ("a@x.y,b@x.y") or nothing. All of them become a JSON list instead of failing the cast.
 +SHARED_WITH_TO_JSON = """ALTER TABLE docs ALTER COLUMN shared_with TYPE JSON USING (CASE
 +    WHEN shared_with IS NULL OR btrim(shared_with) = '' THEN '[]'::json
@@ -11,20 +14,20 @@ index 20e3807..8c1d3c3 100644
 +END)"""  # no subquery: Postgres does not allow one in USING
 +
 +
-@@ -87,0 +96,6 @@ def migrate() -> None:
+@@ -87,0 +98,6 @@ def migrate() -> None:
 +        if "projects" in existing and "site_slug" not in {c["name"] for c in insp.get_columns("projects")}:
 +            conn.execute(text("ALTER TABLE projects ADD COLUMN site_slug VARCHAR(60)"))
 +            conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_projects_site_slug ON projects (site_slug)"))
 +        for table in ("project_members", "project_invites"):
 +            if table in existing and "field" not in {c["name"] for c in insp.get_columns(table)}:
 +                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN field VARCHAR(120) NOT NULL DEFAULT ''"))
-@@ -93,0 +108,5 @@ def migrate() -> None:
+@@ -93,0 +110,5 @@ def migrate() -> None:
 +                ("project_id", "ALTER TABLE usage_events ADD COLUMN project_id VARCHAR(36)"),
 +                ("request_id", "ALTER TABLE usage_events ADD COLUMN request_id VARCHAR(64) DEFAULT NULL"),
 +                ("characters", "ALTER TABLE usage_events ADD COLUMN characters INTEGER NOT NULL DEFAULT 0"),
 +                ("audio_seconds", "ALTER TABLE usage_events ADD COLUMN audio_seconds FLOAT NOT NULL DEFAULT 0.0"),
 +                ("voice_id", "ALTER TABLE usage_events ADD COLUMN voice_id VARCHAR(64) NOT NULL DEFAULT ''"),
-@@ -96,0 +116,45 @@ def migrate() -> None:
+@@ -96,0 +118,45 @@ def migrate() -> None:
 +            if engine.dialect.name == "postgresql":
 +                # The constraint comes off first: a column made NOT NULL DEFAULT '' by an earlier version refuses the UPDATE to NULL while it is on.
 +                conn.execute(text("ALTER TABLE usage_events ALTER COLUMN request_id DROP NOT NULL"))
@@ -70,7 +73,7 @@ index 20e3807..8c1d3c3 100644
 +                            conn.execute(text("ALTER TABLE docs ALTER COLUMN shared_with SET DEFAULT '[]'::json"))
 +                    except Exception as exc:
 +                        print(f"[migrate] docs.shared_with was left as text: {type(exc).__name__}: {str(exc)[:160]}")
-@@ -112,0 +177,9 @@ def migrate() -> None:
+@@ -112,0 +179,9 @@ def migrate() -> None:
 +        if "direct_messages" in existing and "withheld" not in {c["name"] for c in insp.get_columns("direct_messages")}:
 +            conn.execute(text("ALTER TABLE direct_messages ADD COLUMN withheld VARCHAR(60) NOT NULL DEFAULT ''"))
 +        if "direct_messages" in existing and "share" not in {c["name"] for c in insp.get_columns("direct_messages")}:
@@ -80,12 +83,17 @@ index 20e3807..8c1d3c3 100644
 +        if "direct_messages" in existing:  # a summary or a write in progress when the server stopped never finishes; let its asker send it again
 +            conn.execute(text("UPDATE direct_messages SET share = 'pending' WHERE share = 'sharing'"))
 +            conn.execute(text("UPDATE direct_messages SET share = 'proceed' WHERE share = 'running' AND action <> ''"))
-@@ -215,0 +289,4 @@ def migrate() -> None:
+@@ -207,0 +283,4 @@ def migrate() -> None:
++        if "projects" in existing and "proposed_prices" not in project_cols:
++            conn.execute(text("ALTER TABLE projects ADD COLUMN proposed_prices TEXT NOT NULL DEFAULT ''"))
++        if "projects" in existing and "payments_enabled" not in project_cols:
++            conn.execute(text("ALTER TABLE projects ADD COLUMN payments_enabled BOOLEAN NOT NULL DEFAULT false"))
+@@ -215,0 +295,4 @@ def migrate() -> None:
 +        if "projects" in existing and "coding_bot_id" not in project_cols:
 +            conn.execute(text("ALTER TABLE projects ADD COLUMN coding_bot_id VARCHAR(36) NOT NULL DEFAULT ''"))
 +        if "projects" in existing and "pr_reviews" not in project_cols:
 +            conn.execute(text("ALTER TABLE projects ADD COLUMN pr_reviews BOOLEAN NOT NULL DEFAULT true"))
-@@ -239,0 +317,10 @@ def migrate() -> None:
+@@ -239,0 +323,10 @@ def migrate() -> None:
 +        if "documents" in existing:
 +            doc_rec_cols = {c["name"] for c in insp.get_columns("documents")}
 +            shared_ddl = "ALTER TABLE documents ADD COLUMN shared_with JSON DEFAULT '[]'::json" if engine.dialect.name == "postgresql" else "ALTER TABLE documents ADD COLUMN shared_with TEXT DEFAULT '[]'"
@@ -96,5 +104,5 @@ index 20e3807..8c1d3c3 100644
 +            ):
 +                if name not in doc_rec_cols:
 +                    conn.execute(text(ddl))
-@@ -314,0 +402 @@ USER_CASCADE_FKS = (
+@@ -314,0 +408 @@ USER_CASCADE_FKS = (
 +    ("voice_calls", "user_id", "voice_calls_user_id_fkey"),

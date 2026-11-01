@@ -14,6 +14,8 @@ import os
 import re
 import secrets
 import time
+import io
+import tarfile
 import zipfile
 
 import httpx
@@ -114,11 +116,21 @@ async def _extract(box: PreviewBox, archive: str, agent_id: str, user_id: str, s
         out = Path(tmp) / "code"
         out.mkdir()
         await asyncio.to_thread(safe_extract, path, out)
-        files = {str(p.relative_to(out)): p.read_text(encoding="utf-8", errors="replace") for p in out.rglob("*") if p.is_file() and p.stat().st_size < 2_000_000}
+        files = {}  # the text files, for finding how to run the project; pictures and other binaries go in the tarball, which keeps their bytes
+        for p in out.rglob("*"):
+            if p.is_file() and p.stat().st_size < 2_000_000:
+                try:
+                    files[str(p.relative_to(out))] = p.read_text(encoding="utf-8")
+                except UnicodeDecodeError:
+                    pass
+        tarball = io.BytesIO()
+        with tarfile.open(fileobj=tarball, mode="w:gz") as tar:
+            tar.add(out, arcname="project")  # one top folder: the sandbox unpacks it with --strip-components=1
+    extra = {}
     if session:  # Muse will change this code: it works under the same skills and rules as the build did
-        files.update(build_prompt.skill_files())
-        files["AGENTS.md"] = build_prompt.with_rules(files.get("AGENTS.md"))
-    await box.load(empty_tarball(), files)
+        extra = {**build_prompt.skill_files(), "AGENTS.md": build_prompt.with_rules(files.get("AGENTS.md"))}
+        files.update(extra)
+    await box.load(tarball.getvalue(), extra)
     return files
 
 

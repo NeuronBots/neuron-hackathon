@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import json
 import os
 import re
 import shutil
@@ -156,23 +157,68 @@ def run(name: str, args: dict, agent_id: str) -> str:
         return f"Error: {exc}"
 
 
-def _run_order_routines(project_id: str, message: str) -> int:
-    """Start every enabled order routine of this project's bots on the visitor's message. Returns how many started."""
+def order_data(message: str) -> dict:
+    """What a visitor sent, as record fields: the page's own fields when it sent a JSON object, else the text as it came."""
+    try:
+        data = json.loads(message)
+    except ValueError:
+        data = None
+    return data if isinstance(data, dict) else {"message": message[:ACTION_MAX]}
+
+
+def project_of(project_id: str) -> Project | None:
     from core.database import SessionLocal
-    from core.models import Routine
-    from services import routines
 
     db = SessionLocal()
     try:
-        ids = [r.id for r in db.query(Routine).join(Agent, Agent.id == Routine.agent_id)
-               .filter(Agent.project_id == project_id, Routine.enabled.is_(True), Routine.schedule.like('%"on_order"%'))]
+        project = db.get(Project, project_id)
+        if project is not None:
+            db.expunge(project)  # read after the session is closed
+        return project
     finally:
         db.close()
-    return sum(routines.fire(i, message[:ACTION_MAX]) for i in ids)
 
 
-async def deliver(project: Project, message: str) -> None:
-    """A visitor's message from the page. With order routines (allowed by the owner) each one runs on it; without, the Master is told, as data and with no tools."""
+def save_order(project_id: str, message: str, status: str = "new") -> str:
+    """Keep the visitor's message as a record in the project's orders (status "test" for one sent from the preview). '' if it could not be stored: the routines still run."""
+    from core.database import SessionLocal
+    from tools import records
+
+    db = SessionLocal()
+    try:
+        return records.add(project_id, "orders", order_data(message[:ACTION_MAX]), status, db).id
+    except ValueError:
+        return ""
+    finally:
+        db.close()
+
+
+def _order_routine_ids(project_id: str) -> list[str]:
+    from core.database import SessionLocal
+    from core.models import Routine
+
+    db = SessionLocal()
+    try:
+        return [r.id for r in db.query(Routine).join(Agent, Agent.id == Routine.agent_id)
+                .filter(Agent.project_id == project_id, Routine.enabled.is_(True), Routine.schedule.like('%"on_order"%'))]
+    finally:
+        db.close()
+
+
+def _run_order_routines(ids: list[str], message: str, order_id: str = "", test: bool = False) -> int:
+    """Start every one of these order routines on the visitor's message. Returns how many started. Runs on the event loop: starting a bot's run needs it."""
+    from services import routines
+
+    return sum(routines.fire(i, message[:ACTION_MAX], order_id, test) for i in ids)
+
+
+async def deliver(project: Project, message: str, test: bool = False) -> None:
+    """A visitor's message from the page (test: sent from the preview, so the record is labelled and the bots are told): kept as an order, then given to the team."""
+    await dispatch(project, message, await asyncio.to_thread(save_order, project.id, message, "test" if test else "new"), test)
+
+
+async def dispatch(project: Project, message: str, order_id: str, test: bool = False) -> None:
+    """Start the team on an order that is already saved. With order routines (allowed by the owner) each one runs on it; without, the Master is told, as data and with no tools."""
     from core.database import SessionLocal
     from routes.chat import _start_kickoff
     from services.review_render import untrusted_block
@@ -189,8 +235,8 @@ async def deliver(project: Project, message: str) -> None:
     master_id, owner_id = await asyncio.to_thread(who)
     if not master_id:
         return
-    if await asyncio.to_thread(_run_order_routines, project.id, message):
+    if _run_order_routines(await asyncio.to_thread(_order_routine_ids, project.id), message, order_id, test):
         return  # the owner allowed these routines: they are what happens when an order comes in
-    text = (f"A visitor of the live website of {project.name} just sent this from the page (an order, a question or a form). Tell the person what came in, in one or two lines, "
+    text = (f"A visitor of the {'preview (a TEST, before publishing)' if test else 'live website'} of {project.name} just sent this from the page (an order, a question or a form). Tell the person what came in, in one or two lines, "
             "and what you suggest doing about it. You cannot act on it yourself: they decide.\n\n" + untrusted_block("Visitor message", message[:ACTION_MAX]))
     _start_kickoff(master_id, "Website", project.id, text, owner_id, no_tools=True)

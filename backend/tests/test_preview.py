@@ -665,3 +665,102 @@ def test_a_vite_project_is_started_under_the_previews_own_path_and_asked_for_the
 def test_the_frame_is_given_in_memory_storage_for_apps_that_read_it_while_rendering():
     html = pv.rewrite_html("<html><head></head><body></body></html>", "/api/preview/x/k/")
     assert "localStorage" in html and "sessionStorage" in html and html.index("localStorage") < html.index("</head>")
+
+
+def test_a_restarted_session_gets_its_pictures_byte_for_byte(tmp_path, monkeypatch):
+    import asyncio
+    import io
+    import tarfile
+    import zipfile
+
+    from services import preview as pv
+
+    picture = bytes(range(256)) * 8  # not valid UTF-8: reading it as text would change it
+    archive = tmp_path / "build.zip"
+    with zipfile.ZipFile(archive, "w") as z:
+        z.writestr("package.json", '{"scripts": {"dev": "vite"}}')
+        z.writestr("images/hero.webp", picture)
+    monkeypatch.setattr(pv, "_find", lambda *a: (archive, "", ""))
+    loaded = {}
+
+    class Box:
+        async def load(self, tarball, files):
+            loaded["tar"], loaded["files"] = tarball, files
+
+    files = asyncio.run(pv._extract(Box(), "build.zip", "a", "u"))
+    with tarfile.open(fileobj=io.BytesIO(loaded["tar"])) as tar:
+        assert tar.extractfile("project/images/hero.webp").read() == picture
+    assert "package.json" in files and "images/hero.webp" not in files  # the text map is only for finding how to run it
+
+
+def test_restart_session_starts_on_the_newest_build_or_says_there_is_none(db, monkeypatch):
+    import asyncio
+
+    from fastapi import HTTPException
+
+    from core.models import Agent, Project, ProjectMember, User
+    from routes import projects as rp
+    from services import preview as pv
+
+    user = User(id="u", name="U", email="u@x.io", password_hash="x")
+    db.add_all([user, Project(id="p", name="P")])
+    db.flush()
+    db.add_all([Agent(id="m", name="Master", system_prompt="x", project_id="p", is_master="true"), ProjectMember(project_id="p", user_id="u", role="owner")])
+    db.commit()
+    started = []
+
+    async def fake_start(project_id, name, user_id, agent_id, archive):
+        started.append((project_id, agent_id, archive))
+        return {"id": "s1", "status": "starting"}
+
+    monkeypatch.setattr(pv, "start_session", fake_start)
+    monkeypatch.setattr(pv, "_context", lambda agent_id: ("p", "P", "", ""))
+    try:
+        asyncio.run(rp.restart_session("p", user, db))
+        raise AssertionError("no saved build should be refused")
+    except HTTPException as exc:
+        assert exc.status_code == 404 and not started
+    monkeypatch.setattr(pv, "_context", lambda agent_id: ("p", "P", "", "p-first-build-1.zip"))
+    assert asyncio.run(rp.restart_session("p", user, db))["id"] == "s1" and started == [("p", "m", "p-first-build-1.zip")]
+
+
+def test_an_order_from_the_preview_is_kept_as_a_test_and_the_bots_are_told(db, monkeypatch):
+    import asyncio
+
+    from starlette.requests import Request
+
+    from core.models import Agent, Project, ProjectRecord
+    from routes import projects as rp
+    from services import preview as pv, sites
+
+    db.add(Project(id="p", name="P"))
+    db.commit()
+    shown = type("P", (), {"id": "pv1", "project_id": "p"})()
+    monkeypatch.setattr(pv, "by_key", lambda i, k: shown)
+    ran = []
+
+    def fire(rid, message, order_id, test):  # as a bot's run does: it needs the event loop, so it fails when called from a worker thread
+        asyncio.get_running_loop()
+        ran.append((rid, message, order_id, test))
+        return True
+
+    monkeypatch.setattr(sites, "_order_routine_ids", lambda project_id: ["r1"])
+    from services import routines as _routines
+    monkeypatch.setattr(_routines, "fire", fire)
+    db.add_all([Agent(id="m", name="Master", system_prompt="x", project_id="p", is_master="true")])
+    db.commit()
+
+    def post(body: bytes):
+        sent = [{"type": "http.request", "body": body, "more_body": False}]
+        async def receive(): return sent.pop(0)
+        return Request({"type": "http", "method": "POST", "headers": [], "query_string": b"", "path": "/"}, receive)
+
+    out = asyncio.run(rp.preview_proxy("pv1", "k", "_action", post(b'{"kind": "booking", "name": "Asha", "contact": "a@x.io"}')))
+    assert out.status_code == 200
+    row = db.query(ProjectRecord).one()
+    assert row.status == "test" and row.collection == "orders" and row.data == {"kind": "booking", "name": "Asha", "contact": "a@x.io"}
+    assert len(ran) == 1 and ran[0][2] == row.id and ran[0][3] is True  # the bots' flow runs, told it is a test
+    from services import routines
+    assert "TEST" in routines._text(type("R", (), {"title": "t", "instruction": "i"})(), "hello", row.id, True) and "TEST" not in routines._text(type("R", (), {"title": "t", "instruction": "i"})(), "hello", row.id)
+    assert sites.order_data("plain text") == {"message": "plain text"}
+    assert asyncio.run(rp.preview_proxy("pv1", "k", "_action", post(b"   "))).status_code == 413

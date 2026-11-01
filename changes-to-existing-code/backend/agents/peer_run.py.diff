@@ -1,7 +1,10 @@
 diff --git a/backend/agents/peer_run.py b/backend/agents/peer_run.py
-index a113e51..22803bc 100644
+index a113e51..c5d8c4b 100644
 --- a/backend/agents/peer_run.py
 +++ b/backend/agents/peer_run.py
+@@ -8 +8 @@ from sqlalchemy.orm import Session
+-from tools import calendar_tools
++from tools import calendar_tools, records
 @@ -11,0 +12 @@ from tools import recall
 +from tools.outbox import queue_outward
 @@ -13,3 +14,3 @@ from core.database import SessionLocal
@@ -41,13 +44,16 @@ index a113e51..22803bc 100644
 @@ -193 +182 @@ async def _run_peer_inner(
 -                    result_text, ev = run_request_decision(target.id, args.get("title", ""), args.get("question", ""), db)
 +                    result_text, ev = run_request_decision(target.id, args.get("title", ""), args.get("question", ""), db, to=args.get("to", ""))
-@@ -202,0 +192,2 @@ async def _run_peer_inner(
+@@ -198,0 +188,2 @@ async def _run_peer_inner(
++                elif tname in records.NAMES:
++                    result_text = records.run(tname, tu.get("input") or {}, target.project_id, target.name, db)
+@@ -202,0 +194,2 @@ async def _run_peer_inner(
 +                elif (held := queue_outward(target.id, tname, tu.get("input") or {}, jira_scope, repo_scope, db, turn=turn_holds)) is not None:
 +                    result_text, ev = held  # no person is in this teammate's chat: an outward write waits for approval
-@@ -246 +237 @@ async def _run_peer_inner(
+@@ -246 +239 @@ async def _run_peer_inner(
 -                        "model": (model or target.model),
 +                        "model": model or CHAT_MODEL,
-@@ -251,9 +242 @@ async def _run_peer_inner(
+@@ -251,9 +244 @@ async def _run_peer_inner(
 -                    resp = await client.post(
 -                        f"{ANTHROPIC_BASE}/messages",
 -                        headers={

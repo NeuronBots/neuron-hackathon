@@ -1,5 +1,5 @@
 diff --git a/backend/routes/chat.py b/backend/routes/chat.py
-index df62b39..674e221 100644
+index df62b39..f0a3ca5 100644
 --- a/backend/routes/chat.py
 +++ b/backend/routes/chat.py
 @@ -22 +22 @@ from agents.memory import flush_memory
@@ -11,6 +11,9 @@ index df62b39..674e221 100644
 @@ -47 +47 @@ from tools.gating import gate_tools
 -from tools.outbox import GH_PUSHES, is_mail_send, run_queue_mail, run_queue_push
 +from tools.outbox import queue_outward
+@@ -52 +52 @@ from integrations import notifications
+-from tools import calendar_tools
++from tools import calendar_tools, records
 @@ -62 +62,2 @@ from core.timing import log_span
 -from core.limits import allowance, clamp_model, over_limit, plan_in
 +from core.limits import allowance, over_limit, plan_in
@@ -88,35 +91,41 @@ index df62b39..674e221 100644
 @@ -663 +661 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
 -                        result_text, ev = run_request_decision(agent.id, tc["arguments"].get("title", ""), tc["arguments"].get("question", ""), db)
 +                        result_text, ev = run_request_decision(agent.id, tc["arguments"].get("title", ""), tc["arguments"].get("question", ""), db, to=tc["arguments"].get("to", ""))
-@@ -680,4 +678,2 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
+@@ -675,0 +674,2 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
++                    elif tname in records.NAMES:
++                        result_text = records.run(tname, tc["arguments"], agent.project_id, agent.name, db)
+@@ -680,4 +680,2 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
 -                    elif kickoff and tname in GH_PUSHES:
 -                        result_text, ev = run_queue_push(agent.id, tname, tc["arguments"], db)
 -                    elif kickoff and is_mail_send(tname):
 -                        result_text, ev = run_queue_mail(agent.id, tname, tc["arguments"], db)
 +                    elif gated and (held := queue_outward(agent.id, tname, tc["arguments"], jira_key, repo, db, interactive=not kickoff, turn=turn_holds)) is not None:
 +                        result_text, ev = held  # an outward write waits for a person: on the board if nobody is in the chat, else in a card here
-@@ -770 +766 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
+@@ -724 +722 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
+-                    local_db = ("load_board_tasks", "add_board_task", "complete_board_task", "request_decision", "fold_decisions", "propose_prompt_update", "propose_agent", "read_logs", "message_person", *calendar_tools.NAMES, *recall.NAMES)
++                    local_db = ("load_board_tasks", "add_board_task", "complete_board_task", "request_decision", "fold_decisions", "propose_prompt_update", "propose_agent", "read_logs", "message_person", *calendar_tools.NAMES, *records.NAMES, *recall.NAMES)
+@@ -770 +768 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
 -            tool_defs = _tools(await remote_tools(), api_messages)
 +            tool_defs = _tools([] if no_tools else await remote_tools(), api_messages)
-@@ -805 +800,0 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
+@@ -805 +802,0 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
 -                    force_headers = {"x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json"}
-@@ -808 +803 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
+@@ -808 +805 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
 -                        resp = await follow_client.post(f"{ANTHROPIC_BASE}/messages", headers=force_headers, json={
 +                        resp = await apost_retry(follow_client, {
-@@ -811,2 +806,2 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
+@@ -811,2 +808,2 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
 -                            resp = await follow_client.post(f"{ANTHROPIC_BASE}/messages", headers=force_headers, json={
 -                                "model": model, "max_tokens": CHAT_MAX_TOKENS, **cached(system, tool_defs, final_ask)})
 +                            resp = await apost_retry(follow_client, {  # one try: the first call already waited out a busy provider
 +                                "model": model, "max_tokens": CHAT_MAX_TOKENS, **cached(system, tool_defs, final_ask)}, tries=1)
-@@ -916,0 +912,3 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
+@@ -916,0 +914,3 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
 +                elif kind == "notice":
 +                    notice = "Couldn't write the follow-up: " + value  # "couldn't" is what makes the chat keep the banner after the turn
 +                    yield f"data: {json.dumps({'type': 'status', 'message': notice})}\n\n"
-@@ -957 +955,3 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
+@@ -957 +957,3 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
 -            if agent.is_master == "true" and asks_for_new_bot(body.content) and not tool_proposed:
 +            # A kickoff is the system talking to the bot (a brief, a handover, a decision answer), never a person asking for a bot: matching
 +            # its wording against a request turned a project brief into a bot of its own.
 +            if agent.is_master == "true" and not kickoff and asks_for_new_bot(body.content) and not tool_proposed:
-@@ -961 +961 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
+@@ -961 +963 @@ def _chat_stream(agent_id: str, body: ChatRequest, user, project: Project, db: S
 -                    "name": hinted.get("name") or name_from_job(body.content),
 +                    "name": hinted.get("name") or await suggest_name(body.content),

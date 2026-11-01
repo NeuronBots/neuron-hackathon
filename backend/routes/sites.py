@@ -14,7 +14,7 @@ router = APIRouter()
 
 # The page is someone's generated code on our domain: sandboxed, it has no access to the app's cookies or storage, and its scripts and forms still run.
 _PAGE = {"Content-Security-Policy": "sandbox allow-scripts allow-forms allow-popups", "X-Content-Type-Options": "nosniff", "Cache-Control": "no-cache"}
-_CORS = {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "content-type"}  # the sandboxed page has no origin
+_CORS = {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, POST, OPTIONS", "Access-Control-Allow-Headers": "content-type"}  # the sandboxed page has no origin
 _hits: dict[str, deque] = defaultdict(deque)
 PER_MINUTE = 5  # ponytail: in-process per site and visitor; a shared limiter if this runs on several workers
 
@@ -35,6 +35,52 @@ def site_root(slug: str):
     return RedirectResponse(f"/sites/{slug}/")
 
 
+def _gateway(method: str, path: str, body: dict | None = None) -> dict:
+    from routes.billing import _call
+    return _call(method, path, body)
+
+
+def _key_id() -> str:
+    from routes.billing import _keys
+    return _keys()[0]
+
+
+async def _pay_door(slug: str, name: str, request: Request, db: Session) -> JSONResponse:
+    """The page's way to the payments (_catalog, _pay, _pay/<id>, _refund): small, rate limited, and the amounts are the owner's, never the page's."""
+    project = db.query(Project).filter(Project.site_slug == slug).first()
+    if project is None:
+        return JSONResponse({"ok": False, "error": "No such site"}, status_code=404, headers=_CORS)
+    body = await request.body()
+    if len(body) > sites.ACTION_MAX:
+        return JSONResponse({"ok": False, "error": "Too large"}, status_code=413, headers=_CORS)
+    if request.method == "POST" and not (_allowed(f"{slug}:pay:{request.client.host if request.client else ''}") and _allowed(f"{slug}:pay:*")):
+        return JSONResponse({"ok": False, "error": "Too many attempts, try again in a minute"}, status_code=429, headers=_CORS)
+    import asyncio
+    from services import payments
+    status, out = await asyncio.to_thread(payments.door, db, project, name, request.method, body, _gateway, _key_id(), False, sites.url(slug))
+    return JSONResponse(out, status_code=status, headers=_CORS)
+
+
+@router.get("/sites/{slug}/_catalog")
+async def catalog(slug: str, request: Request, db: Session = Depends(get_db)):
+    return await _pay_door(slug, "_catalog", request, db)
+
+
+@router.post("/sites/{slug}/_pay")
+async def pay(slug: str, request: Request, db: Session = Depends(get_db)):
+    return await _pay_door(slug, "_pay", request, db)
+
+
+@router.get("/sites/{slug}/_pay/{payment_id}")
+async def pay_status(slug: str, payment_id: str, request: Request, db: Session = Depends(get_db)):
+    return await _pay_door(slug, f"_pay/{payment_id}", request, db)
+
+
+@router.post("/sites/{slug}/_refund")
+async def refund(slug: str, request: Request, db: Session = Depends(get_db)):
+    return await _pay_door(slug, "_refund", request, db)
+
+
 @router.get("/sites/{slug}/{path:path}")
 def serve(slug: str, path: str):
     file = sites.resolve(slug, path)
@@ -43,8 +89,8 @@ def serve(slug: str, path: str):
     return FileResponse(file, headers=_PAGE)
 
 
-@router.options("/sites/{slug}/_action", include_in_schema=False)
-def action_preflight(slug: str):
+@router.options("/sites/{slug}/{name:path}", include_in_schema=False)
+def action_preflight(slug: str, name: str = ""):
     return Response(status_code=204, headers=_CORS)
 
 

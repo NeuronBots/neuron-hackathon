@@ -53,6 +53,9 @@ def brief(name: str, goal: str, repo: str, summary: str, team: list[tuple[str, s
         "and ask them to read it and tell you what to change. A button under the plan starts Muse building it when they are happy, and if they ask you to build it, call build_project: tell them both. Do not build by asking teammates or adding tasks.\n\n"
         "## Rules\n"
         "- One document, not one per teammate. You assemble it.\n"
+        "- Payments are Neuron's: when the project sells something, Neuron adds checkout after the first build, on a payment page hosted by Razorpay, with prices the owner sets in the Wallet and shown in the currency of the person's region. "
+        "So plan the items, quantities and prices, and the emails and checks around an order. Do not plan or research a payment provider (Stripe, PayPal...), API keys, a card form or a checkout of your own, and do not ask which provider or which currency to use.\n"
+        "- Visitors are asked for an email address, never a phone number: the team's tools can email them, not call or text. Plan every form that way.\n"
         "- Do not write or push code, and do not create Jira issues or anything outside the app: this is a plan. Anything that leaves the app needs the person's approval.\n"
         "- Start now. Begin with one short sentence to the person saying what you are doing; the project's chat is where they will see you work.\n"
     )

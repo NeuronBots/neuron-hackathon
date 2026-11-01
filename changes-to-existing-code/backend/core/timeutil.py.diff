@@ -1,0 +1,14 @@
+diff --git a/backend/core/timeutil.py b/backend/core/timeutil.py
+index 395a8e6..db1af1d 100644
+--- a/backend/core/timeutil.py
++++ b/backend/core/timeutil.py
+@@ -1,0 +2 @@
++from contextvars import ContextVar
+@@ -2,0 +4,7 @@ from datetime import datetime, timezone
++from zoneinfo import available_timezones
++
++request_timezone: ContextVar[str] = ContextVar("request_timezone", default="")  # the person's IANA zone, from the browser; only ever a real zone name, as it ends up in prompts
++
++
++def set_request_timezone(raw: str) -> None:
++    request_timezone.set(raw if raw in available_timezones() else "")

@@ -1,11 +1,11 @@
 diff --git a/backend/tools/definitions.py b/backend/tools/definitions.py
-index d2ee6ba..f8c77d5 100644
+index d2ee6ba..de64d1d 100644
 --- a/backend/tools/definitions.py
 +++ b/backend/tools/definitions.py
 @@ -82,0 +83,2 @@ BOARD_TOOL_DEFS = [
 +                "options": {"type": "array", "items": {"type": "string"}, "description": "Two to four short answers they can pick with one tap, your recommendation first. Leave out for an open question."},
 +                "to": {"type": "string", "description": "A person from the project's People list whose field covers this decision. They are notified and named on the card. Leave out when no one's field fits."},
-@@ -266,0 +269,99 @@ DOC_TOOL_DEFS = [
+@@ -266,0 +269,131 @@ DOC_TOOL_DEFS = [
 +WIKI_TOOL = {
 +    "name": "build_wiki",
 +    "description": (
@@ -63,7 +63,8 @@ index d2ee6ba..f8c77d5 100644
 +    "name": "add_routine",
 +    "description": (
 +        "Propose a standing routine: what you (or a teammate) should do every time a visitor sends an order or message from the project's website. "
-+        "Write the instruction as steps for that bot, for example check the items and prices, add a board task, ask a teammate, draft the reply for the owner. "
++        "Write the instruction as steps for that bot, for example check the items and prices, add a board task, ask a teammate, email the customer a confirmation, open a Jira ticket. "
++        "A step can use any tool that bot has, including its connected accounts; name the action (email, Jira) in the steps. Each email or ticket it makes still waits for the person's Allow when it runs. "
 +        "It runs by itself on every order afterwards, so the person must allow it first: a card asks them. Propose one per bot whose part it is, and only what that bot owns."
 +    ),
 +    "input_schema": {
@@ -75,6 +76,37 @@ index d2ee6ba..f8c77d5 100644
 +        },
 +        "required": ["title", "instruction"],
 +    },
++}
++
++
++ROUTINE_UPDATE_TOOL = {
++    "name": "update_routine",
++    "description": (
++        "Change an order routine that already exists instead of adding a second one: reword its steps, rename it, or switch it off or on. "
++        "Find it by its current title (the list comes with plan_order_routines). Send only what changes. It changes what runs on every order, so the person must allow it first."
++    ),
++    "input_schema": {
++        "type": "object",
++        "properties": {
++            "title": {"type": "string", "description": "The routine's current title"},
++            "bot": {"type": "string", "description": "The owning bot's name, only if two routines share the title"},
++            "new_title": {"type": "string", "description": "A new title. Leave out to keep it."},
++            "instruction": {"type": "string", "description": "The complete new steps, replacing the old ones. Leave out to keep them."},
++            "enabled": {"type": "boolean", "description": "false to switch it off, true to switch it on. Leave out to keep it."},
++        },
++        "required": ["title"],
++    },
++}
++
++
++ROUTINE_PLAN_TOOL = {
++    "name": "plan_order_routines",
++    "description": (
++        "Work out with the person what each bot does every time an order or message comes in from the project's website, and set it up as routines. "
++        "Call it when the user asks you (or another bot) to set up, review or refine the order routines. It returns the steps to follow: "
++        "ask the owning teammates, ask the person about what is undecided, then add_routine. Needs the project's first-build plan."
++    ),
++    "input_schema": {"type": "object", "properties": {}, "required": []},
 +}
 +
 +

@@ -1,24 +1,65 @@
 diff --git a/src/App.tsx b/src/App.tsx
-index 5d89efb..d387ddd 100644
+index 5d89efb..ab841a4 100644
 --- a/src/App.tsx
 +++ b/src/App.tsx
-@@ -8,0 +9 @@ import { DocumentsView } from "./DocumentsView"
+@@ -7,0 +8,3 @@ import { CalendarView } from "./CalendarView"
++import { DataView } from "./DataView"
++import { WalletView } from "./WalletView"
++import { PaymentsOffer } from "./PaymentsOffer"
+@@ -8,0 +12 @@ import { DocumentsView } from "./DocumentsView"
 +import { PreviewPanel } from "./PreviewPanel"
-@@ -42,0 +44,2 @@ import {
+@@ -42,0 +47,2 @@ import {
 +  setCodingBot,
 +  setPrReviews,
-@@ -115,0 +119 @@ export function App() {
+@@ -115,0 +122 @@ export function App() {
 +  const [autoStatus, setAutoStatus] = useState<Record<string, string>>({}) // what each bot working on its own is doing, from the server
-@@ -343 +347 @@ export function App() {
+@@ -127 +134 @@ export function App() {
+-  const [page, setPage] = useState<"chat" | "board" | "calendar" | "documents" | "admin" | "setup">("chat")
++  const [page, setPage] = useState<"chat" | "board" | "calendar" | "data" | "wallet" | "documents" | "admin" | "setup">("chat")
+@@ -130 +137 @@ export function App() {
+-    return { board: flip("board"), calendar: flip("calendar"), documents: flip("documents"), admin: flip("admin"), setup: flip("setup") }
++    return { board: flip("board"), calendar: flip("calendar"), data: flip("data"), wallet: flip("wallet"), documents: flip("documents"), admin: flip("admin"), setup: flip("setup") }
+@@ -133,0 +141,2 @@ export function App() {
++  const [dataOpen, setDataOpen] = [page === "data", pageSetters.data]
++  const [walletOpen, setWalletOpen] = [page === "wallet", pageSetters.wallet]
+@@ -343 +352 @@ export function App() {
 -  async function handleEditSave(draft: { id: string; name: string; system_prompt: string; model: string; field: string; label: string }): Promise<boolean> {
 +  async function handleEditSave(draft: { id: string; name: string; system_prompt: string; field: string; label: string }): Promise<boolean> {
-@@ -345 +349 @@ export function App() {
+@@ -345 +354 @@ export function App() {
 -      const updated = await updateAgent(draft.id, { name: draft.name, system_prompt: draft.system_prompt, model: draft.model, field: draft.field, label: draft.label })
 +      const updated = await updateAgent(draft.id, { name: draft.name, system_prompt: draft.system_prompt, field: draft.field, label: draft.label })
-@@ -843,0 +848,2 @@ export function App() {
+@@ -683,0 +693,2 @@ export function App() {
++    setDataOpen(false)
++    setWalletOpen(false)
+@@ -706,0 +718,2 @@ export function App() {
++    setDataOpen(false)
++    setWalletOpen(false)
+@@ -722,0 +736,18 @@ export function App() {
++  function handleOpenData() {
++    setDmPersonId("")
++    setNavOpen(false)
++    if (selectedAgentId) lastAgentRef.current = selectedAgentId
++    setPeerView(null)
++    setSelectedAgentId(null)
++    setDataOpen(true)
++  }
++
++  function handleOpenWallet() {
++    setDmPersonId("")
++    setNavOpen(false)
++    if (selectedAgentId) lastAgentRef.current = selectedAgentId
++    setPeerView(null)
++    setSelectedAgentId(null)
++    setWalletOpen(true)
++  }
++
+@@ -729,0 +761,2 @@ export function App() {
++    setDataOpen(false)
++    setWalletOpen(false)
+@@ -843,0 +877,2 @@ export function App() {
 +          const next = data.status ?? {}
 +          setAutoStatus((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next))
-@@ -885,0 +892,47 @@ export function App() {
+@@ -885,0 +921,47 @@ export function App() {
 +  // When the bot I am looking at stops typing in the background, show what it wrote. The flag is kept with the agent it was read for, so
 +  // switching from a typing bot to an idle one is not mistaken for "stopped typing" (that would reload the new chat over its own load).
 +  const wasTyping = useRef<{ id: string | null; typing: boolean }>({ id: null, typing: false })
@@ -66,7 +107,25 @@ index 5d89efb..d387ddd 100644
 +    }
 +  }, [selectedAgentId, botWorking, autoStatus])
 +
-@@ -1138,2 +1191,9 @@ export function App() {
+@@ -963,0 +1046,2 @@ export function App() {
++    setDataOpen(false)
++    setWalletOpen(false)
+@@ -1020,0 +1105,2 @@ export function App() {
++    setDataOpen(false)
++    setWalletOpen(false)
+@@ -1051,0 +1138,2 @@ export function App() {
++      setDataOpen(false)
++      setWalletOpen(false)
+@@ -1072,0 +1161,2 @@ export function App() {
++      setDataOpen(false)
++      setWalletOpen(false)
+@@ -1090,0 +1181,2 @@ export function App() {
++      setDataOpen(false)
++      setWalletOpen(false)
+@@ -1100,0 +1193,2 @@ export function App() {
++      setDataOpen(false)
++      setWalletOpen(false)
+@@ -1138,2 +1232,9 @@ export function App() {
 -    await openProject(created.id, list, { mode: "replace" })
 -    setWelcome({ title: `Welcome to ${created.name}!`, text: "Your project is ready. Say hello to your bots.", name: created.name, id: created.id })
 +    await openProject(created.id, list, { mode: "replace", agentId: created.plan_started ? created.master_id : undefined }) // where the planning is happening
@@ -78,7 +137,7 @@ index 5d89efb..d387ddd 100644
 +      name: created.name,
 +      id: created.id,
 +    })
-@@ -1171,0 +1232,14 @@ export function App() {
+@@ -1171,0 +1273,14 @@ export function App() {
 +  async function handleSetCodingBot(agentId: string) {
 +    const saved = await setCodingBot(projectId, agentId)
 +    const withBot = (list: ProjectRecord[]) => list.map((item) => (item.id === projectId ? { ...item, coding_bot_id: saved } : item))
@@ -93,19 +152,28 @@ index 5d89efb..d387ddd 100644
 +    setProjects(withFlag)
 +  }
 +
-@@ -1252,0 +1327 @@ export function App() {
+@@ -1252,0 +1368 @@ export function App() {
 +      <PreviewPanel />
-@@ -1262,0 +1338,2 @@ export function App() {
+@@ -1262,0 +1379,4 @@ export function App() {
 +        onOpenCalendar={handleOpenCalendar}
++        onOpenData={handleOpenData}
++        onOpenWallet={handleOpenWallet}
 +        onOpenBoard={handleOpenBoard}
-@@ -1293,0 +1371,2 @@ export function App() {
+@@ -1293,0 +1414,2 @@ export function App() {
 +        onSetCodingBot={handleSetCodingBot}
 +        onSetPrReviews={handleSetPrReviews}
-@@ -1322 +1401 @@ export function App() {
+@@ -1322 +1444,5 @@ export function App() {
 -        <DocumentsView onClose={handleCloseCalendar} onOpenTeam={() => setNavOpen(true)} teamOpen={navOpen} />
 +        <DocumentsView onClose={handleCloseCalendar} onOpenTeam={() => setNavOpen(true)} teamOpen={navOpen} members={members} />
-@@ -1335,0 +1415 @@ export function App() {
++      ) : walletOpen ? (
++        <WalletView onClose={handleCloseCalendar} onOpenTeam={() => setNavOpen(true)} teamOpen={navOpen} />
++      ) : dataOpen ? (
++        <DataView onClose={handleCloseCalendar} onOpenTeam={() => setNavOpen(true)} teamOpen={navOpen} />
+@@ -1335,0 +1462 @@ export function App() {
 +          agentTyping={!!selectedAgentId && activeTyping.agents.includes(selectedAgentId)}
-@@ -1349,2 +1428,0 @@ export function App() {
+@@ -1349,2 +1475,0 @@ export function App() {
 -          onOpenCalendar={handleOpenCalendar}
 -          onOpenBoard={handleOpenBoard}
+@@ -1370,0 +1496,2 @@ export function App() {
++      <PaymentsOffer projectId={projectId} onOpenWallet={handleOpenWallet} />
++

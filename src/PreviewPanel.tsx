@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react"
-import { getPreview, saveSession, stopPreview, type PreviewState } from "./api"
+import { getActiveProject, getPreview, restartSession, saveSession, stopPreview, type PreviewState } from "./api"
 
 // The built app, running in a sandbox, docked on the right of the chat. The frame is sandboxed away from Neuron (no same-origin), and its address is
 // this server's, not the sandbox's. Other components open it with openPreview().
@@ -28,6 +28,7 @@ export function PreviewPanel() {
   const [preview, setPreview] = useState<PreviewState | null>(null)
   const [frame, setFrame] = useState(0)
   const [saving, setSaving] = useState("")
+  const [restarting, setRestarting] = useState("") // "busy", or what went wrong
   const [width, setWidth] = useState<number | null>(savedWidth) // null: the default, set by the stylesheet
   const drag = useRef<{ x: number; w: number } | null>(null)
   const panel = useRef<HTMLElement | null>(null)
@@ -105,6 +106,13 @@ export function PreviewPanel() {
     if (live) void stopPreview(preview.id)
     setPreview(null)
   }
+  const ended = preview.status === "stopped" || preview.status === "failed"
+  const restart = () => {
+    setRestarting("busy")
+    restartSession(getActiveProject())
+      .then((next) => { setPreview(next); setRestarting("") })
+      .catch((e) => setRestarting(e instanceof Error ? e.message : "Could not restart."))
+  }
   return (
     <aside className="preview-panel" aria-label="Live preview" ref={panel}>
       <div
@@ -145,12 +153,19 @@ export function PreviewPanel() {
       </header>
       {preview.status === "running" && preview.src ? (
         <div className={`preview-stage${phone ? " is-phone" : ""}`}>
-          <iframe key={`${frame}-${preview.version ?? 0}`} className="preview-frame" title="Live preview" src={preview.src} sandbox="allow-scripts allow-forms allow-popups" referrerPolicy="no-referrer" />
+          <iframe key={`${frame}-${preview.version ?? 0}`} className="preview-frame" title="Live preview" src={preview.src} sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox" referrerPolicy="no-referrer" />
         </div>
       ) : (
         <div className="preview-wait">
           {preview.status === "starting" && <span className="src-spinner" role="status" aria-label="Starting" />}
           <p>{preview.status === "starting" ? `${preview.stage}…` : preview.stage}</p>
+          {ended && (
+            <div className="preview-actions">
+              <button type="button" className="btn btn-primary" disabled={restarting === "busy"} onClick={restart}>{restarting === "busy" ? "Restarting…" : "Restart"}</button>
+              <button type="button" className="btn" onClick={close}>Close</button>
+            </div>
+          )}
+          {restarting && restarting !== "busy" && <p className="preview-note">{restarting}</p>}
         </div>
       )}
       {saving && saving !== "busy" && saving !== "done" && <p className="preview-note">{saving}</p>}
