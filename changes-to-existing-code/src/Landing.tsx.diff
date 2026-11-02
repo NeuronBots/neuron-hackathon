@@ -1,7 +1,555 @@
 diff --git a/src/Landing.tsx b/src/Landing.tsx
-index a4fda17..707314d 100644
+index a4fda17..474d1f8 100644
 --- a/src/Landing.tsx
 +++ b/src/Landing.tsx
-@@ -562 +562 @@ export function Landing({ onSignedIn }: { onSignedIn: (account: Account, isNew?:
+@@ -2 +2 @@ import { track } from "@vercel/analytics"
+-import { useEffect, useRef, useState, type FormEvent } from "react"
++import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react"
+@@ -7,0 +8,3 @@ import DirectoryBadges from "./DirectoryBadges"
++import type Lenis from "lenis"
++import { Split, useLandingMotion } from "./LandingMotion"
++import { Elements, Final, Flow, Marquee, NeuronMark } from "./LandingSections"
+@@ -11,5 +14,5 @@ const tails = [
+-  "build software with an army of agents.",
+-  "coordinate multi-agent workflows from one chat.",
+-  "iterate with your team in real time.",
+-  "spawn specialists on demand.",
+-  "ship faster without hiring more engineers.",
++  "write the plan and wait for your approval.",
++  "build the site in a sandbox you can preview.",
++  "publish only after you press Allow.",
++  "take orders and payments from the live site.",
++  "remember what they learn, with versions.",
+@@ -98,11 +100,0 @@ export function useLocalQuote(): PriceQuote | null {
+-const FEATURES: [string, string, string][] = [
+-  ["Attach files", "Drop in a PDF, an image or a code file. The bot reads it and answers from it.", "files"],
+-  ["Web search", "Bots look things up on their own before they write a plan or a document.", "search"],
+-  ["Documents", "Everything a bot writes is saved on its profile, ready to open.", "docs"],
+-  ["Forwarding", "Pass any message to another bot or a teammate, with a note on what to do.", "forward"],
+-  ["Team calendar", "Bots read and edit one shared calendar for the whole team.", "calendar"],
+-  ["Routines", "Give a bot a schedule and it runs the task on its own, then reports back.", "routines"],
+-  ["Goals", "Every bot has one goal, with a map of where it has been and what comes next.", "goals"],
+-  ["Jira", "Bots create and search tickets in your Jira project, and only in that one.", "jira"],
+-  ["Memory", "Bots keep what matters from past chats, so nobody has to repeat themselves.", "memory"],
+-]
+@@ -345 +337 @@ function Tagline() {
+-function DemoFrame({ demo, startInView = false, tabs }: { demo: string; startInView?: boolean; tabs?: { id: string; label: string }[] }) {
++function DemoFrame({ demo, kind = demo, startInView = false, play, hold = false, canvas, onDone, tabs }: { demo: string; kind?: string; startInView?: boolean; play?: boolean; hold?: boolean; canvas?: { w: number; r: number }; onDone?: () => void; tabs?: { id: string; label: string }[] }) {
+@@ -353,0 +346,19 @@ function DemoFrame({ demo, startInView = false, tabs }: { demo: string; startInV
++  const [gone, setGone] = useState(false)  // a chapter that was left is unloaded, so opening it again starts the scene fresh
++  const started = useRef(false)
++  const done = useRef(onDone)
++  done.current = onDone
++  // The app is drawn at a real desktop size and scaled down to the frame, so its text and controls read at their true proportions.
++  const [fit, setFit] = useState({ s: 1, w: 1280, h: 720 })
++  useEffect(() => {
++    const el = box.current
++    if (!el) return
++    const measure = () => {
++      const width = el.clientWidth
++      const base = canvas ? canvas.w : width < 720 ? 760 : 1280
++      setFit({ s: width / base, w: base, h: Math.round(base * (canvas ? canvas.r : width < 720 ? 0.95 : 0.56)) })
++    }
++    measure()
++    const watch = new ResizeObserver(measure)
++    watch.observe(el)
++    return () => watch.disconnect()
++  }, [canvas?.w, canvas?.r])
+@@ -357,2 +368,2 @@ function DemoFrame({ demo, startInView = false, tabs }: { demo: string; startInV
+-      if (event.data === `neuron-demo-live:${demo}`) setLive(true)
+-      if (event.data === `neuron-demo-ready:${demo}`) setReady(true)
++      if (event.data === `neuron-demo-live:${kind}`) { setLive(true); done.current?.() }
++      if (event.data === `neuron-demo-ready:${kind}`) setReady(true)
+@@ -364 +375 @@ function DemoFrame({ demo, startInView = false, tabs }: { demo: string; startInV
+-  }, [demo])
++  }, [kind])
+@@ -372,2 +383,14 @@ function DemoFrame({ demo, startInView = false, tabs }: { demo: string; startInV
+-    if (startInView && ready && seen) frame.current?.contentWindow?.postMessage("neuron-demo-start", location.origin)
+-  }, [startInView, ready, seen])
++    const want = play !== undefined ? play : startInView && seen
++    if (ready && want) {
++      frame.current?.contentWindow?.postMessage("neuron-demo-start", location.origin)
++      started.current = true
++    }
++  }, [startInView, play, ready, seen])
++  useEffect(() => {
++    if (play === undefined) return
++    if (play === true && gone) setGone(false)
++    if (play !== false || !started.current) return
++    // unload once the chapter has faded out, so the blank page is never seen
++    const timer = window.setTimeout(() => { setGone(true); setReady(false); setLive(false); setInvited(false) }, 800)
++    return () => window.clearTimeout(timer)
++  }, [play, gone])
+@@ -376 +399 @@ function DemoFrame({ demo, startInView = false, tabs }: { demo: string; startInV
+-      <div className="landing-frame" ref={box}>
++      <div className="landing-frame" ref={box} style={{ "--ratio": fit.h / fit.w } as CSSProperties}>
+@@ -378 +401,3 @@ function DemoFrame({ demo, startInView = false, tabs }: { demo: string; startInV
+-        <iframe key={run} ref={frame} className={live ? "is-live" : ""} src={`/?demo=${demo}`} title="Neuron demo" tabIndex={live ? 0 : -1} loading={startInView ? "lazy" : "eager"} />
++        <div className="landing-frame-body" style={{ "--s": fit.s, "--base-w": fit.w, "--base-h": fit.h } as CSSProperties}>
++          <iframe key={run} ref={frame} className={live ? "is-live" : ""} src={hold || gone ? undefined : `/?demo=${demo}`} title="Neuron demo" tabIndex={live ? 0 : -1} loading={startInView || play !== undefined ? "lazy" : "eager"} />
++        </div>
+@@ -403,0 +429,133 @@ function DemoFrame({ demo, startInView = false, tabs }: { demo: string; startInV
++type Chapter = { id: string; demo: string; kind: string; title: string; text: string; canvas?: { w: number; r: number }; tabs?: { id: string; label: string }[] }
++const scene = (id: string, title: string, text: string, canvas?: { w: number; r: number }): Chapter => ({ id, demo: `scene&scene=${id}`, kind: id, title, text, canvas })
++const STORY: Chapter[] = [
++  scene("setup", "Describe the business", "Name it, say what it is, pick a repo or skip it, and choose a naming theme. Your Master bot sets up the rest of the team.", { w: 1100, r: 0.68 }),
++  scene("plan", "Plan, then approve", "The Master bot researches and writes the first-build plan. Nothing is built until you approve it."),
++  scene("build", "Build and preview", "It builds in a sandbox, about ten minutes in real life and sped up here. You get the code, a run guide and a QA report, and you can run it live."),
++  scene("live", "Publish on your Allow", "Nothing goes public until you press Allow, and anything waiting on you is pinned above the chat. Then orders from the site reach your bots."),
++  scene("pay", "Get paid", "Turn on payments, set prices in your Wallet and add checkout. Customers pay through Razorpay: 3% to Neuron plus about 2% to the gateway, paid out after a 7-day refund period."),
++]
++const TEAM: Chapter[] = [
++  { id: "members", demo: "members", kind: "members", title: "Invite people", text: "One shared team, one shared context. Invite people, and they pick up where the bots left off.", tabs: [{ id: "owner", label: "Sam" }, { id: "member", label: "Maya" }] },
++]
++
++// A story told in short scenes. On a wide screen the section pins and scrolling walks through them (the motion hook
++// sends lp-pinned and lp-chapter events); on a phone, or with reduced motion, they stack and each starts when seen.
++function Chapters({ chapters, eyebrow, lines, priority }: { chapters: Chapter[]; eyebrow: string; lines: string[]; priority: number }) {
++  const root = useRef<HTMLElement>(null)
++  const [active, setActive] = useState(0)
++  const [pinned, setPinned] = useState(false)
++  const [open, setOpen] = useState(false)  // the section is pinned on screen: only then does a scene play
++  const [near, setNear] = useState(false)  // within a screen of it: the scenes load, and wait
++  const [seen, setSeen] = useState(() => chapters.map(() => false))
++  const [mounted, setMounted] = useState(() => new Set([0, 1]))
++  const current = useRef(0)
++  current.current = active
++  // When a scene finishes, the page moves on to the next chapter, unless the visitor has clicked into the demo to use it.
++  const advance = (i: number) => {
++    if (i >= chapters.length - 1) return
++    window.setTimeout(() => {
++      const el = root.current
++      if (!el || current.current !== i || el.contains(document.activeElement)) return
++      el.dispatchEvent(new CustomEvent("lp-goto", { detail: i + 1 }))
++    }, 2200)
++  }
++  useEffect(() => {
++    const el = root.current
++    if (!el) return
++    const onChapter = (e: Event) => setActive((e as CustomEvent<number>).detail)
++    const onPinned = (e: Event) => setPinned((e as CustomEvent<boolean>).detail)
++    const onOpen = (e: Event) => setOpen((e as CustomEvent<boolean>).detail)
++    el.addEventListener("lp-open", onOpen)
++    const watch = new IntersectionObserver(([entry]) => { if (entry.isIntersecting) setNear(true) }, { rootMargin: "120% 0px" })
++    watch.observe(el)
++    el.addEventListener("lp-chapter", onChapter)
++    el.addEventListener("lp-pinned", onPinned)
++    if (el.classList.contains("is-pinned")) setPinned(true)  // the motion hook may have pinned it before this listener existed
++    return () => { el.removeEventListener("lp-chapter", onChapter); el.removeEventListener("lp-pinned", onPinned); el.removeEventListener("lp-open", onOpen); watch.disconnect() }
++  }, [])
++  useEffect(() => { setMounted((all) => new Set([...all, active, active + 1])) }, [active])  // the next scene loads while this one plays
++  useEffect(() => {
++    const el = root.current
++    if (!el || pinned) return
++    const items = [...el.querySelectorAll(".lp-chap")]
++    const watch = new IntersectionObserver((entries) => entries.forEach((entry) => {
++      const i = items.indexOf(entry.target)
++      if (entry.isIntersecting && i >= 0) setSeen((all) => (all[i] ? all : all.map((v, j) => v || j === i)))
++    }), { threshold: 0.4 })
++    items.forEach((item) => watch.observe(item))
++    return () => watch.disconnect()
++  }, [pinned])
++  return (
++    <section className={`lp-chapters${chapters.length === 1 ? " is-single" : ""}`} ref={root} aria-label={eyebrow} data-priority={priority}>
++      <div className="lp-chap-glow" aria-hidden="true" />
++      <div className="lp-chap-side">
++        <header className="lp-chap-head">
++          <p className="lp-eyebrow">{eyebrow}</p>
++          <h2 data-split><Split lines={lines} /></h2>
++        </header>
++        <div className="lp-chap-copies" aria-hidden="true">
++          {chapters.map((c, i) => (
++            <div key={c.id} className={`lp-chap-copy${i === active ? " is-on" : ""}`}>
++              <span className="lp-chap-num">{String(i + 1).padStart(2, "0")}</span>
++              <h3><Split lines={[c.title]} /></h3>
++              <p>{c.text}</p>
++            </div>
++          ))}
++        </div>
++        {pinned && chapters.length > 1 && (
++          <nav className="lp-chap-index" aria-label="Chapters">
++          {chapters.map((c, i) => (
++            <button key={c.id} type="button" className={i === active ? "is-on" : ""} aria-current={i === active ? "step" : undefined} onClick={() => root.current?.dispatchEvent(new CustomEvent("lp-goto", { detail: i }))}>
++              <span aria-hidden="true">{String(i + 1).padStart(2, "0")}</span>{c.title}
++            </button>
++          ))}
++        </nav>
++        )}
++      </div>
++      <ol className="lp-chap-list">
++        {chapters.map((c, i) => (
++          <li key={c.id} className={`lp-chap${pinned && i === active ? " is-active" : ""}`} aria-current={pinned && i === active ? "step" : undefined}>
++            <div className="lp-chap-copy">
++              <span className="lp-chap-num" aria-hidden="true">{String(i + 1).padStart(2, "0")}</span>
++              <h3>{c.title}</h3>
++              <p>{c.text}</p>
++            </div>
++            <div className="lp-chap-stage">
++              <DemoFrame demo={c.demo} kind={c.kind} tabs={c.tabs} canvas={c.canvas} onDone={pinned ? () => advance(i) : undefined} play={pinned ? open && active === i : seen[i]} hold={pinned && !(near && mounted.has(i))} />
++            </div>
++          </li>
++        ))}
++      </ol>
++    </section>
++  )
++}
++
++// A price that counts up the first time it is seen (whole units, in the visitor's currency). Still, with reduced motion.
++function Price({ inr, quote, per }: { inr: number; quote: PriceQuote | null; per: string }) {
++  const box = useRef<HTMLSpanElement>(null)
++  const [value, setValue] = useState(0)
++  const [seen, setSeen] = useState(false)
++  useEffect(() => {
++    const el = box.current
++    if (!el) return
++    const watch = new IntersectionObserver(([entry]) => { if (entry.isIntersecting) { setSeen(true); watch.disconnect() } }, { threshold: 0.6 })
++    watch.observe(el)
++    return () => watch.disconnect()
++  }, [])
++  useEffect(() => {
++    if (!seen) return
++    if (inr === 0 || window.matchMedia("(prefers-reduced-motion: reduce)").matches) { setValue(inr); return }
++    let raf = 0
++    const start = performance.now()
++    const tick = (now: number) => {
++      const t = Math.min(1, (now - start) / 1200)
++      setValue(inr * (1 - (1 - t) ** 4))
++      if (t < 1) raf = requestAnimationFrame(tick)
++    }
++    raf = requestAnimationFrame(tick)
++    return () => cancelAnimationFrame(raf)
++  }, [seen, inr])
++  return <span className="lp-plan-price" ref={box}>{quote ? formatLocal(Math.round(value), quote.currency, quote.rate) : "…"}<small>{per}</small></span>
++}
++
+@@ -415,120 +573,7 @@ export function Landing({ onSignedIn }: { onSignedIn: (account: Account, isNew?:
+-  const copy = useRef<HTMLDivElement>(null)
+-  const teamCopy = useRef<HTMLDivElement>(null)
+-  useEffect(() => {
+-    const root = scroller.current
+-    const copyEl = copy.current
+-    const teamEl = teamCopy.current
+-    if (!root || !copyEl || !teamEl) return
+-    const demoFrame = copyEl.parentElement?.querySelector<HTMLElement>(".landing-frame")
+-    const teamFrame = teamEl.parentElement?.querySelector<HTMLElement>(".landing-frame")
+-    const features = root.querySelector<HTMLElement>(".landing-features")
+-    const pricing = root.querySelector<HTMLElement>(".landing-pricing")
+-    if (!demoFrame || !teamFrame || !features || !pricing) return
+-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+-    let raf = 0
+-    // The heading stays behind its window, then rises out of the top edge.
+-    const rise = (el: HTMLElement, along: number) => {
+-      const reveal = reduce ? 1 : Math.min(1, Math.max(0, (along - 0.18) / 0.62))
+-      el.style.opacity = String(reveal)
+-      const hidden = el.offsetHeight + 12
+-      el.style.transform = reduce ? "none" : `translateY(${(1 - reveal) * hidden}px)`
+-    }
+-    const apply = () => {
+-      raf = 0
+-      const origin = root.getBoundingClientRect().top
+-      rise(copyEl, root.scrollTop / (root.clientHeight * 0.5))
+-      const frameTop = teamFrame.getBoundingClientRect().top - origin
+-      const peekTop = root.clientHeight - teamFrame.offsetHeight * 0.5
+-      const settledTop = root.clientHeight * 0.28
+-      rise(teamEl, (peekTop - frameTop) / (peekTop - settledTop))
+-    }
+-    let prev = root.scrollTop
+-    let gestureStart = root.scrollTop
+-    let gesturePeak = root.scrollTop
+-    let inGesture = false
+-    const onScroll = () => {
+-      if (!inGesture) {
+-        gestureStart = prev
+-        gesturePeak = root.scrollTop
+-        inGesture = true
+-      }
+-      gesturePeak = Math.max(gesturePeak, root.scrollTop)
+-      prev = root.scrollTop
+-      if (!raf) raf = requestAnimationFrame(apply)
+-    }
+-    // Where a snap point wants the scroll, matching the CSS snap alignment.
+-    const snapTop = (el: HTMLElement, align: "center" | "start") => {
+-      const docTop = el.getBoundingClientRect().top - root.getBoundingClientRect().top + root.scrollTop
+-      const margin = parseFloat(getComputedStyle(el).scrollMarginTop) || 0
+-      const raw = align === "start"
+-        ? docTop - margin
+-        : docTop - (root.clientHeight - el.offsetHeight) / 2 - margin / 2
+-      return Math.max(0, Math.min(raw, root.scrollHeight - root.clientHeight))
+-    }
+-    let locking = false
+-    // The browser's own smooth scroll is slow and cannot be tuned, so ease there by hand. Longer trips take
+-    // longer (a full screen at a fixed 280ms reads as a jump), and ease in and out so it starts and lands softly.
+-    const go = (top: number) => {
+-      locking = true
+-      const from = root.scrollTop
+-      const ms = Math.min(700, Math.max(280, Math.abs(top - from) * 0.45))
+-      const start = performance.now()
+-      root.style.scrollSnapType = "none" // CSS snapping would fight the animation
+-      const step = (now: number) => {
+-        const t = Math.min(1, (now - start) / ms)
+-        root.scrollTop = from + (top - from) * (t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2)
+-        if (t < 1) requestAnimationFrame(step)
+-        else {
+-          window.setTimeout(() => { root.style.scrollSnapType = ""; locking = false }, 150)
+-        }
+-      }
+-      requestAnimationFrame(step)
+-    }
+-    const onEnd = () => {
+-      const y = root.scrollTop
+-      const started = gestureStart
+-      const peaked = gesturePeak
+-      inGesture = false
+-      prev = y
+-      if (locking || reduce) return
+-      const demo = snapTop(demoFrame, "center")
+-      const team = snapTop(teamFrame, "center")
+-      const gate = demo + (team - demo) * 0.1
+-      // On a phone a swipe from the hero overshoots the demo; land on the demo, not past it on the team section.
+-      // 640px is the phone-swipe threshold, intentionally wider than the 520px .landing-join layout breakpoint in styles.css.
+-      if (window.matchMedia("(max-width: 640px)").matches && started < demo - 24 && y > demo && y < team + 80) {
+-        if (Math.abs(y - demo) > 24) go(demo)
+-        return
+-      }
+-      // Ten percent of the way from the demo to the team section commits to that snap.
+-      if (started <= gate && peaked >= gate && y < team + 80) {
+-        if (Math.abs(y - team) > 24) go(team)
+-        return
+-      }
+-      const points = [
+-        { top: 0, grab: false },
+-        { top: demo, grab: true },
+-        { top: team, grab: false },
+-        { top: snapTop(pricing, "center"), grab: true },
+-        { top: snapTop(features, "start"), grab: true },
+-      ]
+-      const nearest = points.reduce((best, point) => Math.abs(y - point.top) < Math.abs(y - best.top) ? point : best)
+-      // Only grab when already close; farther out the user is just scrolling.
+-      if (!nearest.grab || Math.abs(y - nearest.top) < 24 || Math.abs(y - nearest.top) > root.clientHeight * 0.2) return
+-      if (nearest.top === points[4].top && y > nearest.top + 24) return  // features: below it the user is just reading
+-      go(nearest.top)
+-    }
+-    apply()
+-    root.addEventListener("scroll", onScroll, { passive: true })
+-    root.addEventListener("scrollend", onEnd)
+-    return () => {
+-      root.removeEventListener("scroll", onScroll)
+-      root.removeEventListener("scrollend", onEnd)
+-      cancelAnimationFrame(raf)
+-    }
+-  }, [signingIn])
+-  useEffect(() => {
+-    // A refresh always starts at the hero, not wherever the browser remembers.
+-    history.scrollRestoration = "manual"
+-    document.querySelector(".landing")?.scrollTo(0, 0)
+-  }, [])
++  const lenis = useRef<Lenis | null>(null)
++  useLandingMotion(scroller, lenis, !signingIn)
++  const toTop = () => {
++    if (lenis.current) lenis.current.scrollTo(0, { duration: 1.4 })
++    else scroller.current?.scrollTo({ top: 0 })
++    window.setTimeout(() => emailBox.current?.focus({ preventScroll: true }), 900)
++  }
+@@ -535,0 +581 @@ export function Landing({ onSignedIn }: { onSignedIn: (account: Account, isNew?:
++  const gmail = /@(gmail|googlemail)\.com\s*$/i.test(email)
+@@ -537,21 +583 @@ export function Landing({ onSignedIn }: { onSignedIn: (account: Account, isNew?:
+-    <div
+-      className="landing"
+-      ref={scroller}
+-      onScroll={(e) => {
+-        // Video through the hero, black once that section leaves, then back for the last section.
+-        const el = e.currentTarget
+-        const hero = el.querySelector<HTMLElement>(".landing-hero")
+-        const features = el.querySelector<HTMLElement>(".landing-features")
+-        const span = hero?.offsetHeight ?? el.clientHeight
+-        const hold = span * 0.22
+-        const done = span * 0.62
+-        let fade = Math.min(1, Math.max(0, (el.scrollTop - hold) / (done - hold)))
+-        if (features) {
+-          const featTop = features.getBoundingClientRect().top - el.getBoundingClientRect().top
+-          const back = Math.min(1, Math.max(0, 1 - (featTop - 32) / el.clientHeight))
+-          fade = Math.min(fade, 1 - back)
+-        }
+-        el.style.setProperty("--fade", String(fade))
+-        el.toggleAttribute("data-away", fade > 0.4) // the hero's email field fades out once the demo section takes over
+-      }}
+-    >
++    <div className="landing" ref={scroller}>
+@@ -561,26 +587,8 @@ export function Landing({ onSignedIn }: { onSignedIn: (account: Account, isNew?:
+-      <header className="landing-hero">
 -        <p className="landing-logo">Neuron</p>
-+        <img className="landing-logo brand-lockup" src="/brand/neuron-lockup.png" alt="Neuron" width="155" height="40" />
+-        <h1>Build Software with an Army of Agents</h1>
+-        <Tagline />
+-        <form className="landing-join" onSubmit={(event) => {
+-          event.preventDefault()
+-          if (/@(gmail|googlemail)\.com\s*$/i.test(email)) window.location.href = "/api/oauth/google-login/start"
+-          else {
+-            if (signupOpen) track("signup_started") // once per click, not per mount
+-            setWaitlisting(true)
+-          }
+-        }}>
+-          <input
+-            ref={emailBox}
+-            type="email"
+-            value={email}
+-            onChange={(event) => setEmail(event.target.value)}
+-            placeholder="Email"
+-            autoComplete="email"
+-            aria-label="Email"
+-            required
+-          />
+-          {plan && (
+-            <span className="landing-join-plan">
+-              {plan === "Free Trial" ? plan : `${plan} plan`}
+-              <button type="button" aria-label="Remove the chosen plan" onClick={() => setPlan("")}>×</button>
++      <div className="lp-content">
++        <header className="lp-hero">
++          <div className="lp-glow" aria-hidden="true" />
++          <nav className="lp-nav" aria-label="Main">
++            <NeuronMark />
++            <span>
++              <a href="#pricing" onClick={(e) => { e.preventDefault(); if (lenis.current) lenis.current.scrollTo("#pricing"); else document.getElementById("pricing")?.scrollIntoView() }}>Pricing</a>
++              <a href="/login">Log in</a>
+@@ -588,24 +596,34 @@ export function Landing({ onSignedIn }: { onSignedIn: (account: Account, isNew?:
+-          )}
+-          {/@(gmail|googlemail)\.com\s*$/i.test(email)
+-            ? <a className="landing-cta landing-cta-google" href="/api/oauth/google-login/start" aria-label="Continue with Google" title="Continue with Google"><span className="landing-cta-ghost">Get started</span><GoogleMark /></a>
+-            : <button type="submit" className="landing-cta">Get started</button>}
+-        </form>
+-        <p className="landing-login">Already have an account? <a href="/login">Log in</a></p>
+-      </header>
+-      {waitlisting && (signupOpen
+-        ? <SignupDialog email={email.trim()} onClose={() => setWaitlisting(false)} onSignedIn={onSignedIn} />
+-        : <WaitlistDialog email={email.trim()} onClose={() => setWaitlisting(false)} />)}
+-      <section className="landing-demo" aria-label="Neuron demo">
+-        <div className="landing-demo-wrap">
+-          <div className="landing-copy" ref={copy}>
+-            <h2>Skip the setup. Your bots are already built.</h2>
+-            <p>Connect GitHub or bring your context, and your workspace and bots are created for you.</p>
+-          </div>
+-          <DemoFrame demo="1" />
+-        </div>
+-      </section>
+-      <section className="landing-team">
+-        <div className="landing-demo-wrap landing-members">
+-          <div className="landing-copy" ref={teamCopy}>
+-            <h2>Bring your team in</h2>
+-            <p>One shared team, one shared context. Invite people, and they pick up where the bots left off.</p>
++          </nav>
++          <div className="lp-hero-inner">
++            <h1><Split lines={["Bots that build", "your site and", "get you paid"]} /></h1>
++            <div className="lp-sub">
++              <Tagline />
++              <form className="landing-join" onSubmit={(event) => {
++                event.preventDefault()
++                if (gmail) window.location.href = "/api/oauth/google-login/start"
++                else {
++                  if (signupOpen) track("signup_started") // once per click, not per mount
++                  setWaitlisting(true)
++                }
++              }}>
++                <input
++                  ref={emailBox}
++                  type="email"
++                  value={email}
++                  onChange={(event) => setEmail(event.target.value)}
++                  placeholder="Email"
++                  autoComplete="email"
++                  aria-label="Email"
++                  required
++                />
++                {plan && (
++                  <span className="landing-join-plan">
++                    {plan === "Free Trial" ? plan : `${plan} plan`}
++                    <button type="button" aria-label="Remove the chosen plan" onClick={() => setPlan("")}>×</button>
++                  </span>
++                )}
++                {gmail
++                  ? <a className="landing-cta landing-cta-google" href="/api/oauth/google-login/start" aria-label="Continue with Google" title="Continue with Google"><span className="landing-cta-ghost">Get started</span><GoogleMark /></a>
++                  : <button type="submit" className="landing-cta">Get started</button>}
++              </form>
++            </div>
+@@ -613,25 +631,17 @@ export function Landing({ onSignedIn }: { onSignedIn: (account: Account, isNew?:
+-          <DemoFrame demo="members" startInView tabs={[{ id: "owner", label: "Sam" }, { id: "member", label: "Maya" }]} />
+-        </div>
+-      </section>
+-      <section className="landing-pricing" id="pricing" aria-label="Pricing">
+-        <p className="landing-pricing-eyebrow">Pricing</p>
+-        <h2>Try it free. Pay when it earns its place.</h2>
+-        <div className="landing-plans">
+-          {PLANS.map((plan) => (
+-            <article className={`landing-plan${plan.popular ? " is-popular" : ""}`} key={plan.name}>
+-              {plan.popular && <span className="landing-plan-badge">Most popular</span>}
+-              <h3>{plan.name}</h3>
+-              <p className="landing-plan-price">{quote ? formatLocal(plan.inr, quote.currency, quote.rate) : "…"}<span>{plan.period === "mo" ? "/mo" : ` · ${plan.period}`}</span></p>
+-              <dl>
+-                <div><dt>Usage</dt><dd>{plan.usage}</dd></div>
+-                <div><dt>Card required</dt><dd>{plan.card}</dd></div>
+-                {plan.invite && <div><dt>Invite team mates</dt><dd>Yes</dd></div>}
+-              </dl>
+-              <button
+-                type="button"
+-                className="landing-plan-cta"
+-                onClick={() => {
+-                  setPlan(plan.name)
+-                  scroller.current?.scrollTo({ top: 0, behavior: "smooth" })
+-                  window.setTimeout(() => emailBox.current?.focus({ preventScroll: true }), 700)
+-                }}
++          <p className="lp-cue" aria-hidden="true"><i />Scroll</p>
++        </header>
++        {waitlisting && (signupOpen
++          ? <SignupDialog email={email.trim()} onClose={() => setWaitlisting(false)} onSignedIn={onSignedIn} />
++          : <WaitlistDialog email={email.trim()} onClose={() => setWaitlisting(false)} />)}
++        <Marquee />
++        <Chapters chapters={STORY} eyebrow="How it works" lines={["From one sentence", "to a *live site.*"]} priority={3} />
++        <Flow />
++        <Chapters chapters={TEAM} eyebrow="Teamwork" lines={["Bring your *team* in"]} priority={1} />
++        <section className="lp-pricing" id="pricing" aria-label="Pricing">
++          <p className="lp-eyebrow">Pricing</p>
++          <h2 data-split><Split lines={["Try it free. Pay when", "*it earns its place.*"]} /></h2>
++          <ol className="lp-plans">
++            {PLANS.map((plan) => (
++              <li
++                className={`lp-plan${plan.popular ? " is-popular" : ""}`} key={plan.name}
++                onPointerMove={(e) => { const r = e.currentTarget.getBoundingClientRect(); e.currentTarget.style.setProperty("--mx", `${e.clientX - r.left}px`); e.currentTarget.style.setProperty("--my", `${e.clientY - r.top}px`) }}
+@@ -639,17 +649,21 @@ export function Landing({ onSignedIn }: { onSignedIn: (account: Account, isNew?:
+-                {plan.cta}
+-              </button>
+-            </article>
+-          ))}
+-        </div>
+-      </section>
+-      <section className="landing-features" aria-label="More features">
+-        <h2>Everything around it</h2>
+-        <ul>
+-          {FEATURES.map(([title, text, area]) => (
+-            <li key={title} className={`feature-${area}`}>
+-              <h3>{title}</h3>
+-              <p>{text}</p>
+-            </li>
+-          ))}
+-        </ul>
+-      </section>
++                <i className="lp-plan-rule" aria-hidden="true" />
++                <div className="lp-plan-name">
++                  <h3>{plan.name}</h3>
++                  {plan.popular && <span className="lp-plan-tag">Most popular</span>}
++                </div>
++                <Price inr={plan.inr} quote={quote} per={plan.period === "mo" ? "/mo" : ` · ${plan.period}`} />
++                <dl className="lp-plan-facts">
++                  <div><dt>Usage</dt><dd>{plan.usage}</dd></div>
++                  <div><dt>Card required</dt><dd>{plan.card}</dd></div>
++                  {plan.invite && <div><dt>Invite team mates</dt><dd>Yes</dd></div>}
++                </dl>
++                <button type="button" className="lp-plan-cta" onClick={() => { setPlan(plan.name); toTop() }}>
++                  <span>{plan.cta}</span><b aria-hidden="true">→</b>
++                </button>
++              </li>
++            ))}
++          </ol>
++          <p className="lp-plans-note">{quote ? `Prices shown in ${quote.currency}. ` : ""}Payments by Razorpay.</p>
++        </section>
++        <Elements />
++        <Final onStart={toTop} />
+@@ -669,0 +684 @@ export function Landing({ onSignedIn }: { onSignedIn: (account: Account, isNew?:
++      </div>

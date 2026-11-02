@@ -1,6 +1,6 @@
 // The wireframe N from the design system, drawing itself while something is being generated.
 // `inline` is the compact one that sits in a button or a line of text; the default is the hero loader with a caption.
-const EDGES: [number, number, number, number, number][] = [
+export const EDGES: [number, number, number, number, number][] = [
   [24, 76, 24, 28, 0.0],
   [24, 28, 38, 18, 0.1],
   [38, 18, 76, 68, 0.2],

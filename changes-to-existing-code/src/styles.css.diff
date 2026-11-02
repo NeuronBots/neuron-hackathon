@@ -1,5 +1,5 @@
 diff --git a/src/styles.css b/src/styles.css
-index 764ceee..f478cae 100644
+index 764ceee..1f78302 100644
 --- a/src/styles.css
 +++ b/src/styles.css
 @@ -2,15 +2,26 @@
@@ -626,7 +626,7 @@ index 764ceee..f478cae 100644
 +.src-spinner { width: 14px; height: 14px; flex: none; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: src-spin 0.9s linear infinite; }
 +@keyframes src-spin { to { transform: rotate(360deg); } }
 +@media (prefers-reduced-motion: reduce) { .src-spinner { animation-duration: 3s; } }
-@@ -8261,0 +8450,668 @@ button.landing-plan-cta {
+@@ -8261,0 +8450,1057 @@ button.landing-plan-cta {
 +
 +
 +/* Document Store & List Panel (NURN-152) */
@@ -1295,3 +1295,392 @@ index 764ceee..f478cae 100644
 +.flow-meter { margin: 1rem 0; grid-template-columns: repeat(4, minmax(0, 1fr)); }
 +.flow-bots { max-width: 32rem; margin-bottom: 1rem; }
 +.flow-brief { margin: .5rem 0 1.5rem; padding: 1rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--slip); max-height: 28rem; overflow: auto; }
++
++/* ===== Landing remake (lp-*). Final states are the CSS defaults; GSAP only animates from them. ===== */
++.lenis.lenis-smooth { scroll-behavior: auto !important; }
++
++.lp-content { position: relative; z-index: 1; }
++
++.lp-eyebrow { margin: 0; color: var(--stamp); font-size: 12px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; }
++
++/* Masked words: the clip hides the rise, padding keeps descenders. */
++.lp-line { display: block; }
++.lp-word { display: inline-block; overflow: hidden; vertical-align: top; padding-bottom: 0.18em; margin-bottom: -0.18em; }
++.lp-word > span { display: inline-block; }
++
++/* Hero */
++.lp-hero {
++  position: relative;
++  min-height: 100svh;
++  display: flex;
++  flex-direction: column;
++  justify-content: space-between;
++  padding: 28px clamp(20px, 5vw, 72px) 36px;
++  overflow: hidden;
++}
++
++.lp-glow {
++  position: absolute; top: 0; left: 0; width: 620px; height: 620px; margin: -310px 0 0 -310px;
++  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.2), rgba(120, 140, 255, 0.1) 45%, transparent 70%);
++  mix-blend-mode: screen; pointer-events: none; opacity: 0; transition: opacity 400ms;
++}
++.lp-hero:hover .lp-glow { opacity: 1; }
++
++.lp-nav { position: relative; display: flex; align-items: center; justify-content: space-between; z-index: 2; }
++.lp-nav span { display: flex; gap: 28px; }
++.lp-nav a { color: #fff; font-weight: 600; font-size: 0.95rem; text-decoration: none; opacity: 0.85; }
++.lp-nav a:hover { opacity: 1; text-decoration: underline; text-underline-offset: 4px; }
++.lp-nav a:focus-visible, .lp-cta-big:focus-visible { outline: 2px solid var(--stamp); outline-offset: 4px; }
++
++.lp-hero-inner { position: relative; z-index: 2; margin-top: auto; padding-top: 12vh; }
++
++.lp-hero h1 {
++  font-family: "Michroma", var(--sans);
++  font-weight: 700;
++  -webkit-text-stroke: 0.6px currentColor;
++  font-size: clamp(2.1rem, 7.2vw, 8rem);
++  line-height: 1;
++  letter-spacing: -0.035em;
++  text-transform: uppercase;
++  color: #fff;
++}
++
++.lp-sub { display: flex; flex-wrap: nowrap; align-items: flex-start; justify-content: space-between; gap: 28px 48px; margin-top: clamp(28px, 5vh, 56px); }
++.lp-sub .landing-line { flex: 1 1 0; min-width: 0; margin: 0; max-width: 28rem; color: #fff; font-weight: 600; font-size: clamp(1.05rem, 1.7vw, 1.4rem); line-height: 1.35; min-height: 2.8em; }
++.lp-sub .landing-join { flex: none; margin: 0; width: min(460px, 100%); animation: none; }
++
++.lp-cue { position: relative; z-index: 2; display: flex; align-items: center; gap: 12px; margin-top: 28px; color: rgba(255, 255, 255, 0.7); font-size: 12px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; }
++.lp-cue i { width: 48px; height: 1px; background: currentColor; transform-origin: left; animation: lp-cue 1.8s ease-in-out infinite; }
++@keyframes lp-cue { 0%, 100% { transform: scaleX(0.3); } 50% { transform: scaleX(1); } }
++
++/* Marquee */
++.lp-marquee { overflow: hidden; padding: 40px 0; border-block: 1px solid rgba(255, 255, 255, 0.12); background: rgba(0, 0, 0, 0.35); }
++.lp-marquee-row { display: flex; width: max-content; font-family: "Michroma", var(--sans); font-size: clamp(3rem, 9vw, 8rem); line-height: 1.15; text-transform: uppercase; white-space: pre; color: transparent; -webkit-text-stroke: 1px rgba(255, 255, 255, 0.55); }
++.lp-marquee-row.is-solid { color: #fff; -webkit-text-stroke: 0; }
++.lp-marquee-row b { font-weight: 400; color: var(--stamp); -webkit-text-stroke: 0; }
++
++/* Demo and team sections */
++.lp-demo { padding: clamp(96px, 16vh, 180px) clamp(20px, 5vw, 72px) 40px; }
++.lp-copy { width: min(1360px, 100%); margin: 0 auto 48px; }
++.lp-copy h2, .lp-index h2, .lp-flow h2, .landing-pricing h2, .lp-final h2 {
++  font-family: var(--serif);
++  font-weight: 600;
++  letter-spacing: -0.035em;
++  font-size: clamp(2.4rem, 6.6vw, 6.4rem);
++  line-height: 1.02;
++  color: #fff;
++  text-align: left;
++  max-width: none;
++}
++.lp-copy p { max-width: 34rem; margin-top: 20px; color: rgba(255, 255, 255, 0.85); font-size: clamp(1rem, 1.5vw, 1.2rem); line-height: 1.55; }
++.lp-stage { width: min(clamp(960px, 72vw, 1360px), 100%); margin: 0 auto; perspective: 1600px; }
++.lp-stage .landing-frame { scroll-margin-top: 0; }
++.lp-team { padding-top: clamp(96px, 16vh, 180px); }
++
++/* Pinned horizontal flow. Stacked by default; .lp-pin (set by script on desktop) lays it out sideways. */
++
++/* Index of smaller features */
++.lp-index { padding: clamp(96px, 14vh, 160px) clamp(20px, 5vw, 72px); }
++.lp-index ol { list-style: none; margin: 56px 0 0; padding: 0; border-top: 1px solid rgba(255, 255, 255, 0.2); }
++.lp-row {
++  position: relative; display: grid; grid-template-columns: 4rem minmax(0, 1fr) minmax(0, 1.2fr); align-items: baseline; gap: 24px;
++  padding: 28px 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.2); transition: background 250ms, padding-left 250ms;
++}
++.lp-row:hover { background: rgba(255, 255, 255, 0.07); padding-left: 28px; }
++.lp-row-num { font-family: "Michroma", var(--sans); font-size: 0.8rem; color: var(--stamp); }
++.lp-row h3 { font-family: var(--serif); font-size: clamp(1.5rem, 3.2vw, 2.8rem); font-weight: 600; letter-spacing: -0.03em; line-height: 1.05; color: #fff; }
++.lp-row p { color: rgba(255, 255, 255, 0.85); font-size: 1.02rem; line-height: 1.5; }
++
++/* Pricing reuses the shared plan cards; only the heading is remade. */
++.landing-pricing { align-items: stretch; text-align: left; padding: clamp(96px, 14vh, 160px) clamp(20px, 5vw, 72px); }
++.landing-pricing h2 { margin-bottom: 24px; }
++
++/* Closing call to action */
++.lp-final { min-height: 100svh; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 48px; padding: 96px clamp(20px, 5vw, 72px); }
++.lp-final h2 { font-size: clamp(3rem, 11vw, 11rem); letter-spacing: -0.045em; }
++.lp-cta-big { padding: 22px 44px; border-radius: 999px; background: #fff; color: #000; font-size: clamp(1.1rem, 2vw, 1.5rem); font-weight: 700; letter-spacing: -0.02em; transition: transform 200ms, background 200ms; }
++.lp-cta-big:hover { transform: scale(1.05); background: var(--stamp); }
++
++@media (max-width: 768px) {
++  .lp-sub { flex-direction: column; align-items: stretch; }
++  .lp-sub .landing-line { flex: none; max-width: none; }
++  .lp-row { grid-template-columns: 2.5rem 1fr; }
++  .lp-row p { grid-column: 2; }
++  .lp-hero h1 { font-size: clamp(2.2rem, 12vw, 4rem); }
++}
++
++@media (prefers-reduced-motion: reduce) {
++  .lp-cue i { animation: none; }
++  .lp-row, .lp-cta-big { transition: none; }
++  .lp-cta-big:hover { transform: none; }
++}
++
++@media (prefers-reduced-transparency: reduce) {
++}
++
++.landing-pricing .landing-plans { width: 100%; max-width: none; }
++
++/* Chapters: the story in five short scenes. Stacked by default; .is-pinned (set by script on wide screens) shows one at a time. */
++.lp-chapters { position: relative; padding: clamp(96px, 14vh, 160px) clamp(20px, 5vw, 72px); }
++.lp-chap-glow, .lp-chap-index, .lp-chap-copies { display: none; }
++.lp-chap-head h2 { margin-top: 14px; font-family: var(--serif); font-weight: 600; letter-spacing: -0.035em; font-size: clamp(2.4rem, 6.6vw, 6.4rem); line-height: 1.02; color: #fff; }
++.lp-chap-list { list-style: none; margin: 48px 0 0; padding: 0; display: grid; gap: 72px; }
++.lp-chap { display: grid; gap: 24px; }
++.lp-chap-num { font-family: "Michroma", var(--sans); font-size: clamp(3rem, 7vw, 6rem); line-height: 1; color: transparent; -webkit-text-stroke: 1px rgba(255, 255, 255, 0.45); }
++.lp-chap-copy h3 { margin-top: 12px; font-family: var(--serif); font-size: clamp(1.6rem, 3vw, 2.6rem); font-weight: 600; letter-spacing: -0.03em; line-height: 1.08; color: #fff; }
++.lp-chap-copy p { margin-top: 12px; max-width: 28rem; color: rgba(255, 255, 255, 0.85); font-size: 1.05rem; line-height: 1.55; }
++.lp-chap-stage .landing-frame { border-color: rgba(255, 255, 255, 0.14); background: #050507; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.05), 0 0 200px 50px rgba(96, 80, 255, 0.3), 0 40px 140px rgba(96, 80, 255, 0.4), 0 12px 40px rgba(0, 0, 0, 0.6); }
++
++/* Pinned: one column of words (heading, the chapter, the index) beside one large, lit product window. */
++.lp-chapters.is-pinned { height: 100svh; padding: 0 clamp(20px, 5vw, 72px); overflow: hidden; }
++.lp-chapters.is-pinned .lp-chap-glow { display: block; position: absolute; inset: 0; pointer-events: none;
++  background: radial-gradient(78% 105% at 68% 52%, rgba(120, 90, 255, 0.46), rgba(70, 110, 255, 0.24) 40%, rgba(40, 130, 255, 0.09) 66%, transparent 88%); }
++.lp-chapters.is-pinned .lp-chap-side { position: absolute; z-index: 2; top: 0; bottom: 0; left: clamp(20px, 5vw, 72px); width: 30%; display: flex; flex-direction: column; justify-content: center; gap: clamp(20px, 4svh, 36px); }
++.lp-chapters.is-pinned .lp-chap-copies { display: grid; }
++.lp-chapters.is-pinned .lp-chap > .lp-chap-copy { display: none; }
++.lp-chapters.is-pinned .lp-chap-stage { grid-column: 2; }
++.lp-chapters.is-pinned .lp-chap-head h2 { font-size: clamp(1.7rem, 3vw, 2.8rem); }
++.lp-chapters.is-pinned .lp-chap-list { position: absolute; inset: 0; margin: 0; display: block; }
++.lp-chapters.is-pinned .lp-chap { position: absolute; inset: 0; grid-template-columns: 30% minmax(0, 1fr); align-items: center; gap: clamp(24px, 4vw, 64px); padding: 0 clamp(20px, 5vw, 72px); opacity: 0; pointer-events: none; transition: opacity 500ms; }
++.lp-chapters.is-pinned .lp-chap.is-active { opacity: 1; pointer-events: auto; }
++.lp-chapters.is-pinned .lp-chap-copies .lp-chap-copy { grid-area: 1 / 1; align-self: start; opacity: 0; transform: translateY(16px); transition: opacity 400ms, transform 700ms cubic-bezier(0.16, 1, 0.3, 1); }
++.lp-chapters.is-pinned .lp-chap-copies .lp-chap-copy.is-on { opacity: 1; transform: none; }
++.lp-chapters.is-pinned .lp-chap-num { display: block; font-size: clamp(1.8rem, 3vw, 2.6rem); }
++.lp-chapters.is-pinned .lp-chap-copy h3 { margin-top: 6px; font-size: clamp(1.5rem, 2.4vw, 2.2rem); }
++.lp-chapters.is-pinned .lp-chap-copy p { margin-top: 8px; font-size: 1rem; }
++.lp-chapters.is-pinned .lp-chap-stage { display: grid; justify-items: center; transform: translateY(24px) scale(0.97); transition: transform 800ms cubic-bezier(0.16, 1, 0.3, 1); }
++.lp-chapters.is-pinned .lp-chap.is-active .lp-chap-stage { transform: none; }
++.lp-chapters.is-pinned .lp-chap-stage .landing-frame { width: min(100%, calc((100svh - 150px) / var(--ratio, 0.5625))); }
++
++.lp-chapters.is-pinned .lp-chap-index { display: grid; gap: 0; }
++.lp-chap-index button { display: flex; align-items: baseline; gap: 14px; padding: 5px 0; color: rgba(255, 255, 255, 0.4); font-size: 0.92rem; font-weight: 600; letter-spacing: -0.01em; text-align: left; transition: color 250ms, transform 250ms; }
++.lp-chap-index button span { font-family: "Michroma", var(--sans); font-size: 0.68rem; letter-spacing: 0.04em; }
++.lp-chap-index button:hover { color: rgba(255, 255, 255, 0.8); }
++.lp-chap-index button.is-on { color: #fff; transform: translateX(6px); }
++.lp-chap-index button.is-on span { color: var(--stamp); }
++.lp-chap-index button:focus-visible { outline: 2px solid var(--stamp); outline-offset: 3px; }
++
++@media (prefers-reduced-motion: reduce) {
++  .lp-chapters.is-pinned .lp-chap, .lp-chapters.is-pinned .lp-chap-copies .lp-chap-copy, .lp-chapters.is-pinned .lp-chap-stage, .lp-chap-index button { transition: none; }
++}
++
++/* Demo frames: the app is drawn at --base-w by --base-h and scaled by --s to fit the frame. */
++.landing-frame .landing-frame-body { position: relative; overflow: hidden; height: calc(var(--base-h, 720) * var(--s, 1) * 1px); }
++.landing-frame .landing-frame-body iframe { position: absolute; top: 0; left: 0; width: calc(var(--base-w, 1280) * 1px); height: calc(var(--base-h, 720) * 1px); transform: scale(var(--s, 1)); transform-origin: 0 0; }
++
++/* Chapters typography: Inter to read, Instrument Serif for the voice, Michroma for labels and numbers. */
++.lp-chapters .lp-eyebrow { display: flex; align-items: center; gap: 14px; font-family: "Michroma", var(--sans); font-size: 10px; font-weight: 400; letter-spacing: 0.3em; }
++.lp-chapters .lp-eyebrow::before { content: ""; width: 28px; height: 1px; background: currentColor; }
++.lp-chapters .lp-chap-head h2 { font-family: var(--sans); font-weight: 500; letter-spacing: -0.045em; line-height: 0.98; text-wrap: balance; }
++.lp-chapters .is-accent { font-family: "Instrument Serif", Georgia, serif; font-style: italic; font-weight: 400; letter-spacing: -0.02em; font-size: 1.12em; line-height: 0.9; }
++.lp-chapters .lp-chap-num { font-size: clamp(2.4rem, 4vw, 3.4rem); -webkit-text-stroke: 1px rgba(255, 255, 255, 0.32); letter-spacing: 0.02em; }
++.lp-chapters .lp-chap-copy h3 { font-family: "Instrument Serif", Georgia, serif; font-weight: 400; font-size: clamp(2.1rem, 3.6vw, 3.4rem); letter-spacing: -0.02em; line-height: 1.02; text-wrap: balance; }
++.lp-chapters .lp-chap-copy p { max-width: 25rem; font-size: 0.98rem; font-weight: 400; line-height: 1.62; color: rgba(255, 255, 255, 0.68); text-wrap: pretty; }
++.lp-chapters.is-pinned .lp-chap-num { font-size: clamp(1.7rem, 2.6vw, 2.3rem); }
++.lp-chapters.is-pinned .lp-chap-copy h3 { margin-top: 8px; font-size: clamp(1.9rem, 2.9vw, 2.8rem); }
++.lp-chapters.is-pinned .lp-chap-copy p { margin-top: 10px; font-size: 0.96rem; }
++
++.lp-chap-index button { gap: 12px; font-size: 0.86rem; font-weight: 500; letter-spacing: -0.005em; }
++.lp-chap-index button span { font-size: 0.6rem; letter-spacing: 0.08em; }
++.lp-chap-index button::before { content: ""; order: -1; width: 0; height: 1px; align-self: center; background: var(--stamp); transition: width 300ms cubic-bezier(0.16, 1, 0.3, 1); }
++.lp-chap-index button.is-on { transform: none; }
++.lp-chap-index button.is-on::before { width: 20px; }
++@media (prefers-reduced-motion: reduce) { .lp-chap-index button::before { transition: none; } }
++
++.landing-frame .landing-frame-body { background: #000; }
++.landing-frame .landing-frame-body iframe { background: #000; color-scheme: dark; }
++
++/* Trust flow, minimal: one serif line per moment lights up as you reach it, and one screen beside it cross-fades. */
++.lp-flow { position: relative; padding: clamp(96px, 14vh, 160px) clamp(20px, 5vw, 72px); }
++.lp-flow .lp-eyebrow { display: flex; align-items: center; gap: 14px; font-family: "Michroma", var(--sans); font-size: 10px; font-weight: 400; letter-spacing: 0.3em; }
++.lp-flow .lp-eyebrow::before { content: ""; width: 28px; height: 1px; background: currentColor; }
++.lp-flow-head h2 { margin-top: 14px; font-family: var(--sans); font-weight: 500; letter-spacing: -0.045em; line-height: 0.98; font-size: clamp(2.8rem, 7vw, 7rem); color: #fff; text-wrap: balance; }
++.lp-flow .is-accent { font-family: "Instrument Serif", Georgia, serif; font-style: italic; font-weight: 400; letter-spacing: -0.02em; font-size: 1.12em; line-height: 0.9; }
++
++.lp-moments { list-style: none; margin: clamp(56px, 10vh, 112px) 0 0; padding: 0; }
++.lp-moment { position: relative; padding-block: clamp(36px, 7svh, 72px); }
++.lp-moment-rule { position: absolute; top: 0; left: 0; right: 0; height: 1px; background: rgba(255, 255, 255, 0.18); transform-origin: left; }
++.lp-moment-num { display: block; font-family: "Michroma", var(--sans); font-size: 0.7rem; letter-spacing: 0.14em; color: rgba(255, 255, 255, 0.45); }
++.lp-moment h3 { margin-top: 18px; font-family: "Instrument Serif", Georgia, serif; font-weight: 400; font-size: clamp(2.6rem, 5vw, 5rem); letter-spacing: -0.025em; line-height: 0.98; color: #fff; text-wrap: balance; }
++.lp-moment p { margin-top: 18px; max-width: 26rem; font-size: 1.02rem; line-height: 1.6; color: rgba(255, 255, 255, 0.62); text-wrap: pretty; }
++.lp-moment-art { margin-top: 28px; max-width: 30rem; }
++.lp-flow-stage { display: none; }
++
++/* Wide screens with motion: the section pins like the chapters above it, and one moment shows at a time. */
++.lp-flow-index { display: none; }
++.lp-flow.lp-pin .lp-flow-head h2 { font-size: clamp(1.7rem, 3vw, 2.8rem); }
++/* One tight stack on the left (heading, the current moment, the index), centred together; the screen sits beside it. */
++.lp-flow.lp-pin { --pad: clamp(20px, 5vw, 72px); height: 100svh; padding: 0 var(--pad); overflow: hidden; display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
++  column-gap: clamp(24px, 4vw, 64px); grid-template-rows: auto auto auto; align-content: center; row-gap: clamp(18px, 3.2svh, 30px); }
++.lp-flow.lp-pin .lp-flow-head { grid-column: 1; grid-row: 1; width: auto; }
++.lp-flow.lp-pin .lp-flow-head h2 { margin-top: 10px; font-size: clamp(1.9rem, 3.3vw, 3.8rem); }
++.lp-flow.lp-pin .lp-stack { display: contents; }
++.lp-flow.lp-pin .lp-moments { grid-column: 1; grid-row: 2; display: grid; margin: 0; }
++.lp-flow.lp-pin .lp-moment { grid-area: 1 / 1; align-self: start; position: static; margin: 0; padding: 0; min-height: 0; opacity: 0; }  /* GSAP slides these in and out sideways */
++.lp-flow.lp-pin .lp-moment h3 { margin-top: 10px; font-size: clamp(2.4rem, 4.6vw, 6rem); }
++.lp-flow.lp-pin .lp-moment p { margin-top: 14px; max-width: 30rem; font-size: clamp(1rem, 1.15vw, 1.2rem); }
++.lp-flow.lp-pin .lp-flow-index button { font-size: clamp(0.82rem, 0.95vw, 1rem); padding-block: 4px; }
++.lp-flow.lp-pin .lp-flow-index { display: grid; grid-column: 1; grid-row: 3; }
++.lp-flow.lp-pin .lp-flow-stage { display: block; position: relative; grid-column: 2; grid-row: 1 / 4; height: min(78svh, 52rem); align-self: center; }
++.lp-flow.lp-pin .lp-moment-rule, .lp-flow.lp-pin .lp-moment-art { display: none; }
++.lp-flow.lp-pin .lp-screen { position: absolute; inset: 0; display: grid; place-items: center; opacity: 0; }
++.lp-flow.lp-pin .lp-screen { z-index: 1; }
++.lp-flow.lp-pin .lp-screen .lp-art { width: min(100%, 30rem); zoom: 1.25; box-shadow: 0 50px 120px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08); }
++.lp-flow.lp-pin .lp-art-shop img { height: clamp(130px, 22svh, 200px); }
++@media (min-width: 1500px) { .lp-flow.lp-pin .lp-screen .lp-art { zoom: 1.6; } }
++@media (min-width: 1800px) { .lp-flow.lp-pin .lp-screen .lp-art { zoom: 1.95; } }
++.lp-flow-ghost { display: none; }
++.lp-flow.lp-pin .lp-flow-ghost { display: grid; place-items: center; position: absolute; inset: 0; pointer-events: none; font-family: "Michroma", var(--sans); font-size: clamp(9rem, 24vw, 28rem); line-height: 1; letter-spacing: -0.04em;
++  color: transparent; -webkit-text-stroke: 1px rgba(255, 255, 255, 0.09); }
++.lp-stage-count { position: absolute; right: 0; bottom: 5svh; margin: 0; font-family: "Michroma", var(--sans); font-size: 0.7rem; letter-spacing: 0.14em; color: rgba(255, 255, 255, 0.4); }
++.lp-stage-count b { font-weight: 400; color: #fff; }
++.lp-flow-index button { display: flex; align-items: baseline; gap: 12px; padding: 3px 0; color: rgba(255, 255, 255, 0.38); font-size: 0.82rem; font-weight: 500; letter-spacing: -0.005em; text-align: left; transition: color 250ms; }
++.lp-flow-index button span { font-family: "Michroma", var(--sans); font-size: 0.58rem; letter-spacing: 0.08em; }
++.lp-flow-index button::before { content: ""; order: -1; width: 0; height: 1px; align-self: center; background: #fff; transition: width 300ms cubic-bezier(0.16, 1, 0.3, 1); }
++.lp-flow-index button:hover { color: rgba(255, 255, 255, 0.8); }
++.lp-flow-index button.is-on { color: #fff; }
++.lp-flow-index button.is-on::before { width: 18px; }
++.lp-flow-index button:focus-visible { outline: 2px solid var(--stamp); outline-offset: 3px; }
++@media (prefers-reduced-motion: reduce) { .lp-flow-index button::before { transition: none; } }
++
++/* The recreated screens */
++.lp-art { border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 16px; overflow: hidden; background: rgba(6, 6, 10, 0.92); font-size: 0.8rem; color: rgba(255, 255, 255, 0.8);
++  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.6); }
++.lp-art-bar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; font-weight: 600; font-size: 0.78rem; color: #fff; background: rgba(255, 255, 255, 0.06); border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
++.lp-art-body { display: grid; gap: 8px; padding: 12px 14px; }
++.lp-art-list { margin: 0; padding: 12px 14px 4px 30px; display: grid; gap: 6px; line-height: 1.5; }
++.lp-art-row { display: flex; justify-content: space-between; gap: 14px; font-family: var(--mono); font-size: 0.7rem; }
++.lp-art-row span { color: rgba(255, 255, 255, 0.5); }
++.lp-art-row b { font-weight: 500; color: #fff; text-align: right; }
++.lp-art-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; padding: 10px 14px 14px; }
++.lp-btn { padding: 7px 12px; border-radius: 8px; font-size: 0.72rem; font-weight: 600; background: rgba(255, 255, 255, 0.1); color: #fff; }
++.lp-btn.is-primary { background: #fff; color: #000; }
++.lp-art-ver { display: flex; gap: 10px; align-items: baseline; line-height: 1.4; }
++.lp-art-ver em { flex: none; padding: 2px 8px; border-radius: 6px; font-style: normal; font-family: var(--mono); font-size: 0.64rem; background: rgba(255, 255, 255, 0.1); }
++.lp-art-ver.is-live em { background: #fff; color: #000; }
++.lp-art-line { display: grid; grid-template-columns: 5.2rem 1fr; gap: 10px; line-height: 1.45; }
++.lp-art-line b { font-family: var(--mono); font-weight: 500; font-size: 0.68rem; color: rgba(255, 255, 255, 0.5); }
++.lp-dot { width: 7px; height: 7px; border-radius: 50%; background: #fff; }
++.lp-art-shop img { display: block; width: 100%; height: clamp(140px, 26svh, 240px); object-fit: cover; }
++.lp-flow:not(.lp-pin) .lp-art-shop img { height: auto; aspect-ratio: 16 / 9; }
++
++
++/* Tighter rhythm between sections. */
++.lp-demo { padding-top: clamp(56px, 9vh, 96px); padding-bottom: 24px; }
++.lp-team { padding-top: clamp(40px, 6vh, 72px); }
++.lp-index, .landing-pricing { padding-block: clamp(56px, 9vh, 96px); }
++.landing-pricing { min-height: 0; justify-content: flex-start; }
++.lp-index ol { margin-top: 32px; }
++.lp-final { min-height: 72svh; padding-block: 64px; gap: 36px; }
++.lp-chapters:not(.is-pinned), .lp-flow:not(.lp-pin) { padding-block: clamp(56px, 9vh, 96px); }
++.lp-marquee { padding: 28px 0; }
++
++/* A one-scene story (the team): no numeral, no index. */
++.lp-chapters.is-single .lp-chap-num, .lp-chapters.is-single .lp-chap-index { display: none; }
++
++/* Pricing: four quiet cards. A giant price, a spotlight edge that follows the cursor, and the popular plan inverted as the one focal point. */
++.lp-pricing { position: relative; z-index: 1; padding: clamp(56px, 9vh, 96px) clamp(20px, 5vw, 72px); }
++.lp-pricing .lp-eyebrow { display: flex; align-items: center; gap: 14px; font-family: "Michroma", var(--sans); font-size: 10px; font-weight: 400; letter-spacing: 0.3em; }
++.lp-pricing .lp-eyebrow::before { content: ""; width: 28px; height: 1px; background: currentColor; }
++.lp-pricing h2 { margin-top: 14px; font-family: var(--sans); font-weight: 500; letter-spacing: -0.045em; line-height: 0.98; font-size: clamp(2.8rem, 7vw, 7rem); color: #fff; text-align: left; max-width: none; text-wrap: balance; }
++.lp-pricing .is-accent { font-family: "Instrument Serif", Georgia, serif; font-style: italic; font-weight: 400; letter-spacing: -0.02em; font-size: 1.12em; line-height: 0.9; }
++
++.lp-plans { list-style: none; margin: clamp(40px, 7vh, 72px) 0 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
++.lp-plan { --mx: 50%; --my: 50%; position: relative; isolation: isolate; display: flex; flex-direction: column; min-height: min(46svh, 23rem); padding: 22px 22px 22px; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 22px;
++  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.01)); transition: transform 600ms cubic-bezier(0.16, 1, 0.3, 1); }
++.lp-plan-rule { display: none; }
++.lp-plan::before { content: ""; position: absolute; z-index: -1; inset: 0; border-radius: inherit; opacity: 0; pointer-events: none; transition: opacity 400ms; background: radial-gradient(380px circle at var(--mx) var(--my), rgba(255, 255, 255, 0.1), transparent 62%); }
++.lp-plan::after { content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px; opacity: 0; pointer-events: none; transition: opacity 300ms;
++  background: radial-gradient(240px circle at var(--mx) var(--my), rgba(255, 255, 255, 0.85), transparent 65%); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
++.lp-plan:hover, .lp-plan:focus-within { transform: translateY(-8px); }
++.lp-plan:hover::before, .lp-plan:focus-within::before, .lp-plan:hover::after, .lp-plan:focus-within::after { opacity: 1; }
++.lp-plan-name { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; min-height: clamp(4.4rem, 6vw, 5rem); }
++.lp-plan-name h3 { font-family: "Instrument Serif", Georgia, serif; font-weight: 400; font-size: clamp(1.7rem, 2.1vw, 2.3rem); letter-spacing: -0.02em; line-height: 1; color: #fff; }
++.lp-plan-tag { padding: 4px 11px; border: 1px solid rgba(255, 255, 255, 0.5); border-radius: 999px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: #fff; }
++.lp-plan-price { margin-top: clamp(16px, 3svh, 28px); font-family: var(--sans); font-weight: 500; font-size: clamp(2rem, 2.7vw, 3.1rem); letter-spacing: -0.045em; line-height: 1; color: #fff; font-variant-numeric: tabular-nums; white-space: nowrap; }
++.lp-plan-price small { margin-left: 4px; font-size: 0.85rem; font-weight: 500; letter-spacing: 0; color: rgba(255, 255, 255, 0.5); }
++.lp-plan-facts { display: grid; gap: 8px; margin: 20px 0 20px; padding-top: 16px; border-top: 1px solid rgba(255, 255, 255, 0.14); font-family: var(--mono); font-size: 0.74rem; }
++.lp-plan-facts div { display: flex; justify-content: space-between; gap: 12px; }
++.lp-plan-facts dt { color: rgba(255, 255, 255, 0.45); }
++.lp-plan-facts dd { margin: 0; color: #fff; text-align: right; }
++.lp-plan-cta { display: inline-flex; align-items: center; justify-content: space-between; gap: 14px; width: 100%; margin-top: auto; padding: 12px 18px; border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 999px; background: transparent; color: #fff; font-size: 0.88rem; font-weight: 600; letter-spacing: -0.01em; transition: background 300ms, color 300ms, border-color 300ms; }
++.lp-plan-cta b { display: inline-block; font-weight: 400; transition: transform 400ms cubic-bezier(0.16, 1, 0.3, 1); }
++.lp-plan:hover .lp-plan-cta, .lp-plan-cta:focus-visible { background: #fff; color: #000; border-color: #fff; }
++.lp-plan:hover .lp-plan-cta b { transform: translateX(5px); }
++.lp-plan-cta:focus-visible { outline: 2px solid var(--stamp); outline-offset: 3px; }
++
++/* The popular plan is the one inverted card. */
++.lp-plan.is-popular { background: #fff; border-color: #fff; }
++.lp-plan.is-popular::before { background: radial-gradient(380px circle at var(--mx) var(--my), rgba(0, 0, 0, 0.08), transparent 62%); }
++.lp-plan.is-popular::after { background: radial-gradient(240px circle at var(--mx) var(--my), rgba(0, 0, 0, 0.5), transparent 65%); }
++.lp-plan.is-popular .lp-plan-name h3, .lp-plan.is-popular .lp-plan-price, .lp-plan.is-popular .lp-plan-facts dd { color: #000; }
++.lp-plan.is-popular .lp-plan-price small, .lp-plan.is-popular .lp-plan-facts dt { color: rgba(0, 0, 0, 0.5); }
++.lp-plan.is-popular .lp-plan-tag { color: #000; border-color: rgba(0, 0, 0, 0.5); }
++.lp-plan.is-popular .lp-plan-facts { border-top-color: rgba(0, 0, 0, 0.16); }
++.lp-plan.is-popular .lp-plan-cta { background: #000; border-color: #000; color: #fff; }
++.lp-plan.is-popular:hover .lp-plan-cta { background: #000; color: #fff; }
++
++.lp-plans-note { margin-top: 24px; font-family: var(--mono); font-size: 0.72rem; color: rgba(255, 255, 255, 0.4); }
++@media (max-width: 1100px) { .lp-plans { grid-template-columns: repeat(2, minmax(0, 1fr)); } .lp-plan { min-height: 0; } }
++@media (max-width: 620px) { .lp-plans { grid-template-columns: 1fr; } }
++@media (prefers-reduced-motion: reduce) { .lp-plan, .lp-plan::before, .lp-plan::after, .lp-plan-cta, .lp-plan-cta b { transition: none; } .lp-plan:hover, .lp-plan:focus-within { transform: none; } }
++
++/* The periodic table of Neuron. */
++.lp-elements { position: relative; z-index: 1; padding: clamp(56px, 9vh, 96px) clamp(20px, 5vw, 72px); }
++.lp-elements .lp-eyebrow { display: flex; align-items: center; gap: 14px; font-family: "Michroma", var(--sans); font-size: 10px; font-weight: 400; letter-spacing: 0.3em; }
++.lp-elements .lp-eyebrow::before { content: ""; width: 28px; height: 1px; background: currentColor; }
++.lp-el-head h2 { margin-top: 14px; font-family: var(--sans); font-weight: 500; letter-spacing: -0.045em; line-height: 0.98; font-size: clamp(2.8rem, 7vw, 7rem); color: #fff; text-wrap: balance; }
++.lp-elements .is-accent { font-family: "Instrument Serif", Georgia, serif; font-style: italic; font-weight: 400; letter-spacing: -0.02em; font-size: 1.12em; line-height: 0.9; }
++
++.lp-el-body { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: clamp(28px, 5vw, 80px); margin-top: clamp(36px, 6vh, 64px); align-items: start; }
++.lp-readout { position: sticky; top: 12svh; min-height: min(60svh, 30rem); padding-block: 8px; }
++.lp-readout-in { position: relative; display: flex; flex-direction: column; animation: lp-readout 520ms cubic-bezier(0.16, 1, 0.3, 1); }
++@keyframes lp-readout { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
++.lp-readout-sym { font-family: "Michroma", var(--sans); font-size: clamp(6rem, 13vw, 13rem); line-height: 1; letter-spacing: -0.05em; color: transparent; -webkit-text-stroke: 1px var(--hue); }
++.lp-readout-meta { display: flex; align-items: center; gap: 10px; margin-top: 18px; font-family: "Michroma", var(--sans); font-size: 0.62rem; letter-spacing: 0.16em; text-transform: uppercase; color: rgba(255, 255, 255, 0.55); }
++.lp-readout-meta i { width: 8px; height: 8px; border-radius: 50%; background: var(--hue); }
++.lp-readout h3 { margin-top: 12px; font-family: "Instrument Serif", Georgia, serif; font-weight: 400; font-size: clamp(2.2rem, 3.8vw, 4rem); letter-spacing: -0.02em; line-height: 1; color: #fff; }
++.lp-readout-text { margin-top: 16px; max-width: 28rem; font-size: 1.02rem; line-height: 1.6; color: rgba(255, 255, 255, 0.66); text-wrap: pretty; }
++
++.lp-el-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
++.lp-el-filters button { display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px; border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 999px; color: rgba(255, 255, 255, 0.7); font-size: 0.8rem; font-weight: 600; transition: background 250ms, color 250ms, border-color 250ms; }
++.lp-el-filters button i { width: 7px; height: 7px; border-radius: 50%; }
++.lp-el-filters button:hover { border-color: rgba(255, 255, 255, 0.5); color: #fff; }
++.lp-el-filters button.is-on { background: #fff; border-color: #fff; color: #000; }
++.lp-el-filters button:focus-visible, .lp-el:focus-visible { outline: 2px solid var(--stamp); outline-offset: 2px; }
++
++.lp-el-grid { --mx: 50%; --my: 50%; position: relative; isolation: isolate; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
++.lp-el-grid::before { content: ""; position: absolute; z-index: -1; inset: -20px; pointer-events: none; background: radial-gradient(320px circle at var(--mx) var(--my), rgba(255, 255, 255, 0.07), transparent 65%); }
++.lp-el { position: relative; display: flex; flex-direction: column; justify-content: space-between; aspect-ratio: 1; padding: 9px 10px; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; background: rgba(255, 255, 255, 0.025); text-align: left; color: #fff;
++  transition: background 250ms, color 250ms, border-color 250ms, opacity 300ms, transform 400ms cubic-bezier(0.16, 1, 0.3, 1); }
++.lp-el small { font-family: "Michroma", var(--sans); font-size: 0.5rem; letter-spacing: 0.08em; color: rgba(255, 255, 255, 0.4); }
++.lp-el b { font-family: "Michroma", var(--sans); font-weight: 400; font-size: clamp(1.1rem, 2vw, 2rem); letter-spacing: -0.03em; line-height: 1; }
++.lp-el span { font-size: 0.64rem; font-weight: 500; line-height: 1.2; color: rgba(255, 255, 255, 0.55); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
++.lp-el i { position: absolute; top: 10px; right: 10px; width: 6px; height: 6px; border-radius: 50%; background: var(--hue); }
++.lp-el:hover { transform: translateY(-3px); border-color: rgba(255, 255, 255, 0.4); }
++.lp-el.is-on { background: #fff; border-color: #fff; color: #000; }
++.lp-el.is-on small, .lp-el.is-on span { color: rgba(0, 0, 0, 0.55); }
++.lp-el.is-dim { opacity: 0.16; }
++@media (max-width: 860px) {
++  .lp-el-body { grid-template-columns: 1fr; }
++  .lp-readout { position: static; min-height: 0; }
++  .lp-readout-sym { font-size: clamp(4rem, 22vw, 7rem); }
++  .lp-el-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
++  .lp-el span { display: none; }
++}
++@media (prefers-reduced-motion: reduce) { .lp-readout-in { animation: none; } .lp-el, .lp-el-filters button { transition: none; } .lp-el:hover { transform: none; } }
++
++/* Tiles arrive from the centre outward once the grid is seen. */
++.lp-el-grid[data-phase="armed"] .lp-el { opacity: 0; transform: scale(0.6) translateY(24px); }
++.lp-el-grid[data-phase="in"] .lp-el { animation: lp-el-in 700ms cubic-bezier(0.34, 1.4, 0.64, 1) backwards; animation-delay: calc(var(--d, 0) * 1ms); }
++@keyframes lp-el-in { from { opacity: 0; transform: scale(0.6) translateY(24px); } }
++
++/* The hero logo: the wireframe N, large, drawn once and left complete. */
++.lp-mark { display: flex; align-items: center; gap: clamp(14px, 1.6vw, 26px); }
++.lp-mark svg { width: clamp(120px, 13vw, 210px); height: auto; overflow: visible; animation: lp-mark-glow 1400ms ease 2.4s both; }
++.lp-mark .wire-base { stroke: rgba(255, 255, 255, 0.14); }
++.lp-mark .wire-edge { stroke: #fff; }
++.lp-mark .wire-edge line { stroke-dasharray: 120; stroke-dashoffset: 120; animation: lp-mark-draw 1500ms cubic-bezier(0.4, 0, 0.2, 1) forwards; }
++@keyframes lp-mark-draw { to { stroke-dashoffset: 0; } }
++@keyframes lp-mark-glow { 0%, 100% { filter: drop-shadow(0 0 0 rgba(255, 255, 255, 0)); } 40% { filter: drop-shadow(0 0 16px rgba(255, 255, 255, 0.55)); } }
++@media (prefers-reduced-motion: reduce) { .lp-mark svg { animation: none; } .lp-mark .wire-edge line { animation: none; stroke-dashoffset: 0; } .lp-el-grid[data-phase] .lp-el { animation: none; opacity: 1; transform: none; } }

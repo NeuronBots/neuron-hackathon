@@ -1,28 +1,389 @@
 diff --git a/src/Demo.tsx b/src/Demo.tsx
-index d1a98f0..9f47cb7 100644
+index d1a98f0..e044790 100644
 --- a/src/Demo.tsx
 +++ b/src/Demo.tsx
-@@ -244 +244 @@ const bot = (id: string, name: string, label: string, is_master = false): AgentR
+@@ -4,0 +5,2 @@ import { DirectChat } from "./DirectChat"
++import { PaymentsOffer } from "./PaymentsOffer"
++import { PreviewPanel } from "./PreviewPanel"
+@@ -7,0 +10 @@ import { TaskBoard } from "./TaskBoard"
++import { WalletView } from "./WalletView"
+@@ -33,4 +36,4 @@ const AGENTS = [
+-  { name: "Orion", label: "Tech lead", field: "Architecture", system_prompt: "You lead the build. You break the goal into work, keep the stack simple, and review what the others ship." },
+-  { name: "Lyra", label: "Designer", field: "Product design", system_prompt: "You design the booking flow and keep every screen calm and clear for patients." },
+-  { name: "Vega", label: "Backend engineer", field: "APIs and data", system_prompt: "You build the scheduling API and keep patient data safe and correct." },
+-  { name: "Atlas", label: "QA", field: "Testing", system_prompt: "You test each release, find what breaks, and report it with steps to reproduce." },
++  { name: "Orion", label: "Master", field: "Releases", system_prompt: "You lead the team, plan the build with the owner, and publish only what the owner allows." },
++  { name: "Jasmine", label: "Storefront designer", field: "Shop design", system_prompt: "You own the shop grid and cart, and check how it looks on every change." },
++  { name: "Amber", label: "Orders and stock", field: "Order math", system_prompt: "You own order data, totals in rupees and the stock gate." },
++  { name: "Rose", label: "QA", field: "Checks", system_prompt: "You run the order checklist on every change." },
+@@ -38,0 +42 @@ const THEMES = [
++  { title: "Friendly first names", detail: "Warm, easy to say.", examples: ["Jasmine", "Amber", "Rose"] },
+@@ -80,14 +84,16 @@ const demoTasks: TaskRead[] = []
+-function addDemoTask(agentId: string, title: string, status = "working", note = "") {
+-  const now = new Date().toISOString()
+-  demoTasks.push({
+-    id: `task-${demoTasks.length + 1}`,
+-    agent_id: agentId,
+-    title,
+-    status,
+-    decisions: note ? [{ at: now, who: "Orion", text: note }] : [],
+-    created_at: now,
+-    updated_at: now,
+-  })
+-  window.dispatchEvent(new Event("board-added"))
+-  window.dispatchEvent(new Event("board-update"))
+-}
++// The project's path in the sidebar, and the built app shown in the live preview.
++const PATH: [string, string, string][] = [
++  ["plan", "Plan", "The first-build plan"], ["build", "Build", "Muse builds it in a sandbox"], ["live", "Live", "Publish the site"],
++  ["orders", "Orders", "Take the first order"], ["payments", "Payments", "Get paid"],
++]
++let pathNow = 0
++// The Wallet: prices the owner confirms (in paise), found on the built shop. 3% Neuron and about 2% gateway, as the product states.
++const SHOP_PRICES = [
++  { sku: "vanilla-ember", name: "Vanilla Ember", amount: 49900, currency: "INR" },
++  { sku: "filter-kaapi", name: "Filter Kaapi", amount: 44900, currency: "INR" },
++  { sku: "monsoon-jasmine", name: "Monsoon Jasmine", amount: 54900, currency: "INR" },
++  { sku: "sandalwood-dusk", name: "Sandalwood Dusk", amount: 64900, currency: "INR" },
++  { sku: "shipping", name: "Shipping", amount: 7900, currency: "INR" },
++]
++const WALLET = { enabled: false, offer: false, platform_fee_pct: 3, gateway_fee_pct: 2, refund_days: 7, balance: {} as Record<string, unknown>, prices: [] as typeof SHOP_PRICES, proposed_prices: SHOP_PRICES, payments: [] as unknown[], payouts: [] as unknown[] }
++const PREVIEW = { id: "pv1", name: "Wick & Wax", src: "/demo-site/index.html", status: "running", stage: "Running", logs: [] as string[] }
+@@ -119,0 +126,25 @@ function mockFetch() {
++    const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } })
++    if (path === "/api/flows/path") return json({ phases: [], steps: PATH.map(([id, label, hint], i) => ({ id, label, hint, cost: null, state: i < pathNow ? "done" : i === pathNow ? "current" : "pending" })) })
++    if (path === "/api/wallet" && method === "GET") return json(WALLET)
++    if (path === "/api/wallet/enable" && method === "POST") { WALLET.enabled = true; WALLET.offer = false; return json({ enabled: true }) }
++    if (path === "/api/wallet/prices" && method === "PUT") {
++      WALLET.prices = JSON.parse(String(init?.body ?? "[]")) as typeof SHOP_PRICES
++      WALLET.proposed_prices = []
++      return json({})
++    }
++    if (path === "/api/wallet/checkout" && method === "POST") return json({})
++    if (path === "/api/projects/demo/build" && method === "POST") return json({})
++    if (path === "/api/projects/demo/preview" && method === "POST") return json(PREVIEW)
++    if (/^\/api\/previews\/[^/]+$/.test(path)) return json(method === "DELETE" ? {} : PREVIEW)
++    const task = path.match(/^\/api\/tasks\/([^/]+?)(\/decide)?$/)
++    if (task && task[1] !== "decide-batch") {
++      const row = demoTasks.find((t) => t.id === task[1])
++      if (!row) return json({ detail: "gone" }, 404)
++      if (task[2] && method === "POST") {
++        const { answer } = JSON.parse(String(init?.body ?? "{}")) as { answer: string }
++        row.status = "done"
++        row.decisions = [...row.decisions, { at: new Date().toISOString(), who: "You", text: `Decision: ${answer}` }]
++        window.dispatchEvent(new Event("board-update"))
++      }
++      return json(row)
++    }
+@@ -189 +220 @@ function driver(alive: () => boolean, pace = 1) {
+-    [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.trim() === text && !b.disabled))
++    [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => (b.textContent?.trim() === text || b.getAttribute("aria-label") === text) && !b.disabled))
+@@ -228 +259 @@ async function playSetup(alive: () => boolean) {
+-  await type(await field('input[placeholder="Project name"]'), "Lumen")
++  await type(await field('input[placeholder="Project name"]'), "Wick & Wax")
+@@ -230 +261 @@ async function playSetup(alive: () => boolean) {
+-  await type(await field("textarea"), "A patient app where people book clinic visits and get reminders.")
++  await type(await field("textarea"), "A small handmade candle brand. Customers pick candles and order online, in rupees.")
+@@ -232,4 +263 @@ async function playSetup(alive: () => boolean) {
+-  await type(await field('input[placeholder="owner/repo or a few words"]'), "lumen health")
+-  await click(await button("Search"))
+-  await click(await find(() => document.querySelector<HTMLButtonElement>(".setup-repos button")))
+-  await click(await button("Read repository"))
++  await click(await button("Continue without a repository"))
+@@ -244 +272 @@ const bot = (id: string, name: string, label: string, is_master = false): AgentR
 -  id, name, label, is_master, field: "", system_prompt: "", model: "claude-sonnet-5-5", parent_id: null, created_at: "",
 +  id, name, label, is_master, field: "", system_prompt: "", parent_id: null, created_at: "",
-@@ -375 +375 @@ function ChatScene({ onLive, ready = true }: { onLive: () => void; ready?: boole
+@@ -248,11 +276,12 @@ const TEAM = [bot("orion", "Orion", "Tech lead", true), bot("lyra", "Lyra", "Des
+-const ASK = "Plan the tickets for the first sprint."
+-const HANDOFFS = [
+-  { who: TEAM[1], ticket: "Ticket 1: design the booking flow and the reminder screens.", ack: "Got it. Sketches for review by Thursday." },
+-  { who: TEAM[2], ticket: "Ticket 2: build the scheduling API and the calendar sync.", ack: "On it. I will start with the availability endpoint." },
+-  { who: TEAM[3], ticket: "Ticket 3: write the test plan for double bookings.", ack: "Understood. I will have cases ready before the API lands." },
+-]
+-const OPENING = "On it. I will send each ticket to the teammate who owns it."
+-const CLOSING = "The tickets are on the board. I still need your call on video visits."
+-const DECISION = "Should video visits ship in the first sprint?"
+-const DECISION_NOTE = "Needs your decision: include video visits in this sprint, or leave them for the next one."
+-const DECISION_REPLY = "Ship video visits in this sprint."
++const WW = { id: "demo", name: "Wick & Wax", repo: "" }
++const WW_TEAM = [bot("orion", "Orion", "Master", true), bot("jasmine", "Jasmine", "Storefront designer"), bot("amber", "Amber", "Orders and stock"), bot("rose", "Rose", "QA")]
++  .map((a, i) => ({ ...a, created_at: `2026-01-0${i + 1}` }))
++const ASK = "Build an online shop for Wick & Wax, my handmade candle brand. Prices in rupees."
++const PLAN_STEPS = ["Reading what you told me about Wick & Wax", "Looking up cart and checkout patterns for small shops", "Writing the first-build plan"]
++const PLAN_CARD = { kind: "buildplan", filename: "first-build-plan.md", title: "The Wick & Wax first-build plan", project_id: "demo", status: "ready" }
++const PLAN_SUMMARY = "The plan: one page with five candles, prices in ₹ and orders by email only. No payment code yet. Jasmine owns the shop, Amber the order math and stock, Rose the checks."
++const PUBLISH = { kind: "approval", task_id: "t-publish", agent_id: "orion", name: "Orion", title: "Publish the Wick & Wax shop", detail: "Orion asks to act as you.\n• Publish the Wick & Wax shop at /sites/wick-wax", interactive: true }
++const PAYMENTS = { kind: "approval", task_id: "t-pay", agent_id: "orion", name: "Orion", title: "Publish the shop with checkout", detail: "Orion asks to act as you.\n• Publish the Wick & Wax shop with its Pay button at /sites/wick-wax", interactive: true }
++// ₹1,277 is 549 + 649 + 79 shipping. Fees follow the product: 3% Neuron, about 2% gateway.
++const PAYMENT = { kind: "payment", amount: 127700, currency: "INR", fee: 6385, net: 121315, items: ["Monsoon Jasmine", "Sandalwood Dusk"], ref: "WW-2026-3QAD", payout: new Date(Date.now() + 7 * 864e5).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) }
++const ORDER = { kind: "order", items: ["Monsoon Jasmine", "Sandalwood Dusk"], total: 1277, currency: "INR", ref: "WW-2026-3QAD", next: "Amber is checking stock before confirming" }
+@@ -263,0 +293,4 @@ const nothing = () => {}
++const wwGreeting = (a: AgentRecord) =>
++  say("assistant", a.is_master
++    ? "Hi, I am Orion, your master bot. Jasmine, Amber and Rose are ready. What should we build first?"
++    : `Hi, I am ${a.name}. Orion will send me work. This demo cannot do real tasks.`, `hello-${a.id}`)
+@@ -269,2 +302,26 @@ const greeting = (a: AgentRecord) =>
+-function ChatScene({ onLive, ready = true }: { onLive: () => void; ready?: boolean }) {
+-  const [chats, setChats] = useState<Record<string, ChatMessage[]>>(() => Object.fromEntries(TEAM.map((a) => [a.id, [greeting(a)]])))
++type Scene = "full" | "plan" | "build" | "live" | "pay" | "none"
++const cardMsg = (id: string, body: object) => say("assistant", `[[SOURCES:${JSON.stringify(body)}]]`, id)
++const BUILT = { kind: "build", project: "Wick & Wax", status: "done", files: 16, guide: true, archive: "wick-wax.zip", project_id: "demo" }
++// What the chat already holds when a chapter begins, so each chapter is a short scene of its own.
++function seed(scene: Scene): ChatMessage[] {
++  const plan = [
++    say("user", ASK, "ask"),
++    say("assistant", "I will write the first-build plan first. Nothing gets built until you approve it.", "opening"),
++    ...PLAN_STEPS.map((text, i) => cardMsg(`step-${i}`, { kind: "step", text })),
++    say("assistant", PLAN_SUMMARY, "summary"),
++    cardMsg("plan", { ...PLAN_CARD, status: "started" }),
++  ]
++  const build = [cardMsg("build", BUILT), say("assistant", "10 tests pass and 24 of 26 checks passed. The stock gate blocks Gulab Oud, which is out of stock.", "qa", { from: "Rose", to: "Orion", is_peer: true })]
++  const live = [
++    say("assistant", "The shop works. Publishing puts it on the web, so I need your Allow.", "ask-publish"), cardMsg("publish", PUBLISH),
++    say("assistant", "It is live at /sites/wick-wax. Orders from its form wake the order routine.", "live"), cardMsg("order", ORDER),
++  ]
++  const now = new Date().toISOString()
++  demoTasks.length = 0
++  pathNow = scene === "build" || scene === "live" ? 1 : scene === "pay" ? 3 : 0
++  if (scene === "pay") demoTasks.push({ id: "t-publish", agent_id: "orion", title: PUBLISH.title, status: "done", decisions: [{ at: now, who: "Orion", text: PUBLISH.detail }, { at: now, who: "You", text: "Decision: Approved" }], created_at: now, updated_at: now })
++  return scene === "build" ? plan : scene === "live" ? [...plan, ...build] : scene === "pay" ? [...plan, ...build, ...live] : []
++}
++
++function ChatScene({ onLive, ready = true, scene = "full" }: { onLive: () => void; ready?: boolean; scene?: Scene }) {
++  const [chats, setChats] = useState<Record<string, ChatMessage[]>>(() => ({ ...Object.fromEntries(WW_TEAM.map((a) => [a.id, [wwGreeting(a)]])), orion: [wwGreeting(WW_TEAM[0]), ...seed(scene)] }))
+@@ -276,0 +334 @@ function ChatScene({ onLive, ready = true }: { onLive: () => void; ready?: boole
++  const [walletOpen, setWalletOpen] = useState(false)
+@@ -278 +336 @@ function ChatScene({ onLive, ready = true }: { onLive: () => void; ready?: boole
+-  const agent = TEAM.find((a) => a.id === selected) ?? TEAM[0]
++  const agent = WW_TEAM.find((a) => a.id === selected) ?? WW_TEAM[0]
+@@ -297,0 +356,11 @@ function ChatScene({ onLive, ready = true }: { onLive: () => void; ready?: boole
++      const card = (id: string, body: object) => push("orion", say("assistant", `[[SOURCES:${JSON.stringify(body)}]]`, id))
++      const setCard = (id: string, body: object) => setChats((all) => ({ ...all, orion: all.orion.map((m) => (m.id === id ? { ...m, content: `[[SOURCES:${JSON.stringify(body)}]]` } : m)) }))
++      const path = async (step: number) => { pathNow = step; setWorking(["orion"]); await sleep(150); setWorking([]) }  // a changed working list makes the rail reload
++      const peerSay = (from: string, text: string, id: string) => push("orion", say("assistant", text, id, { from, to: "Orion", is_peer: true }))
++      const ask = (body: typeof PUBLISH, id: string) => {
++        const now = new Date().toISOString()
++        demoTasks.push({ id: body.task_id, agent_id: "orion", title: body.title, status: "decision", decisions: [{ at: now, who: "Orion", text: body.detail }], created_at: now, updated_at: now })
++        window.dispatchEvent(new Event("board-update"))
++        card(id, body)
++      }
++      const segPlan = async () => {
+@@ -301,0 +371,9 @@ function ChatScene({ onLive, ready = true }: { onLive: () => void; ready?: boole
++      await sleep(1600)
++      await stream("I will write the first-build plan first. Nothing gets built until you approve it.", "opening")
++      for (const [i, text] of PLAN_STEPS.entries()) {
++        card(`step-${i}`, { kind: "step", text })
++        await sleep(1300)
++        if (!live) return
++      }
++      await stream(PLAN_SUMMARY, "summary")
++      card("plan", PLAN_CARD)
+@@ -303,2 +381,5 @@ function ChatScene({ onLive, ready = true }: { onLive: () => void; ready?: boole
+-      await stream(OPENING, "opening")
+-      for (const { who, ticket, ack } of HANDOFFS) {
++      await click(await button("Approve and build"))
++      setCard("plan", { ...PLAN_CARD, status: "started" })
++      await path(1)
++      }
++      const segBuild = async () => {
+@@ -306,3 +387,3 @@ function ChatScene({ onLive, ready = true }: { onLive: () => void; ready?: boole
+-        setWorking([who.id])
+-        touch(who.id)
+-        push("orion", say("assistant", ticket, `to-${who.id}`, { from: "Orion", to: who.name, is_peer: true }))
++      for (const stage of ["Writing the pages", "Running the tests", "Checking it against the plan"]) {
++        setCard("build", { kind: "build", project: "Wick & Wax", status: "running", stage })
++        if (stage === "Writing the pages") card("build", { kind: "build", project: "Wick & Wax", status: "running", stage })
+@@ -310,4 +390,0 @@ function ChatScene({ onLive, ready = true }: { onLive: () => void; ready?: boole
+-        push("orion", say("assistant", ack, `from-${who.id}`, { from: who.name, to: "Orion", is_peer: true }))
+-        touch(who.id)
+-        addDemoTask(who.id, ticket.replace(/^Ticket \d+:\s*/, "").replace(/\.$/, ""))
+-        await sleep(1800)
+@@ -316,14 +393,3 @@ function ChatScene({ onLive, ready = true }: { onLive: () => void; ready?: boole
+-      setWorking([])
+-      await stream(CLOSING, "closing")
+-      addDemoTask("orion", DECISION, "decision", DECISION_NOTE)
+-      performance.mark("decision-raised")
+-      setStreaming(false)
+-      await sleep(800)
+-      await click(await find(() => document.querySelector<HTMLButtonElement>('[aria-label="Open board"]')))
+-      await sleep(1600)
+-      await click(await find(() => document.querySelector<HTMLElement>(".task-card-decision")))
+-      await sleep(600)
+-      await click(await button("More info"))
+-      await sleep(1400)
+-      await type(await field('textarea[placeholder^="Your answer"]'), DECISION_REPLY)
+-      await click(await find(() => document.querySelector<HTMLButtonElement>(".task-submit-answers:not(:disabled)")))
++      setCard("build", { kind: "build", project: "Wick & Wax", status: "done", files: 16, guide: true, archive: "wick-wax.zip", project_id: "demo" })
++      touch("rose")
++      peerSay("Rose", "10 tests pass and 24 of 26 checks passed. The stock gate blocks Gulab Oud, which is out of stock.", "qa")
+@@ -331 +397,12 @@ function ChatScene({ onLive, ready = true }: { onLive: () => void; ready?: boole
+-      await click(await find(() => document.querySelector<HTMLButtonElement>(".task-board-back")))
++      await click(await button("Run it live"))
++      await sleep(6000)
++      await click(await find(() => document.querySelector<HTMLButtonElement>('.preview-head button[aria-label="Stop the session"]')))
++      await sleep(900)
++      }
++      const segPublish = async () => {
++        await sleep(800)
++      await stream("The shop works. Publishing puts it on the web, so I need your Allow.", "ask-publish")
++      ask(PUBLISH, "publish")
++      await sleep(2600)
++      await click(await button("Allow"))
++      await path(2)
+@@ -333,7 +410,16 @@ function ChatScene({ onLive, ready = true }: { onLive: () => void; ready?: boole
+-      setStreaming(true)
+-      performance.mark("decision-answered")
+-      await stream("Video visits are in this sprint. I am telling Lyra and Vega.", "after-decision")
+-      performance.mark("after-decision")
+-      setWorking(["lyra"])
+-      touch("lyra")
+-      push("orion", say("assistant", "Video visits are in this sprint. Add them to the booking flow.", "visit-lyra", { from: "Orion", to: "Lyra", is_peer: true }))
++      await stream("It is live at /sites/wick-wax. Orders from its form wake the order routine.", "live")
++      await sleep(2600)
++      touch("amber")
++      card("order", ORDER)
++      await path(3)
++      await sleep(2400)
++      }
++      const segPay = async () => {
++        await sleep(1200)
++      await stream("First order in: ₹1,277 with shipping. To get paid on the site, turn on payments.", "pay-ask")
++      WALLET.offer = true
++      window.dispatchEvent(new Event("neuron:payments-offer"))
++      await sleep(2600)
++      await click(await button("Next →"))
++      await sleep(1800)
++      await click(await button("Turn on payments"))
+@@ -341,6 +427,4 @@ function ChatScene({ onLive, ready = true }: { onLive: () => void; ready?: boole
+-      push("orion", say("assistant", "I will add a video visit step to the booking screens.", "visit-lyra-ack", { from: "Lyra", to: "Orion", is_peer: true }))
+-      touch("lyra")
+-      await sleep(1400)
+-      setWorking(["vega"])
+-      touch("vega")
+-      push("orion", say("assistant", "Add a video visit type to the scheduling API.", "visit-vega", { from: "Orion", to: "Vega", is_peer: true }))
++      await click(await button("Use these prices"))
++      await click(await button("Save prices"))
++      await sleep(900)
++      await click(await button("Add checkout to my site"))
+@@ -348,3 +432,17 @@ function ChatScene({ onLive, ready = true }: { onLive: () => void; ready?: boole
+-      push("orion", say("assistant", "The availability endpoint will take the visit type.", "visit-vega-ack", { from: "Vega", to: "Orion", is_peer: true }))
+-      touch("vega")
+-      setWorking([])
++      await click(await button("← Chat"))
++      await sleep(900)
++      await stream("Checkout is added, and the Pay button follows the prices in your Wallet. Publishing it needs your Allow.", "pay-ready")
++      ask(PAYMENTS, "payments")
++      await sleep(2600)
++      await click(await button("Allow"))
++      await sleep(1400)
++      touch("amber")
++      card("payment", PAYMENT)
++      await path(5)
++      await sleep(2600)
++      await stream("Paid. Amber counted the stock down once and sent the confirmation email with the payment ID. Ask me anything about the shop.", "after-pay")
++      }
++      if (scene === "plan" || scene === "full") await segPlan()
++      if (scene === "build" || scene === "full") await segBuild()
++      if (scene === "live" || scene === "full") await segPublish()
++      if (scene === "pay" || scene === "full") await segPay()
+@@ -352,4 +449,0 @@ function ChatScene({ onLive, ready = true }: { onLive: () => void; ready?: boole
+-      await sleep(1200)
+-      await click(await find(() => [...document.querySelectorAll<HTMLButtonElement>("button.peer-avatar")].at(-1) ?? null))
+-      await sleep(3500)
+-      await click(await button("Back to Orion"))
+@@ -362 +456 @@ function ChatScene({ onLive, ready = true }: { onLive: () => void; ready?: boole
+-  }, [onLive, ready])
++  }, [onLive, ready, scene])
+@@ -374,2 +468,2 @@ function ChatScene({ onLive, ready = true }: { onLive: () => void; ready?: boole
+-        agents={TEAM.map((a) => ({ ...a, last_active: active[a.id] }))} selectedAgentId={selected} workingIds={streaming && scripted.current ? ["orion", ...working] : working}
 -        onSelectAgent={(id) => { setSelected(id); setPeer(null) }} onCreateBot={async () => {}} onDeleteAgent={nothing} onOpenProfile={nothing}
-+        onSelectAgent={(id) => { setSelected(id); setPeer(null) }} onCreateBot={async () => {}} onDeleteAgent={nothing} onOpenProfile={nothing} onOpenBoard={() => setBoardOpen(true)}
-@@ -380 +380 @@ function ChatScene({ onLive, ready = true }: { onLive: () => void; ready?: boole
++        agents={WW_TEAM.map((a) => ({ ...a, last_active: active[a.id] }))} selectedAgentId={selected} workingIds={streaming && scripted.current ? ["orion", ...working] : working}
++        onSelectAgent={(id) => { setSelected(id); setPeer(null) }} onCreateBot={async () => {}} onDeleteAgent={nothing} onOpenProfile={nothing} onOpenBoard={() => setBoardOpen(true)} onOpenWallet={() => setWalletOpen(true)}
+@@ -377 +471 @@ function ChatScene({ onLive, ready = true }: { onLive: () => void; ready?: boole
+-        projects={[{ ...PROJECT, role: "owner" }]} projectId="demo"
++        projects={[{ ...WW, role: "owner" }]} projectId="demo"
+@@ -380,2 +474,2 @@ function ChatScene({ onLive, ready = true }: { onLive: () => void; ready?: boole
 -        onAddMember={async () => {}} onDeleteInvite={async () => {}} onDeleteProject={async () => {}} onLinkJira={async () => {}} onLinkRepo={async () => {}} onLogout={nothing} onCancelSubscription={async () => {}} onDeleteAccount={async () => {}} onSendDeleteCode={async () => {}}
+-        navOpen={false} onNavOpenChange={nothing}
 +        onAddMember={async () => {}} onDeleteInvite={async () => {}} onDeleteProject={async () => {}} onLinkJira={async () => {}} onLinkRepo={async () => {}} onSetCodingBot={async () => {}} onSetPrReviews={async () => {}} onLogout={nothing} onCancelSubscription={async () => {}} onDeleteAccount={async () => {}} onSendDeleteCode={async () => {}}
-@@ -389 +389 @@ function ChatScene({ onLive, ready = true }: { onLive: () => void; ready?: boole
++        navOpen={false} onNavOpenChange={nothing} onJumpPhase={nothing}
+@@ -383,2 +477,4 @@ function ChatScene({ onLive, ready = true }: { onLive: () => void; ready?: boole
+-      {boardOpen ? (
+-        <TaskBoard agents={TEAM} onClose={() => setBoardOpen(false)} onSelectAgent={(id) => { setBoardOpen(false); setSelected(id); setPeer(null) }} onOpenTeam={nothing} teamOpen={false} />
++      {walletOpen ? (
++        <WalletView onClose={() => setWalletOpen(false)} onOpenTeam={nothing} teamOpen={false} />
++      ) : boardOpen ? (
++        <TaskBoard agents={WW_TEAM} onClose={() => setBoardOpen(false)} onSelectAgent={(id) => { setBoardOpen(false); setSelected(id); setPeer(null) }} onOpenTeam={nothing} teamOpen={false} />
+@@ -389,3 +485,3 @@ function ChatScene({ onLive, ready = true }: { onLive: () => void; ready?: boole
 -        onClearMemory={nothing} onOpenProfile={nothing} onOpenBoard={() => setBoardOpen(true)} statusMsg=""
+-        peers={TEAM.filter((a) => a.id !== agent.id)} crew={TEAM.filter((a) => a.id !== agent.id)} asking={[]} onForward={nothing}
+-        onSelectPeer={(id) => setPeer(TEAM.find((a) => a.id === id) ?? null)}
 +        onClearMemory={nothing} onOpenProfile={nothing} statusMsg=""
-@@ -532 +532 @@ function MembersScene({ onLive }: { onLive: () => void }) {
++        peers={WW_TEAM.filter((a) => a.id !== agent.id)} crew={WW_TEAM.filter((a) => a.id !== agent.id)} asking={[]} onForward={nothing}
++        onSelectPeer={(id) => setPeer(WW_TEAM.find((a) => a.id === id) ?? null)}
+@@ -393 +489 @@ function ChatScene({ onLive, ready = true }: { onLive: () => void; ready?: boole
+-        onClosePeer={() => setPeer(null)} onOpenTeam={nothing} teamOpen={false}
++        onSelectAgent={(id) => { setSelected(id); setPeer(null) }} onClosePeer={() => setPeer(null)} onOpenTeam={nothing} teamOpen={false}
+@@ -395,0 +492,2 @@ function ChatScene({ onLive, ready = true }: { onLive: () => void; ready?: boole
++      <PreviewPanel />
++      <PaymentsOffer projectId="demo" onOpenWallet={() => setWalletOpen(true)} />
+@@ -532 +630 @@ function MembersScene({ onLive }: { onLive: () => void }) {
 -          onAddMember={addMember} onDeleteInvite={async () => {}} onDeleteProject={async () => {}} onLinkJira={async () => {}} onLinkRepo={async () => {}} onLogout={nothing} onCancelSubscription={async () => {}} onDeleteAccount={async () => {}} onSendDeleteCode={async () => {}}
 +          onAddMember={addMember} onDeleteInvite={async () => {}} onDeleteProject={async () => {}} onLinkJira={async () => {}} onLinkRepo={async () => {}} onSetCodingBot={async () => {}} onSetPrReviews={async () => {}} onLogout={nothing} onCancelSubscription={async () => {}} onDeleteAccount={async () => {}} onSendDeleteCode={async () => {}}
-@@ -629 +629 @@ function TeamChatDemo() {
+@@ -629 +727 @@ function TeamChatDemo() {
 -          onAddMember={async () => {}} onDeleteInvite={async () => {}} onDeleteProject={async () => {}} onLinkJira={async () => {}} onLinkRepo={async () => {}} onLogout={nothing} onCancelSubscription={async () => {}} onDeleteAccount={async () => {}} onSendDeleteCode={async () => {}}
 +          onAddMember={async () => {}} onDeleteInvite={async () => {}} onDeleteProject={async () => {}} onLinkJira={async () => {}} onLinkRepo={async () => {}} onSetCodingBot={async () => {}} onSetPrReviews={async () => {}} onLogout={nothing} onCancelSubscription={async () => {}} onDeleteAccount={async () => {}} onSendDeleteCode={async () => {}}
-@@ -709 +709 @@ function GithubDemo() {
+@@ -638,0 +737,21 @@ function TeamChatDemo() {
++// One chapter of the story, started by the landing page when its turn comes.
++function SceneDemo({ scene }: { scene: Scene }) {
++  const [live, setLive] = useState(false)
++  const [go, setGo] = useState(false)
++  useEffect(() => {
++    let on = true
++    waitForStart(scene).then(() => { if (on) setGo(true) })
++    return () => { on = false }
++  }, [scene])
++  const handOver = useCallback(() => {
++    setLive(true)
++    window.parent.postMessage(`neuron-demo-live:${scene}`, location.origin)
++  }, [scene])
++  return (
++    <div className="demo-stage with-foot">
++      <ChatScene scene={scene} ready={go} onLive={handOver} />
++      {!live && <Cursor />}
++    </div>
++  )
++}
++
+@@ -641 +760 @@ export function Demo() {
+-  return kind === "teamchat" ? <TeamChatDemo /> : kind === "members" ? <MembersDemo /> : kind === "github" ? <GithubDemo /> : kind === "pitch" ? <PitchDemo /> : <SetupDemo />
++  return kind === "scene" ? (new URLSearchParams(location.search).get("scene") === "setup" ? <SetupDemo kind="setup" gated /> : <SceneDemo scene={(new URLSearchParams(location.search).get("scene") ?? "full") as Scene} />) : kind === "teamchat" ? <TeamChatDemo /> : kind === "members" ? <MembersDemo /> : kind === "github" ? <GithubDemo /> : kind === "pitch" ? <PitchDemo /> : <SetupDemo />
+@@ -709 +828 @@ function GithubDemo() {
 -          onAddMember={async () => {}} onDeleteInvite={async () => {}} onDeleteProject={async () => {}} onLinkJira={async () => {}} onLinkRepo={async () => {}} onLogout={nothing} onCancelSubscription={async () => {}} onDeleteAccount={async () => {}} onSendDeleteCode={async () => {}}
 +          onAddMember={async () => {}} onDeleteInvite={async () => {}} onDeleteProject={async () => {}} onLinkJira={async () => {}} onLinkRepo={async () => {}} onSetCodingBot={async () => {}} onSetPrReviews={async () => {}} onLogout={nothing} onCancelSubscription={async () => {}} onDeleteAccount={async () => {}} onSendDeleteCode={async () => {}}
-@@ -811 +811 @@ function PitchDemo() {
+@@ -811 +930 @@ function PitchDemo() {
 -          onAddMember={async () => {}} onDeleteInvite={async () => {}} onDeleteProject={async () => {}} onLinkJira={async () => {}} onLinkRepo={async () => {}} onLogout={nothing} onCancelSubscription={async () => {}} onDeleteAccount={async () => {}} onSendDeleteCode={async () => {}}
 +          onAddMember={async () => {}} onDeleteInvite={async () => {}} onDeleteProject={async () => {}} onLinkJira={async () => {}} onLinkRepo={async () => {}} onSetCodingBot={async () => {}} onSetPrReviews={async () => {}} onLogout={nothing} onCancelSubscription={async () => {}} onDeleteAccount={async () => {}} onSendDeleteCode={async () => {}}
+@@ -829 +948 @@ function PitchDemo() {
+-function SetupDemo() {
++function SetupDemo({ kind = "1", gated = false }: { kind?: string; gated?: boolean }) {
+@@ -835 +954 @@ function SetupDemo() {
+-    playSetup(() => alive).catch(nothing)
++    ;(gated ? waitForStart(kind) : Promise.resolve()).then(() => (alive ? playSetup(() => alive) : undefined)).catch(nothing)
+@@ -837 +956 @@ function SetupDemo() {
+-  }, [])
++  }, [gated, kind])
+@@ -844,2 +963,2 @@ function SetupDemo() {
+-    window.parent.postMessage("neuron-demo-live:1", location.origin)
+-  }, [])
++    window.parent.postMessage(`neuron-demo-live:${kind}`, location.origin)
++  }, [kind])
+@@ -852 +971 @@ function SetupDemo() {
+-        <ChatScene onLive={handOver} ready={phase === "chat"} />
++        <ChatScene onLive={handOver} ready={phase === "chat"} scene={gated ? "none" : "full"} />
+@@ -856 +975 @@ function SetupDemo() {
+-          title="Welcome to Lumen!"
++          title="Welcome to Wick & Wax!"
+@@ -858 +977 @@ function SetupDemo() {
+-          name="Lumen"
++          name="Wick & Wax"
