@@ -1,5 +1,5 @@
 diff --git a/backend/services/spawns.py b/backend/services/spawns.py
-index 54268a6..7b1b9df 100644
+index 54268a6..9e224af 100644
 --- a/backend/services/spawns.py
 +++ b/backend/services/spawns.py
 @@ -12 +11,0 @@ from core import jsonl
@@ -42,6 +42,9 @@ index 54268a6..7b1b9df 100644
 @@ -68 +37 @@ def create_child(parent: Agent, name: str, system_prompt: str, model: str, label
 -               child_model=model, project_id=parent.project_id, field=child.field, apply_ms=int((time.perf_counter() - started) * 1000))
 +               project_id=parent.project_id, field=child.field, apply_ms=int((time.perf_counter() - started) * 1000))
+@@ -82 +51 @@ PROPOSE_AGENT_TOOL = {
+-            "name": {"type": "string", "description": "Short bot name"},
++            "name": {"type": "string", "description": "Short bot name that fits its job (like Scribe or Reviewer). Never a human first or last name"},
 @@ -85 +53,0 @@ PROPOSE_AGENT_TOOL = {
 -            "model": {"type": "string", "enum": list(TIERS), "description": "Capability tier. WORKHORSE (default) for most bots, FAST for simple high-volume work, JUDGEMENT when a wrong answer is costly, REASONING only for sustained deep analysis (top plan or admin)."},
 @@ -99 +67 @@ def run_propose_agent(parent: Agent, args: dict, db: Session) -> tuple[str, dict

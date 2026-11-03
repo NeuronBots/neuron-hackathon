@@ -1,5 +1,5 @@
 diff --git a/backend/services/project_setup.py b/backend/services/project_setup.py
-index 690ccc8..9677209 100644
+index 690ccc8..1de336b 100644
 --- a/backend/services/project_setup.py
 +++ b/backend/services/project_setup.py
 @@ -8,0 +9,2 @@ import time
@@ -7,7 +7,12 @@ index 690ccc8..9677209 100644
 +
 @@ -9,0 +12 @@ from integrations.github_mcp import call_tool, is_enabled
 +from core.tiers import TIERS
-@@ -64,0 +68,82 @@ def parse_repo(value: str) -> tuple[str, str]:
+@@ -37,0 +41 @@ The three themes must differ from each other and come from this project.
++A theme must not be tied to a country, region, language or culture, and its names must not be words or names from a particular region or language (no Sugandha, Khushboo, Mehak style names): choose neutral, internationally common names.
+@@ -46 +50 @@ There are no developer, engineer, or coder roles. Wherever one would fit, use an
+-name is a real given name or character name, never an ordinary English word or phrase. When example names are listed, use those names exactly, in that order, one bot each. Do not replace them. When no examples are listed, every name is the same kind of given name, so the bots sound like one set. Do not use a job title as a name.
++name is a real given name or character name, never an ordinary English word or phrase. When example names are listed, use those names exactly, in that order, one bot each. Do not replace them. When no examples are listed, every name is the same kind of given name, so the bots sound like one set. Do not use a job title as a name. Names must not be tied to a country, region, language or culture.
+@@ -64,0 +69,82 @@ def parse_repo(value: str) -> tuple[str, str]:
 +_API = "https://api.github.com"
 +_REPO_NAME = re.compile(r"^[A-Za-z0-9._-]{1,100}$")
 +
@@ -90,7 +95,7 @@ index 690ccc8..9677209 100644
 +    return {"full_name": data["full_name"], "description": data.get("description") or "", "language": "", "html_url": data["html_url"], "private": bool(data.get("private"))}
 +
 +
-@@ -72,4 +157,35 @@ def _loads(text: str):
+@@ -72,4 +158,35 @@ def _loads(text: str):
 -async def search_repos(query: str) -> list[dict]:
 -    """Repositories matching a name, owner/repo, or a few words."""
 -    if not is_enabled():
@@ -130,13 +135,13 @@ index 690ccc8..9677209 100644
 +async def search_repos(token: str, user_id: str, query: str) -> list[dict]:
 +    """Repositories in the person's own GitHub account matching a name, owner/repo, or a few words. Not a search of GitHub: a repository
 +    that is not in their account does not appear, even by its exact name."""
-@@ -78,0 +195 @@ async def search_repos(query: str) -> list[dict]:
+@@ -78,0 +196 @@ async def search_repos(query: str) -> list[dict]:
 +    mine = await _own_repos(token, user_id)
-@@ -81 +198,2 @@ async def search_repos(query: str) -> list[dict]:
+@@ -81 +199,2 @@ async def search_repos(query: str) -> list[dict]:
 -        github_query = "repo:%s/%s" % (owner, name)
 +        slug = f"{owner}/{name}".lower()
 +        return [r for r in mine if r["full_name"].lower() == slug][:1]
-@@ -83,21 +201,9 @@ async def search_repos(query: str) -> list[dict]:
+@@ -83,21 +202,9 @@ async def search_repos(query: str) -> list[dict]:
 -        github_query = raw[:200]
 -    text = await call_tool("github_search_repositories", {
 -        "query": github_query,
@@ -167,13 +172,13 @@ index 690ccc8..9677209 100644
 +        if all(t in text for t in terms):
 +            (named if all(t in name_text for t in terms) else described).append(repo)
 +    return (named + described)[:8]
-@@ -183,0 +290,3 @@ async def _ask(system: str, user: str, max_tokens: int, phase: str) -> dict:
+@@ -183,0 +291,3 @@ async def _ask(system: str, user: str, max_tokens: int, phase: str) -> dict:
 +    """One structured answer from the model, as the JSON object it was asked for. No thinking: these calls only fill in a shape, and a model that
 +    spends its whole allowance thinking returns nothing to read (the setup then failed with "The reply could not be read"). If an answer still
 +    comes back empty it is asked once more with twice the room."""
-@@ -187,0 +297 @@ async def _ask(system: str, user: str, max_tokens: int, phase: str) -> dict:
+@@ -187,0 +298 @@ async def _ask(system: str, user: str, max_tokens: int, phase: str) -> dict:
 +    raw = ""
-@@ -189,8 +299,4 @@ async def _ask(system: str, user: str, max_tokens: int, phase: str) -> dict:
+@@ -189,8 +300,4 @@ async def _ask(system: str, user: str, max_tokens: int, phase: str) -> dict:
 -        raw = await asyncio.to_thread(
 -            complete,
 -            "claude-sonnet-5-5",
@@ -186,6 +191,6 @@ index 690ccc8..9677209 100644
 +            raw = await asyncio.to_thread(complete, TIERS["WORKHORSE"], system, user, room)
 +            if (raw or "").strip():
 +                break
-@@ -198 +304 @@ async def _ask(system: str, user: str, max_tokens: int, phase: str) -> dict:
+@@ -198 +305 @@ async def _ask(system: str, user: str, max_tokens: int, phase: str) -> dict:
 -        log_span(phase, started, model="claude-sonnet-5-5")
 +        log_span(phase, started, model=TIERS["WORKHORSE"])
