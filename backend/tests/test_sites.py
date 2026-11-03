@@ -63,6 +63,7 @@ def test_pages_are_served_sandboxed_and_the_door_is_small_and_limited(db, tmp_pa
     client = _client(db, tmp_path, monkeypatch)
     page = client.get("/sites/shop-abc123/")
     assert page.status_code == 200 and "sandbox" in page.headers["content-security-policy"]
+    assert page.headers["access-control-allow-origin"] == "*"  # the page's own fetch of its data files needs it
     assert client.get("/sites/shop-abc123/../x").status_code in (404, 200) and client.get("/sites/nope/").status_code == 404
     got = []
 
