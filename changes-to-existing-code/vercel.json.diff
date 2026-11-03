@@ -1,7 +1,8 @@
 diff --git a/vercel.json b/vercel.json
-index 0f51f43..ef192d5 100644
+index 0f51f43..963de45 100644
 --- a/vercel.json
 +++ b/vercel.json
-@@ -4 +4 @@
+@@ -4 +4,2 @@
 -    { "source": "/api/:path*", "destination": "https://api.neuronbot.in/api/:path*" },
 +    { "source": "/api/(.*)", "destination": "https://api-beta.neuronbot.in/api/$1" },
++    { "source": "/sites/(.*)", "destination": "https://api-beta.neuronbot.in/sites/$1" },
