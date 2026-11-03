@@ -1,5 +1,5 @@
 diff --git a/src/styles.css b/src/styles.css
-index 764ceee..c9d987a 100644
+index 764ceee..9488561 100644
 --- a/src/styles.css
 +++ b/src/styles.css
 @@ -2,15 +2,26 @@
@@ -168,7 +168,14 @@ index 764ceee..c9d987a 100644
 @@ -1048 +1105 @@ button:disabled {
 -  color: #c5d4cc;
 +  color: #a1a1aa;
-@@ -1131,0 +1189,41 @@ button:disabled {
+@@ -1131,0 +1189,48 @@ button:disabled {
++/* The primary button is white (neuron-theme.css), so its label has to be dark, not the card's white. */
++.file-card .btn-primary,
++.chat-bubble-text a.file-card-download.btn-primary,
++.chat-bubble-text a.file-card-download.btn-primary:hover {
++  color: #000;
++}
++
 +.file-card-actions {
 +  display: flex;
 +  gap: 6px;
@@ -210,183 +217,183 @@ index 764ceee..c9d987a 100644
 +  text-underline-offset: 2px;
 +}
 +
-@@ -1157 +1255 @@ button:disabled {
+@@ -1157 +1262 @@ button:disabled {
 -  background: #101412;
 +  background: #000000;
-@@ -1263 +1361 @@ button:disabled {
+@@ -1263 +1368 @@ button:disabled {
 -  box-shadow: 0 0 0 2px #0c0f0e;
 +  box-shadow: 0 0 0 2px #000000;
-@@ -1267 +1365 @@ button:disabled {
+@@ -1267 +1372 @@ button:disabled {
 -  box-shadow: 0 0 0 2px #313c37;
 +  box-shadow: 0 0 0 2px #18181b;
-@@ -1270,2 +1368,2 @@ button:disabled {
+@@ -1270,2 +1375,2 @@ button:disabled {
 -.avatar-online { position: absolute; right: -2px; bottom: -2px; width: 9px; height: 9px; border-radius: 50%; background: var(--pine); box-shadow: 0 0 0 2px #0c0f0e; }
 -.agent-item.active .avatar-online { box-shadow: 0 0 0 2px #313c37; }
 +.avatar-online { position: absolute; right: -2px; bottom: -2px; width: 9px; height: 9px; border-radius: 50%; background: var(--pine); box-shadow: 0 0 0 2px #000000; }
 +.agent-item.active .avatar-online { box-shadow: 0 0 0 2px #18181b; }
-@@ -1284 +1382 @@ button:disabled {
+@@ -1284 +1389 @@ button:disabled {
 -    0 0 0 2px #0c0f0e,
 +    0 0 0 2px #000000,
-@@ -1292 +1390 @@ button:disabled {
+@@ -1292 +1397 @@ button:disabled {
 -    0 0 0 2px #313c37,
 +    0 0 0 2px #18181b,
-@@ -1301 +1399 @@ button:disabled {
+@@ -1301 +1406 @@ button:disabled {
 -      0 0 0 2px #0c0f0e,
 +      0 0 0 2px #000000,
-@@ -1307 +1405 @@ button:disabled {
+@@ -1307 +1412 @@ button:disabled {
 -      0 0 0 2px #0c0f0e,
 +      0 0 0 2px #000000,
-@@ -1316 +1414 @@ button:disabled {
+@@ -1316 +1421 @@ button:disabled {
 -      0 0 0 2px #313c37,
 +      0 0 0 2px #18181b,
-@@ -1322 +1420 @@ button:disabled {
+@@ -1322 +1427 @@ button:disabled {
 -      0 0 0 2px #313c37,
 +      0 0 0 2px #18181b,
-@@ -1407 +1505 @@ button:disabled {
+@@ -1407 +1512 @@ button:disabled {
 -  color: #c5d4cc;
 +  color: #a1a1aa;
-@@ -1490 +1588 @@ button:disabled {
+@@ -1490 +1595 @@ button:disabled {
 -  background: #101412;
 +  background: #000000;
-@@ -1525 +1623 @@ button:disabled {
+@@ -1525 +1630 @@ button:disabled {
 -  background: rgba(12, 15, 14, 0.72);
 +  background: rgba(0, 0, 0, 0.72);
-@@ -1537 +1635 @@ button:disabled {
+@@ -1537 +1642 @@ button:disabled {
 -  background: linear-gradient(to bottom, rgba(12, 15, 14, 0.55), transparent);
 +  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.55), transparent);
-@@ -1576 +1674 @@ button:disabled {
+@@ -1576 +1681 @@ button:disabled {
 -  color: #c5d4cc;
 +  color: #a1a1aa;
-@@ -1598 +1696 @@ button:disabled {
+@@ -1598 +1703 @@ button:disabled {
 -  background: #1c2320;
 +  background: #18181b;
-@@ -1717 +1815 @@ button:disabled {
+@@ -1717 +1822 @@ button:disabled {
 -  background: #1c2320;
 +  background: #18181b;
-@@ -1909 +2007 @@ button:disabled {
+@@ -1909 +2014 @@ button:disabled {
 -  background: #313c37;
 +  background: #18181b;
-@@ -1940 +2038 @@ button:disabled {
+@@ -1940 +2045 @@ button:disabled {
 -.mention-list { position: absolute; left: 8px; right: 8px; bottom: calc(100% + 6px); display: flex; flex-direction: column; padding: 6px; border-radius: 14px; background: rgba(18, 24, 21, 0.96); border: 1px solid rgba(255, 255, 255, 0.1); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4); max-height: 220px; overflow: auto; z-index: 5; }
 +.mention-list { position: absolute; left: 8px; right: 8px; bottom: calc(100% + 6px); display: flex; flex-direction: column; padding: 6px; border-radius: 14px; background: rgba(9, 9, 11, 0.96); border: 1px solid rgba(255, 255, 255, 0.1); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4); max-height: 220px; overflow: auto; z-index: 5; }
-@@ -1959,2 +2057,4 @@ button:disabled {
+@@ -1959,2 +2064,4 @@ button:disabled {
 -.dm-thread-overlay { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px 16px 190px; background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
 -.dm-thread { width: min(640px, 100%); max-height: 100%; overflow: auto; display: flex; flex-direction: column; gap: 3px; padding: 4px; }
 +.dm-thread-overlay { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; padding: 16px; background: transparent; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
 +.dm-thread { width: min(640px, 100%); max-height: min(720px, calc(var(--app-height, 100svh) - 32px)); min-height: 0; display: flex; flex-direction: column; gap: 8px; padding: 14px 14px 12px; }
 +.dm-thread-body { flex: 1; min-height: 80px; overflow: auto; display: flex; flex-direction: column; gap: 3px; padding: 2px 2px 6px; overscroll-behavior: contain; touch-action: pan-y; }
 +.dm-thread-composer { flex-shrink: 0; }
-@@ -1962 +2061,0 @@ button:disabled {
+@@ -1962 +2068,0 @@ button:disabled {
 -.chat-dock.dm-dock-over { z-index: 60; }
-@@ -1982 +2081 @@ button:disabled {
+@@ -1982 +2088 @@ button:disabled {
 -  color: #c5d4cc;
 +  color: #a1a1aa;
-@@ -1993 +2092 @@ button:disabled {
+@@ -1993 +2099 @@ button:disabled {
 -  color: #c5d4cc;
 +  color: #a1a1aa;
-@@ -2048 +2147 @@ button:disabled {
+@@ -2048 +2154 @@ button:disabled {
 -  background: rgba(18, 24, 21, 0.94);
 +  background: rgba(9, 9, 11, 0.94);
-@@ -2080 +2179 @@ button:disabled {
+@@ -2080 +2186 @@ button:disabled {
 -  background: #161c19;
 +  background: #09090b;
-@@ -2099 +2198 @@ button:disabled {
+@@ -2099 +2205 @@ button:disabled {
 -    background: #161c19;
 +    background: #09090b;
-@@ -2293 +2392 @@ button:disabled {
+@@ -2293 +2399 @@ button:disabled {
 -  background: rgba(12, 15, 14, 0.78);
 +  background: rgba(0, 0, 0, 0.78);
-@@ -2305 +2404 @@ button:disabled {
+@@ -2305 +2411 @@ button:disabled {
 -  background: linear-gradient(to bottom, transparent, rgba(12, 15, 14, 0.72));
 +  background: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.72));
-@@ -2344 +2443 @@ button:disabled {
+@@ -2344 +2450 @@ button:disabled {
 -  color: #c5d4cc;
 +  color: #a1a1aa;
-@@ -2366 +2465 @@ button:disabled {
+@@ -2366 +2472 @@ button:disabled {
 -  color: #c5d4cc;
 +  color: #a1a1aa;
-@@ -2472 +2571 @@ button:disabled {
+@@ -2472 +2578 @@ button:disabled {
 -  color: #fff;
 +  color: #04121a;
-@@ -2503 +2602 @@ button:disabled {
+@@ -2503 +2609 @@ button:disabled {
 -    background: #1c2320;
 +    background: #18181b;
-@@ -2511 +2610 @@ button:disabled {
+@@ -2511 +2617 @@ button:disabled {
 -    background: #161c19;
 +    background: #09090b;
-@@ -2517 +2616 @@ button:disabled {
+@@ -2517 +2623 @@ button:disabled {
 -    background: #0c0f0e;
 +    background: #000000;
-@@ -2529 +2628 @@ button:disabled {
+@@ -2529 +2635 @@ button:disabled {
 -    background: #121614;
 +    background: #09090b;
-@@ -2555 +2654 @@ button:disabled {
+@@ -2555 +2661 @@ button:disabled {
 -  color: white;
 +  color: #04121a;
-@@ -2841 +2940 @@ button:disabled {
+@@ -2841 +2947 @@ button:disabled {
 -  background: rgba(18, 24, 21, 0.82);
 +  background: rgba(9, 9, 11, 0.82);
-@@ -2903 +3002 @@ button:disabled {
+@@ -2903 +3009 @@ button:disabled {
 -  color: #c5d4cc;
 +  color: #a1a1aa;
-@@ -2995 +3094 @@ button:disabled {
+@@ -2995 +3101 @@ button:disabled {
 -  color: #c5d4cc;
 +  color: #a1a1aa;
-@@ -3109 +3208 @@ button:disabled {
+@@ -3109 +3215 @@ button:disabled {
 -    background: #161c19;
 +    background: #09090b;
-@@ -3218 +3317 @@ button:disabled {
+@@ -3218 +3324 @@ button:disabled {
 -  background: #101412;
 +  background: #000000;
-@@ -3229 +3328 @@ button:disabled {
+@@ -3229 +3335 @@ button:disabled {
 -  background: rgba(12, 15, 14, 0.78);
 +  background: rgba(0, 0, 0, 0.78);
-@@ -3241 +3340 @@ button:disabled {
+@@ -3241 +3347 @@ button:disabled {
 -  background: linear-gradient(to bottom, rgba(12, 15, 14, 0.55), transparent);
 +  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.55), transparent);
-@@ -3263 +3362 @@ button:disabled {
+@@ -3263 +3369 @@ button:disabled {
 -  color: #c5d4cc;
 +  color: #a1a1aa;
-@@ -3304 +3403 @@ button:disabled {
+@@ -3304 +3410 @@ button:disabled {
 -  color: #c5d4cc;
 +  color: #a1a1aa;
-@@ -3311 +3410 @@ button:disabled {
+@@ -3311 +3417 @@ button:disabled {
 -  background: #313c37;
 +  background: #18181b;
-@@ -3341 +3440 @@ button:disabled {
+@@ -3341 +3447 @@ button:disabled {
 -  color: #c5d4cc;
 +  color: #a1a1aa;
-@@ -3406 +3505 @@ button:disabled {
+@@ -3406 +3512 @@ button:disabled {
 -  color: #c5d4cc;
 +  color: #a1a1aa;
-@@ -3443 +3542 @@ button:disabled {
+@@ -3443 +3549 @@ button:disabled {
 -  color: #c5d4cc;
 +  color: #a1a1aa;
-@@ -3578 +3677 @@ button:disabled {
+@@ -3578 +3684 @@ button:disabled {
 -.cal-sheet-notes { color: #c5d4cc; }
 +.cal-sheet-notes { color: #a1a1aa; }
-@@ -3611 +3710 @@ button:disabled {
+@@ -3611 +3717 @@ button:disabled {
 -    background: #0c0f0e;
 +    background: #000000;
-@@ -3859 +3958 @@ button:disabled {
+@@ -3859 +3965 @@ button:disabled {
 -  background: rgba(18, 22, 20, 0.92);
 +  background: rgba(9, 9, 11, 0.92);
-@@ -3963 +4062 @@ button:disabled {
+@@ -3963 +4069 @@ button:disabled {
 -    background: #24302b;
 +    background: #222226;
-@@ -3973 +4072 @@ button:disabled {
+@@ -3973 +4079 @@ button:disabled {
 -    background: #121614;
 +    background: #09090b;
-@@ -4249 +4348 @@ button:disabled {
+@@ -4249 +4355 @@ button:disabled {
 -  background: #1c2320;
 +  background: #18181b;
-@@ -4291 +4390 @@ button:disabled {
+@@ -4291 +4397 @@ button:disabled {
 -  background: #101412;
 +  background: #000000;
-@@ -4295 +4394 @@ button:disabled {
+@@ -4295 +4401 @@ button:disabled {
 -  background: #101412;
 +  background: #000000;
-@@ -4348,0 +4448,48 @@ button:disabled {
+@@ -4348,0 +4455,48 @@ button:disabled {
 +.switch {
 +  position: relative;
 +  flex: none;
@@ -435,37 +442,37 @@ index 764ceee..c9d987a 100644
 +  outline-offset: 2px;
 +}
 +
-@@ -4371 +4518 @@ button:disabled {
+@@ -4371 +4525 @@ button:disabled {
 -  background: #101412;
 +  background: #000000;
-@@ -4389 +4536 @@ button:disabled {
+@@ -4389 +4543 @@ button:disabled {
 -  background: #1c2320;
 +  background: #18181b;
-@@ -4415 +4562 @@ button:disabled {
+@@ -4415 +4569 @@ button:disabled {
 -  background: #101412;
 +  background: #000000;
-@@ -4485 +4632 @@ button:disabled {
+@@ -4485 +4639 @@ button:disabled {
 -  background: #101412;
 +  background: #000000;
-@@ -4492 +4639 @@ button:disabled {
+@@ -4492 +4646 @@ button:disabled {
 -  color: #c5d4cc;
 +  color: #a1a1aa;
-@@ -4510 +4657 @@ button:disabled {
+@@ -4510 +4664 @@ button:disabled {
 -  background: #0c0f0e;
 +  background: #000000;
-@@ -4520 +4667 @@ button:disabled {
+@@ -4520 +4674 @@ button:disabled {
 -  background: linear-gradient(to bottom, transparent, #0c0f0e);
 +  background: linear-gradient(to bottom, transparent, #000000);
-@@ -4532 +4679 @@ button:disabled {
+@@ -4532 +4686 @@ button:disabled {
 -  color: #c5d4cc;
 +  color: #a1a1aa;
-@@ -4569 +4716 @@ button:disabled {
+@@ -4569 +4723 @@ button:disabled {
 -  color: #c5d4cc;
 +  color: #a1a1aa;
-@@ -4673 +4820 @@ button:disabled {
+@@ -4673 +4827 @@ button:disabled {
 -  color: #c5d4cc;
 +  color: #a1a1aa;
-@@ -4714 +4861,23 @@ button:disabled {
+@@ -4714 +4868,23 @@ button:disabled {
 -.chat-attach.is-glow {
 +.sidebar-quick { flex-basis: 100%; display: flex; align-items: center; gap: 8px; }
 +.sidebar-quick .sidebar-board-btn { flex: 1; min-width: 0; }
@@ -490,29 +497,29 @@ index 764ceee..c9d987a 100644
 +
 +.chat-attach.is-glow,
 +.sidebar-circle-btn.is-glow {
-@@ -4726 +4895,2 @@ button:disabled {
+@@ -4726 +4902,2 @@ button:disabled {
 -  .chat-attach.is-glow {
 +  .chat-attach.is-glow,
 +  .sidebar-circle-btn.is-glow {
-@@ -4779 +4949 @@ button:disabled {
+@@ -4779 +4956 @@ button:disabled {
 -  background: #101412;
 +  background: #000000;
-@@ -4875 +5045 @@ button:disabled {
+@@ -4875 +5052 @@ button:disabled {
 -  background: #0c0f0e;
 +  background: #000000;
-@@ -5212 +5382 @@ button:disabled {
+@@ -5212 +5389 @@ button:disabled {
 -  background: #1c2320;
 +  background: #18181b;
-@@ -5229 +5399 @@ button:disabled {
+@@ -5229 +5406 @@ button:disabled {
 -  background: #24302b;
 +  background: #222226;
-@@ -5251 +5421 @@ button:disabled {
+@@ -5251 +5428 @@ button:disabled {
 -  background: #101412;
 +  background: #000000;
-@@ -5295 +5465 @@ button:disabled {
+@@ -5295 +5472 @@ button:disabled {
 -  background: #1c2320;
 +  background: #18181b;
-@@ -5339,0 +5510,13 @@ button:disabled {
+@@ -5339,0 +5517,13 @@ button:disabled {
 +.dm-flat { display: contents; }
 +.dm-col { display: flex; flex-direction: column; gap: 6px; min-width: min(240px, 100%); max-width: min(78%, 60ch); }
 +.dm-col .msg-bubble { max-width: none; }
@@ -526,128 +533,128 @@ index 764ceee..c9d987a 100644
 +.dm-share-yes { background: var(--stamp); color: #04121a; }
 +.dm-share-yes:hover { filter: brightness(1.08); }
 +.dm-share-done { display: block; width: 0; min-width: 100%; font-size: 0.72rem; color: var(--soft); }
-@@ -5361 +5544 @@ button:disabled {
+@@ -5361 +5551 @@ button:disabled {
 -.goal-done .goal-dot { background: var(--stamp); border-color: var(--stamp); color: #0b0f0d; }
 +.goal-done .goal-dot { background: var(--stamp); border-color: var(--stamp); color: #000000; }
-@@ -5435 +5618 @@ button:disabled {
+@@ -5435 +5625 @@ button:disabled {
 -.routine-days button.on { background: var(--stamp); border-color: var(--stamp); color: #0b0f0d; font-weight: 700; }
 +.routine-days button.on { background: var(--stamp); border-color: var(--stamp); color: #000000; font-weight: 700; }
-@@ -5459 +5642 @@ button:disabled {
+@@ -5459 +5649 @@ button:disabled {
 -  background: #101412;
 +  background: #000000;
-@@ -5479 +5662 @@ button:disabled {
+@@ -5479 +5669 @@ button:disabled {
 -  background: #101412;
 +  background: #000000;
-@@ -5508 +5691 @@ button:disabled {
+@@ -5508 +5698 @@ button:disabled {
 -.voice-card { display: flex; flex-direction: column; align-items: center; justify-content: space-between; gap: 28px; width: min(1000px, 100%); height: min(760px, 100%); padding: 48px 24px 36px; border-radius: 24px; border: 1px solid var(--line); background: radial-gradient(circle at 50% 30%, #1b2420, #0b0f0d 75%); color: #f2f5f3; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5); }
 +.voice-card { display: flex; flex-direction: column; align-items: center; justify-content: space-between; gap: 28px; width: min(1000px, 100%); height: min(760px, 100%); padding: 48px 24px 36px; border-radius: 24px; border: 1px solid var(--line); background: radial-gradient(circle at 50% 30%, #1b2420, #000000 75%); color: #f2f5f3; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5); }
-@@ -5524 +5707 @@ button:disabled {
+@@ -5524 +5714 @@ button:disabled {
 -.voice-send { display: grid; place-items: center; flex: none; width: 46px; height: 46px; border-radius: 50%; border: 0; background: var(--stamp); color: #0b0f0d; cursor: pointer; }
 +.voice-send { display: grid; place-items: center; flex: none; width: 46px; height: 46px; border-radius: 50%; border: 0; background: var(--stamp); color: #000000; cursor: pointer; }
-@@ -5531 +5714 @@ button:disabled {
+@@ -5531 +5721 @@ button:disabled {
 -.voice-btn.is-on { background: #f2f5f3; color: #0b0f0d; }
 +.voice-btn.is-on { background: #f2f5f3; color: #000000; }
-@@ -5548 +5731 @@ button:disabled {
+@@ -5548 +5738 @@ button:disabled {
 -.msg-file-icon { font-size: 0.65rem; font-weight: 800; letter-spacing: 0.04em; padding: 3px 5px; border-radius: 6px; background: var(--stamp); color: #0b0f0d; }
 +.msg-file-icon { font-size: 0.65rem; font-weight: 800; letter-spacing: 0.04em; padding: 3px 5px; border-radius: 6px; background: var(--stamp); color: #000000; }
-@@ -5651 +5834 @@ button:disabled {
+@@ -5651 +5841 @@ button:disabled {
 -  color: #121614;
 +  color: #09090b;
-@@ -5740 +5923 @@ button:disabled {
+@@ -5740 +5930 @@ button:disabled {
 -  background: #101412;
 +  background: #000000;
-@@ -5748 +5931 @@ button:disabled {
+@@ -5748 +5938 @@ button:disabled {
 -  background: rgba(16, 20, 18, 0.88);
 +  background: rgba(0, 0, 0, 0.88);
-@@ -5828 +6011 @@ html:has(.landing) #root {
+@@ -5828 +6018 @@ html:has(.landing) #root {
 -  background: #101412;
 +  background: #000000;
-@@ -5948 +6131 @@ html:has(.landing) #root {
+@@ -5948 +6138 @@ html:has(.landing) #root {
 -  color: #fff;
 +  color: #04121a;
-@@ -5998 +6181 @@ html:has(.landing) #root {
+@@ -5998 +6188 @@ html:has(.landing) #root {
 -  background: rgba(16, 20, 18, 0.55);
 +  background: rgba(0, 0, 0, 0.55);
-@@ -6044 +6227 @@ html:has(.landing) #root {
+@@ -6044 +6234 @@ html:has(.landing) #root {
 -    background: #1c2320;
 +    background: #18181b;
-@@ -6051 +6234 @@ html:has(.landing) #root {
+@@ -6051 +6241 @@ html:has(.landing) #root {
 -    background: #121614;
 +    background: #09090b;
-@@ -6154 +6337 @@ html:has(.landing) #root {
+@@ -6154 +6344 @@ html:has(.landing) #root {
 -  background: #1c2320;
 +  background: #18181b;
-@@ -6228 +6411 @@ html:has(.landing) #root {
+@@ -6228 +6418 @@ html:has(.landing) #root {
 -  color: #fff;
 +  color: #04121a;
-@@ -6366 +6549 @@ html:has(.landing) #root {
+@@ -6366 +6556 @@ html:has(.landing) #root {
 -  background: #101412;
 +  background: #000000;
-@@ -6500 +6683 @@ html:has(.landing) #root {
+@@ -6500 +6690 @@ html:has(.landing) #root {
 -  background: #101412;
 +  background: #000000;
-@@ -6520 +6703 @@ html:has(.landing) #root {
+@@ -6520 +6710 @@ html:has(.landing) #root {
 -  color: #fff;
 +  color: #04121a;
-@@ -6573 +6756 @@ html {
+@@ -6573 +6763 @@ html {
 -  background: rgba(16, 20, 18, 0.62);
 +  background: rgba(0, 0, 0, 0.62);
-@@ -6610 +6793 @@ html {
+@@ -6610 +6800 @@ html {
 -  background: #101412;
 +  background: #000000;
-@@ -6650 +6833 @@ html {
+@@ -6650 +6840 @@ html {
 -    background: #1c2320;
 +    background: #18181b;
-@@ -6657 +6840 @@ html {
+@@ -6657 +6847 @@ html {
 -    background: #121614;
 +    background: #09090b;
-@@ -6668 +6851 @@ html {
+@@ -6668 +6858 @@ html {
 -  color: #fff;
 +  color: #04121a;
-@@ -6702 +6885 @@ html {
+@@ -6702 +6892 @@ html {
 -  background: #101412;
 +  background: #000000;
-@@ -6829 +7012 @@ html {
+@@ -6829 +7019 @@ html {
 -  background: #101412;
 +  background: #000000;
-@@ -6945 +7128 @@ html {
+@@ -6945 +7135 @@ html {
 -    background: #24302b;
 +    background: #222226;
-@@ -7049 +7232 @@ html {
+@@ -7049 +7239 @@ html {
 -  background: #1c2320;
 +  background: #18181b;
-@@ -7101 +7284 @@ html {
+@@ -7101 +7291 @@ html {
 -  background: #101412;
 +  background: #000000;
-@@ -7134 +7317 @@ html {
+@@ -7134 +7324 @@ html {
 -  background: #101412;
 +  background: #000000;
-@@ -7340 +7523 @@ html {
+@@ -7340 +7530 @@ html {
 -  background: #1c2320;
 +  background: #18181b;
-@@ -7365 +7548 @@ html {
+@@ -7365 +7555 @@ html {
 -  background: #101412;
 +  background: #000000;
-@@ -7373 +7556 @@ html {
+@@ -7373 +7563 @@ html {
 -  background: linear-gradient(100deg, #1c2320 30%, #27312d 50%, #1c2320 70%) 0 0 / 200% 100%;
 +  background: linear-gradient(100deg, #18181b 30%, #27312d 50%, #18181b 70%) 0 0 / 200% 100%;
-@@ -7542 +7725 @@ html {
+@@ -7542 +7732 @@ html {
 -  background: #101412;
 +  background: #000000;
-@@ -7833 +8016 @@ button.landing-plan-cta {
+@@ -7833 +8023 @@ button.landing-plan-cta {
 -  color: #c5d4cc;
 +  color: #a1a1aa;
-@@ -8106 +8289 @@ button.landing-plan-cta {
+@@ -8106 +8296 @@ button.landing-plan-cta {
 -  color: #fff;
 +  color: #04121a;
-@@ -8249,0 +8433,2 @@ button.landing-plan-cta {
+@@ -8249,0 +8440,2 @@ button.landing-plan-cta {
 +.chat-ask-row { justify-content: flex-start; padding-left: 36px; }  /* avatar 28px + 8px gap, so it lines up under the bubble */
 +.chat-ask-row > .dm-share { width: min(420px, 100%); min-width: 0; }  /* approvals and questions sit on the bot's side, under its bubbles */
-@@ -8254,0 +8440,3 @@ button.landing-plan-cta {
+@@ -8254,0 +8447,3 @@ button.landing-plan-cta {
 +.src-spinner { width: 14px; height: 14px; flex: none; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: src-spin 0.9s linear infinite; }
 +@keyframes src-spin { to { transform: rotate(360deg); } }
 +@media (prefers-reduced-motion: reduce) { .src-spinner { animation-duration: 3s; } }
-@@ -8261,0 +8450,1057 @@ button.landing-plan-cta {
+@@ -8261,0 +8457,1057 @@ button.landing-plan-cta {
 +
 +
 +/* Document Store & List Panel (NURN-152) */
