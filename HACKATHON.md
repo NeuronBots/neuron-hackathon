@@ -1,0 +1,283 @@
+# Hackathon attribution
+
+Meta Global AI Developer Hackathon, building period Oct 27 to Nov 4, 2026.
+
+Everything here was written during the building period. The code that existed before it is not in this repo. It is the baseline commit `e0703a5` (2026-10-27 01:35:21 +0530) of the private Neuron repository.
+
+## Contributors
+
+- Tanay Kapoor
+- Ayushi Gupta
+
+## Commits
+
+55 commits plus 17 merges, with their original author dates:
+
+- 0f5c324 2026-10-27 Add Meta provider to the model proxy
+- 31502a2 2026-10-27 Remove personal contact default from VAPID_SUBJECT
+- e2af28f 2026-10-27 Refactor model handling to use tier-based identifiers
+- ea620b1 2026-10-27 Implement model proxy validation and update environment configurations
+- 34d5a6e 2026-10-27 Refine model proxy validation and update related tests
+- 044eeb5 2026-10-27 Refactor agent model handling and remove model attributes
+- 46ed87c 2026-10-27 Refactor model handling in followup, memory, and peer_run agents
+- 59f57c5 2026-10-27 Update spawn marker regex to prevent stray starts from interfering with subsequent markers and add corresponding tests
+- ddd4d91 2026-10-27 Refactor model handling by removing clamp_model usage across various modules
+- 9194948 2026-10-27 Implement retry logic for model requests and enforce usage limits across agents
+- 52b7a47 2026-10-27 Enhance followup response handling and implement backoff strategy for retries
+- 6d8a474 2026-10-27 Update followup response to include notice for token limit and enhance retry logic in chat route
+- 5f67797 2026-10-27 Enhance retry logic for HTTP requests and improve error handling in client module
+- ef48d3e 2026-10-27 Enhance direct messages model and sharing functionality
+- 720eb14 2026-10-28 Enhance audience management and direct message functionality
+- bfe1480 2026-10-28 Implement draft functionality for direct messages and enhance sharing workflow
+- a3468e4 2026-10-28 Enhance context handling in shared chats and clarify tradeoffs
+- e0f8d01 2026-10-28 feat(docs): add doc store CRUD, file sharing, markdown editing, and delete modal
+- 48f9483 2026-10-28 fix(docs): expand Doc.id length for long filenames and sync shared_with with db session
+- 70e313f 2026-10-28 fix(docs): resolve PR #53 review findings for doc visibility, DM sharing, /api/docs routes, and DocViewer draft safety
+- 6c1be10 2026-10-28 fix(docs): address review findings for docs migration, unowned doc scoping, DocViewer back button, and doc risk tests
+- f41c845 2026-10-28 Fix doc links in people chat and Count ElevenLabs usage in usage ledger
+- b92f3c8 2026-10-28 comments fixed
+- f325133 2026-10-28 feat(pr-review): rebuild PR review bot with walkthrough pass and line-by-line findings pass
+- 7bca698 2026-10-28 refactor(pr-review): streamline PR review process and enhance error handling
+- 25725c9 2026-10-28 feat(spreadsheet-viewer): add Excel sheet viewer and enhance document handling
+- f505161 2026-10-28 refactor(DocumentsView): enhance share and delete dialogs with improved UI
+- a10cbe1 2026-10-28 feat(voice-usage): enhance voice call billing and usage tracking
+- 0a488d2 2026-10-28 feat(voice-calls): implement voice call tracking and billing enhancements
+- be00126 2026-10-28 feat(voice): enhance voice call management and billing
+- 1db4f0d 2026-10-29 feat(outward-actions): implement approval mechanism for bot's external actions
+- ba5ab64 2026-10-31 feat(env): expand configuration for review and build processes
+- b64a124 2026-10-31 feat(memory): version bot memory as draft, prod and rollback
+- c09378e 2026-10-31 feat(goals): refresh bot goals per project
+- 7d5f77f 2026-10-31 feat(ownership): plan states which bot owns what
+- f702044 2026-10-31 feat(sites): host built static sites and take orders from them
+- f9e2ed4 2026-10-31 feat(routines): bots set up order routines after the first build
+- c042886 2026-10-31 chore: stop tracking the dev log, rewrite the README
+- 1316d7c 2026-11-01 feat(payments): integrate payment processing and enhance project models
+- 5aa42b7 2026-11-01 feat: update project models and enhance payment processing
+- 3e1a63c 2026-11-03 feat: update project models and enhance payment processing
+- dd40290 2026-11-03 chore: point beta preview at api-beta.neuronbot.in
+- 4de50f1 2026-11-03 fix(bots): steer new bot names away from human names
+- 7811a99 2026-11-03 refactor(project_setup): clarify naming guidelines for bot themes to ensure neutrality and avoid cultural ties
+- 4c0fe68 2026-11-03 fix(ui): dark text on red, green and pink filled buttons
+- 3fe8d23 2026-11-03 fix(ui): dark label on the white Download button in file cards
+- d00f575 2026-11-03 fix(setup): run structured setup calls on the fast tier so Meta does not spend the allowance thinking
+- 879ceb0 2026-11-03 fix(vercel): proxy /api paths that end in a slash (live preview frame root)
+- 0ea74e8 2026-11-04 fix(sites): unpack a published site again when a deploy wiped its files
+- 91c8518 2026-11-04 feat(vercel): serve hosted sites under the site's own address (/sites/...)
+- 474a4df 2026-11-04 fix(sites): let a sandboxed site read its own data files (CORS on hosted files)
+- b207b84 2026-11-04 feat(wallet): redesign wallet UI to match landing page visual language
+- 51e08b2 2026-11-04 fix(wallet): fix payments intro button layout and hide content when disabled
+- a348f38 2026-11-04 fix(deps): drop unused @dicebear/collection, it needs core 9 and the app uses core 10
+- 58d721a 2026-11-04 fix(cors): answer preflights of sandboxed sites and previews (Origin null) so their payments and orders do not fail with
+
+## New files (113)
+
+- `backend/agents/versions.py` (65 lines): A stripped-down git for a bot's memory: the prod version is what the bot reads, a draft waits for a person, older versions can be rolled back to.
+- `backend/core/audience.py` (192 lines): Who else can read a bot's answer, and which of the asker's connected accounts they cannot see.
+- `backend/flows/README.md` (11 lines): Flow instructions
+- `backend/flows/plan.decisions.md` (1 lines)
+- `backend/flows/plan.decisions.none.md` (1 lines)
+- `backend/flows/plan.md` (21 lines)
+- `backend/flows/plan.research.full.md` (1 lines)
+- `backend/flows/plan.research.light.md` (1 lines)
+- `backend/flows/plan.research.off.md` (1 lines)
+- `backend/flows/plan.research.reuse.md` (3 lines)
+- `backend/flows/platform.md` (5 lines)
+- `backend/routers/__init__.py` (1 lines): Routers package.
+- `backend/routers/docs.py` (318 lines): Router for document CRUD operations with access control and sharing.
+- `backend/routes/docs.py` (4 lines): Alias for backend.routers.docs.
+- `backend/routes/flows.py` (175 lines): Run one flow on its own and see what it costs: the planning flow first. Owner only.
+- `backend/routes/records.py` (25 lines): A project's stored data (orders, bookings...) for the Data view. The bots write it through tools/records.py.
+- `backend/routes/sites.py` (110 lines): Public: a project's hosted site, and the one door a visitor's page has back to the team.
+- `backend/routes/wallet.py` (133 lines): The owner's wallet: what the project's site has earned, refund requests to answer, and payouts to ask for.
+- `backend/routes/webhooks.py` (328 lines): Inbound webhooks. GitHub pull requests are handed to the project's coding bot.
+- `backend/services/build_log.py` (27 lines): What Muse prints while it builds, kept in memory for the build card's terminal. Lost on a restart, like the build itself.
+- `backend/services/build_prompt.py` (247 lines): What Muse is told when it builds a project's first version: the instructions, the skills it must use, and the rules it works under.
+- `backend/services/build_publish.py` (125 lines): Publish a project's first build as a pull request. Runs only after a person has allowed it on the approval card (it pushes a branch to their repository).
+- `backend/services/build_sandbox.py` (239 lines): A Modal sandbox where Muse builds a project's first version.
+- `backend/services/chat_rows.py` (38 lines): Rows a background job writes into a person's chat with a bot: a pill that shows progress and then how it ended, and plain rows (links) after it.
+- `backend/services/checkout.py` (131 lines): After payments are turned on: Muse adds checkout to the built site, in the project's coding session, and the result is saved and offered for publishing.
+- `backend/services/code_review.py` (504 lines): Pull request reviews, in the shape of the original neuron-code-bot: a walkthrough pass (changed-files table, haiku, diagrams,
+- `backend/services/first_build.py` (597 lines): Muse builds a project's first version from its approved plan, in a sandbox.
+- `backend/services/first_plan.py` (86 lines): A new project's first piece of work: the team plans the first build.
+- `backend/services/flow_intro.py` (81 lines): What the "here is how it gets built" modal tells a person about their own project: one line per stage on what will happen to it, what they do,
+- `backend/services/followup.py` (113 lines): Follow-up reviews, for a PR that got new commits after it was reviewed. Like the original bot's re-review: earlier findings are
+- `backend/services/github_app.py` (202 lines): The GitHub App that posts review comments, so they come from the bot and not from whoever linked the repo.
+- `backend/services/imagegen.py` (97 lines): Image generation for the build: Muse has no image tool of its own, so the sandbox gets a small script it can run from its shell.
+- `backend/services/muse_usage.py` (94 lines): What `muse exec --json` says while it works: the words it prints for the build card's terminal, the closing message, and the tokens it used.
+- `backend/services/next_phase.py` (71 lines): While the first build runs, the team plans the next phase with the person.
+- `backend/services/ownership.py` (34 lines): The plan's "Who owns what" section, taken to each bot as a line of its core memory (a draft the person promotes), so every bot knows its part of the finished app.
+- `backend/services/payments.py` (305 lines): Payments for the sites Neuron hosts: what the owner's wallet holds, refunds the owner approves, and payouts after the refund period.
+- `backend/services/pr_fix.py` (263 lines): Fix the findings of a PR review: Muse changes the PR's branch in a sandbox, a person allows the push, and the fixes land as one commit on that branch.
+- `backend/services/pr_poll.py` (83 lines): A safety net for missed webhooks: GitHub gives up on a delivery after 10 seconds and never retries it, and this server can be
+- `backend/services/preview.py` (628 lines): Run the app that was built, live, in a Modal sandbox, and show it inside the chat.
+- `backend/services/review_render.py` (291 lines): Turns a review into text: the walkthrough comment, inline comment bodies, the summary, the fix prompt and the Neuron document.
+- `backend/services/review_sandbox.py` (214 lines): Muse for a PR review, run in a Modal sandbox instead of on this server.
+- `backend/services/sites.py` (291 lines): Neuron hosts a project's built site: the static files of its build archive are served publicly at /sites/<slug>/, and a visitor's message
+- `backend/services/starter.py` (36 lines): A starter app that is in the workspace of a new project's first build before Muse writes a line.
+- `backend/services/wiki.py` (513 lines): GitHub wiki builds: Muse reads a repo, and the server writes a structured wiki for it and pushes it.
+- `backend/tests/test_bot_naming.py` (90 lines): Naming a bot made from a request, and never mistaking the system's own messages for a request to make one.
+- `backend/tests/test_build_prompt.py` (57 lines): What Muse is told when it builds: the skills it must use, the rules it works under, and the instructions.
+- `backend/tests/test_build_publish.py` (222 lines): Publishing the first build as a pull request: the zip is read as untrusted, the default branch is never touched, and only an allowed card gets here.
+- `backend/tests/test_build_sandbox.py` (211 lines): The sandbox where Muse builds: what it can reach, how Muse is started in it, and what is read back out.
+- `backend/tests/test_core/test_audience.py` (607 lines): Access control in shared chats: who may read a bot's answer, the requester context, the credential broker, and the approval flow.
+- `backend/tests/test_core/test_llm_retry.py` (153 lines): post_retry waits and asks again while the provider is busy, and gives the last answer after four tries.
+- `backend/tests/test_core/test_spawn_markers.py` (29 lines): [[SPAWN]] parsing: block form, legacy one-liner, and markers that must not be taken for either.
+- `backend/tests/test_doc_edit_note.py` (27 lines): A person's hand edit of a document is passed to the bot that wrote it.
+- `backend/tests/test_docs.py` (1410 lines): Tests for document store CRUD endpoints and access control (NURN-153).
+- `backend/tests/test_first_build.py` (775 lines): Building a project's first version from its approved plan, in a sandbox.
+- `backend/tests/test_first_plan.py` (107 lines): A new project starts with its team planning the first build.
+- `backend/tests/test_flows.py` (426 lines): The planning flow on its own: modes that spend less, instructions read from files at every run, a preview that costs nothing, a usage meter.
+- `backend/tests/test_github_webhook.py` (729 lines): GitHub PR webhooks: signed deliveries only, handed to the project's coding bot.
+- `backend/tests/test_goals_project.py` (16 lines): A bot's goal is built from the project it is part of and what the team has produced for it.
+- `backend/tests/test_human_in_loop.py` (38 lines): People with a field are the bots' humans in the loop: listed in the prompt, and a decision can be sent to one.
+- `backend/tests/test_imagegen.py` (81 lines): The image script Muse runs in the sandbox.
+- `backend/tests/test_memory_versions.py` (47 lines): A bot's core memory changes wait as drafts; notes and people's answers go live at once; any version can be rolled back to.
+- `backend/tests/test_next_phase.py` (24 lines): While the first build runs, the Master plans the next phase.
+- `backend/tests/test_outward_approval.py` (336 lines): A bot working on its own may not act outside the app (Jira, mail, GitHub) until a person approves.
+- `backend/tests/test_payments.py` (337 lines): The owner's wallet: fees, the refund period, refunds the owner approves, and payouts.
+- `backend/tests/test_pr_fix.py` (317 lines): Fixing a PR review's findings: Muse changes the branch in a sandbox, nothing is pushed before a person allows it, and only to the PR's own branch.
+- `backend/tests/test_preview.py` (766 lines): The live preview: the app runs in a sandbox, the browser only ever sees our own address, and only with the preview's key.
+- `backend/tests/test_project_create.py` (90 lines): Creating a project with a team: the Master is the coding bot, and a bot keeps the id its avatar was drawn from.
+- `backend/tests/test_repo_create.py` (322 lines): Creating a repository from the new-project steps: always as the signed-in person, only where they belong, and with errors they can act on.
+- `backend/tests/test_review_sandbox.py` (377 lines): PR reviews can run Muse in a Modal sandbox. These use a fake Modal: they check what is sent to the sandbox and in what order, not Modal itself.
+- `backend/tests/test_routing.py` (10 lines)
+- `backend/tests/test_setup_replies.py` (64 lines): The project setup asks the model for themes and teams. An answer with nothing in it must not fail the step.
+- `backend/tests/test_sites.py` (110 lines): Neuron hosts a project's static site, sandboxed, with one rate-limited door back to the Master.
+- `backend/tests/test_voice_usage.py` (630 lines): Tests for ElevenLabs voice usage accounting and quota enforcement.
+- `backend/tests/test_wiki.py` (504 lines): The wiki build: what Muse returns is cleaned, the pages are composed against what the wiki already holds, and the result is pushed to a real git remote.
+- `backend/tests/test_working_indicator.py` (102 lines): A bot working on its own (a brief the system gave it, an answer to a decision, a teammate asking) shows as typing, with what it is doing.
+- `backend/tools/records.py` (107 lines): A project's own data (orders, bookings, stock...), kept in the app's database. No fixed schema: a record is JSON in a named collection.
+- `backend/tools/writes.py` (92 lines): Writes a bot makes through a connected account (Jira, GitHub, Gmail): which calls they are, what they will do, and what to tell the other person once done.
+- `public/brand/apple-touch-icon.png` (47 lines): binary file
+- `public/brand/favicon-64.png` (18 lines): binary file
+- `public/brand/icon-192.png` (50 lines): binary file
+- `public/brand/icon-512.png` (194 lines): binary file
+- `public/brand/neuron-lockup.png` (158 lines): binary file
+- `public/brand/neuron-mark.png` (518 lines): binary file
+- `public/demo-site/app.js` (345 lines): app.js — one job: binds products.js + shop.js to the page DOM.
+- `public/demo-site/images/filter-kaapi.webp` (1348 lines): binary file
+- `public/demo-site/images/gulab-oud.webp` (1153 lines): binary file
+- `public/demo-site/images/hero.webp` (1462 lines): binary file
+- `public/demo-site/images/monsoon-jasmine.webp` (1395 lines): binary file
+- `public/demo-site/images/sandalwood-dusk.webp` (974 lines): binary file
+- `public/demo-site/images/vanilla-ember.webp` (991 lines): binary file
+- `public/demo-site/index.html` (200 lines)
+- `public/demo-site/products.js` (9 lines): products.js — one job: the editable candle list. Owner edits prices/stock here.
+- `public/demo-site/shop.js` (141 lines): shop.js — one job: pure order math and validation (no DOM). Integer rupees only.
+- `public/demo-site/styles.css` (200 lines): Wick & Wax — one job: all page styling. Mobile-first, fluid, no fixed widths over 360px.
+- `src/DataView.tsx` (82 lines): the bots write while the page is open
+- `src/Fixtures.tsx` (127 lines): Open /?fixtures: the real chat drawn from canned messages, one scenario at a time. No bot, no model call, no login.
+- `src/FlowIntro.tsx` (166 lines): A scripted run of one stage, looping while the step is on screen: no bot, no model call
+- `src/FlowsView.tsx` (112 lines): the meter: what the project's bots have spent since the run started
+- `src/LandingMotion.tsx` (293 lines): Headline split into masked words. The full sentence is the accessible name; the split copy is hidden from readers.
+- `src/LandingSections.tsx` (204 lines): Seven moments of trust. Each panel recreates the product screen it describes (plain markup, not a screenshot), so the claim is shown, not told.
+- `src/NeedsYou.tsx` (62 lines): a bot in another chat can ask for you while you read this one
+- `src/NeuralThread.tsx` (59 lines): The reasoning thread of the design system: three harmonics of a sine wave, tapered to rest at both ends, drawn on a canvas.
+- `src/NeuronLoader.tsx` (37 lines): The wireframe N from the design system, drawing itself while something is being generated.
+- `src/PathRail.tsx` (45 lines): The project's stages, where it is, and what each cost: the owner's map of the flows
+- `src/PaymentsOffer.tsx` (72 lines): Shown once the first build exists and payments are not on yet: what they are and what they cost
+- `src/PreviewPanel.tsx` (180 lines): The built app, running in a sandbox, docked on the right of the chat. The frame is sandboxed away from Neuron (no same-origin), and its address is
+- `src/StepsLine.tsx` (18 lines): What a bot did on the way to its answer, as one quiet line: the latest step, how many there were, and the list on demand.
+- `src/TeamCard.tsx` (58 lines): the wires are drawn in a 360-unit box that stretches to the card; the nodes below share the same width equally
+- `src/WalletView.tsx` (194 lines): a refund sends money back: it takes a second click
+- `src/askingNames.ts` (7 lines): "A", "A and B", "A, B, and C"
+- `src/money.ts` (4 lines): Amounts are in the smallest unit of their currency (paise, cents)
+- `src/neuron-theme.css` (914 lines): The Neuron design system applied to the chat and the sidebar. Loaded after styles.css, which holds the layout; this holds the look:
+- `src/pathCost.ts` (10 lines): "6 min · 41k tokens": the time and the bot tokens a stage took, from when it began to when the next one did
+
+## Changes to existing files (94)
+
+- `.gitignore` (+3 -0), diff in `changes-to-existing-code/.gitignore.diff`
+- `README.md` (+65 -81), diff in `changes-to-existing-code/README.md.diff`
+- `backend/agents/followup.py` (+18 -13), diff in `changes-to-existing-code/backend/agents/followup.py.diff`
+- `backend/agents/memory.py` (+27 -8), diff in `changes-to-existing-code/backend/agents/memory.py.diff`
+- `backend/agents/naming.py` (+33 -0), diff in `changes-to-existing-code/backend/agents/naming.py.diff`
+- `backend/agents/peer_run.py` (+17 -32), diff in `changes-to-existing-code/backend/agents/peer_run.py.diff`
+- `backend/agents/read_model.py` (+0 -1), diff in `changes-to-existing-code/backend/agents/read_model.py.diff`
+- `backend/board/decisions.py` (+7 -0), diff in `changes-to-existing-code/backend/board/decisions.py.diff`
+- `backend/core/access.py` (+37 -1), diff in `changes-to-existing-code/backend/core/access.py.diff`
+- `backend/core/database.py` (+96 -0), diff in `changes-to-existing-code/backend/core/database.py.diff`
+- `backend/core/jsonl.py` (+1 -1), diff in `changes-to-existing-code/backend/core/jsonl.py.diff`
+- `backend/core/limits.py` (+60 -34), diff in `changes-to-existing-code/backend/core/limits.py.diff`
+- `backend/core/models.py` (+159 -7), diff in `changes-to-existing-code/backend/core/models.py.diff`
+- `backend/core/postgres_schema.sql` (+5 -0), diff in `changes-to-existing-code/backend/core/postgres_schema.sql.diff`
+- `backend/core/schemas.py` (+1 -4), diff in `changes-to-existing-code/backend/core/schemas.py.diff`
+- `backend/core/tiers.py` (+6 -8), diff in `changes-to-existing-code/backend/core/tiers.py.diff`
+- `backend/core/timeutil.py` (+8 -0), diff in `changes-to-existing-code/backend/core/timeutil.py.diff`
+- `backend/core/usage.py` (+292 -0), diff in `changes-to-existing-code/backend/core/usage.py.diff`
+- `backend/integrations/atlassian_mcp.py` (+11 -1), diff in `changes-to-existing-code/backend/integrations/atlassian_mcp.py.diff`
+- `backend/integrations/connections.py` (+41 -0), diff in `changes-to-existing-code/backend/integrations/connections.py.diff`
+- `backend/integrations/github_mcp.py` (+3 -1), diff in `changes-to-existing-code/backend/integrations/github_mcp.py.diff`
+- `backend/integrations/gmail_mcp.py` (+1 -1), diff in `changes-to-existing-code/backend/integrations/gmail_mcp.py.diff`
+- `backend/integrations/notifications.py` (+5 -2), diff in `changes-to-existing-code/backend/integrations/notifications.py.diff`
+- `backend/llm/client.py` (+56 -32), diff in `changes-to-existing-code/backend/llm/client.py.diff`
+- `backend/llm/config.py` (+14 -5), diff in `changes-to-existing-code/backend/llm/config.py.diff`
+- `backend/llm/routing.py` (+11 -0), diff in `changes-to-existing-code/backend/llm/routing.py.diff`
+- `backend/main.py` (+33 -15), diff in `changes-to-existing-code/backend/main.py.diff`
+- `backend/markers/display.py` (+11 -0), diff in `changes-to-existing-code/backend/markers/display.py.diff`
+- `backend/markers/remember.py` (+5 -3), diff in `changes-to-existing-code/backend/markers/remember.py.diff`
+- `backend/markers/spawns.py` (+9 -11), diff in `changes-to-existing-code/backend/markers/spawns.py.diff`
+- `backend/prompts/directory.py` (+15 -1), diff in `changes-to-existing-code/backend/prompts/directory.py.diff`
+- `backend/prompts/identity.py` (+3 -3), diff in `changes-to-existing-code/backend/prompts/identity.py.diff`
+- `backend/prompts/system.py` (+32 -1), diff in `changes-to-existing-code/backend/prompts/system.py.diff`
+- `backend/pytest.ini` (+1 -1), diff in `changes-to-existing-code/backend/pytest.ini.diff`
+- `backend/requirements.txt` (+2 -0), diff in `changes-to-existing-code/backend/requirements.txt.diff`
+- `backend/router.py` (+24 -3), diff in `changes-to-existing-code/backend/router.py.diff`
+- `backend/routes/agents.py` (+159 -26), diff in `changes-to-existing-code/backend/routes/agents.py.diff`
+- `backend/routes/auth.py` (+20 -7), diff in `changes-to-existing-code/backend/routes/auth.py.diff`
+- `backend/routes/billing.py` (+16 -0), diff in `changes-to-existing-code/backend/routes/billing.py.diff`
+- `backend/routes/chat.py` (+52 -50), diff in `changes-to-existing-code/backend/routes/chat.py.diff`
+- `backend/routes/misc.py` (+177 -14), diff in `changes-to-existing-code/backend/routes/misc.py.diff`
+- `backend/routes/model_proxy.py` (+47 -29), diff in `changes-to-existing-code/backend/routes/model_proxy.py.diff`
+- `backend/routes/people.py` (+310 -19), diff in `changes-to-existing-code/backend/routes/people.py.diff`
+- `backend/routes/projects.py` (+352 -32), diff in `changes-to-existing-code/backend/routes/projects.py.diff`
+- `backend/routes/spec_proposals.py` (+1 -2), diff in `changes-to-existing-code/backend/routes/spec_proposals.py.diff`
+- `backend/routes/tasks.py` (+29 -11), diff in `changes-to-existing-code/backend/routes/tasks.py.diff`
+- `backend/services/goals.py` (+49 -6), diff in `changes-to-existing-code/backend/services/goals.py.diff`
+- `backend/services/project_setup.py` (+143 -36), diff in `changes-to-existing-code/backend/services/project_setup.py.diff`
+- `backend/services/routines.py` (+100 -8), diff in `changes-to-existing-code/backend/services/routines.py.diff`
+- `backend/services/runs.py` (+47 -2), diff in `changes-to-existing-code/backend/services/runs.py.diff`
+- `backend/services/spawns.py` (+11 -64), diff in `changes-to-existing-code/backend/services/spawns.py.diff`
+- `backend/services/trace_export.py` (+1 -2), diff in `changes-to-existing-code/backend/services/trace_export.py.diff`
+- `backend/services/voice.py` (+159 -6), diff in `changes-to-existing-code/backend/services/voice.py.diff`
+- `backend/tests/test_admin_users_usage.py` (+1 -1), diff in `changes-to-existing-code/backend/tests/test_admin_users_usage.py.diff`
+- `backend/tests/test_core/test_access.py` (+1 -1), diff in `changes-to-existing-code/backend/tests/test_core/test_access.py.diff`
+- `backend/tests/test_core/test_limits.py` (+7 -30), diff in `changes-to-existing-code/backend/tests/test_core/test_limits.py.diff`
+- `backend/tests/test_core/test_small_modules.py` (+4 -9), diff in `changes-to-existing-code/backend/tests/test_core/test_small_modules.py.diff`
+- `backend/tests/test_events.py` (+3 -17), diff in `changes-to-existing-code/backend/tests/test_events.py.diff`
+- `backend/tests/test_model_proxy.py` (+90 -17), diff in `changes-to-existing-code/backend/tests/test_model_proxy.py.diff`
+- `backend/tests/test_project_documents.py` (+10 -3), diff in `changes-to-existing-code/backend/tests/test_project_documents.py.diff`
+- `backend/tests/test_spawns_idempotent.py` (+9 -10), diff in `changes-to-existing-code/backend/tests/test_spawns_idempotent.py.diff`
+- `backend/tools/board_actions.py` (+35 -5), diff in `changes-to-existing-code/backend/tools/board_actions.py.diff`
+- `backend/tools/catalog.py` (+11 -3), diff in `changes-to-existing-code/backend/tools/catalog.py.diff`
+- `backend/tools/definitions.py` (+144 -0), diff in `changes-to-existing-code/backend/tools/definitions.py.diff`
+- `backend/tools/dispatch.py` (+117 -9), diff in `changes-to-existing-code/backend/tools/dispatch.py.diff`
+- `backend/tools/documents.py` (+160 -5), diff in `changes-to-existing-code/backend/tools/documents.py.diff`
+- `backend/tools/outbox.py` (+128 -27), diff in `changes-to-existing-code/backend/tools/outbox.py.diff`
+- `backend/tools/recall.py` (+17 -4), diff in `changes-to-existing-code/backend/tools/recall.py.diff`
+- `index.html` (+6 -4), diff in `changes-to-existing-code/index.html.diff`
+- `package-lock.json` (+66 -430), diff in `changes-to-existing-code/package-lock.json.diff`
+- `package.json` (+5 -2), diff in `changes-to-existing-code/package.json.diff`
+- `public/manifest.webmanifest` (+6 -3), diff in `changes-to-existing-code/public/manifest.webmanifest.diff`
+- `public/sw.js` (+2 -2), diff in `changes-to-existing-code/public/sw.js.diff`
+- `src/App.tsx` (+168 -11), diff in `changes-to-existing-code/src/App.tsx.diff`
+- `src/AuthScreen.tsx` (+1 -1), diff in `changes-to-existing-code/src/AuthScreen.tsx.diff`
+- `src/Avatar.tsx` (+19 -9), diff in `changes-to-existing-code/src/Avatar.tsx.diff`
+- `src/BotProfile.tsx` (+51 -9), diff in `changes-to-existing-code/src/BotProfile.tsx.diff`
+- `src/ChatView.tsx` (+633 -146), diff in `changes-to-existing-code/src/ChatView.tsx.diff`
+- `src/Demo.tsx` (+228 -109), diff in `changes-to-existing-code/src/Demo.tsx.diff`
+- `src/DirectChat.tsx` (+211 -64), diff in `changes-to-existing-code/src/DirectChat.tsx.diff`
+- `src/DocumentsView.tsx` (+162 -10), diff in `changes-to-existing-code/src/DocumentsView.tsx.diff`
+- `src/Landing.tsx` (+273 -258), diff in `changes-to-existing-code/src/Landing.tsx.diff`
+- `src/ProjectSetup.tsx` (+262 -86), diff in `changes-to-existing-code/src/ProjectSetup.tsx.diff`
+- `src/Sidebar.tsx` (+146 -11), diff in `changes-to-existing-code/src/Sidebar.tsx.diff`
+- `src/SourceCards.tsx` (+445 -0), diff in `changes-to-existing-code/src/SourceCards.tsx.diff`
+- `src/SpecProposals.tsx` (+0 -2), diff in `changes-to-existing-code/src/SpecProposals.tsx.diff`
+- `src/TaskBoard.tsx` (+7 -1), diff in `changes-to-existing-code/src/TaskBoard.tsx.diff`
+- `src/VoiceButton.tsx` (+4 -1), diff in `changes-to-existing-code/src/VoiceButton.tsx.diff`
+- `src/api.ts` (+315 -23), diff in `changes-to-existing-code/src/api.ts.diff`
+- `src/main.tsx` (+4 -1), diff in `changes-to-existing-code/src/main.tsx.diff`
+- `src/models.ts` (+0 -10), diff in `changes-to-existing-code/src/models.ts.diff`
+- `src/styles.css` (+1497 -159), diff in `changes-to-existing-code/src/styles.css.diff`
+- `src/types.ts` (+45 -4), diff in `changes-to-existing-code/src/types.ts.diff`
+- `vercel.json` (+2 -1), diff in `changes-to-existing-code/vercel.json.diff`
