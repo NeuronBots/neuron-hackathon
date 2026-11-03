@@ -53,15 +53,11 @@ export function WalletView({ onClose, onOpenTeam, teamOpen }: Props) {
             </h2>
             <p className="pay-offer-lead">Let customers pay on your site. The money lands in your Wallet.</p>
             {error && <p className="src-approval-error">{error}</p>}
-            <div className="wallet-payments-actions">
+            <div className="dm-share-actions">
               {wallet.offer && (
-                <button type="button" className="btn" onClick={() => window.dispatchEvent(new Event("neuron:payments-offer"))}>
-                  Learn more
-                </button>
+                <button type="button" className="dm-share-no" onClick={() => window.dispatchEvent(new Event("neuron:payments-offer"))}>Learn more</button>
               )}
-              <button type="button" className="dm-share-yes" disabled={busy} onClick={() => act(enablePayments)}>
-                Turn on payments
-              </button>
+              <button type="button" className="dm-share-yes" disabled={busy} onClick={() => act(enablePayments)}>Turn on payments</button>
             </div>
           </div>
         )}
@@ -71,7 +67,7 @@ export function WalletView({ onClose, onOpenTeam, teamOpen }: Props) {
             <button type="button" className="btn" disabled={busy || adding} onClick={() => act(async () => { await addCheckout(); setAdding(true) })}>{adding ? "Muse is adding checkout…" : "Add checkout to my site"}</button>
           </p>
         )}
-        {wallet && (
+        {wallet?.enabled && (
           <>
             <div className="wallet-cards">
               {(currencies.length ? currencies : ["INR"]).map((c) => {
