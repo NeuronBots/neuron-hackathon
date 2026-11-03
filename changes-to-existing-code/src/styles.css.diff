@@ -1,5 +1,5 @@
 diff --git a/src/styles.css b/src/styles.css
-index 764ceee..6e62639 100644
+index 764ceee..5d54b87 100644
 --- a/src/styles.css
 +++ b/src/styles.css
 @@ -2,15 +2,26 @@
@@ -654,7 +654,7 @@ index 764ceee..6e62639 100644
 +.src-spinner { width: 14px; height: 14px; flex: none; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: src-spin 0.9s linear infinite; }
 +@keyframes src-spin { to { transform: rotate(360deg); } }
 +@media (prefers-reduced-motion: reduce) { .src-spinner { animation-duration: 3s; } }
-@@ -8261,0 +8457,1144 @@ button.landing-plan-cta {
+@@ -8261,0 +8457,1143 @@ button.landing-plan-cta {
 +
 +
 +/* Document Store & List Panel (NURN-152) */
@@ -1319,7 +1319,6 @@ index 764ceee..6e62639 100644
 +
 +/* ── Wallet payments intro banner ── */
 +.wallet-payments-intro { max-width: 480px; margin: 1.5rem auto; }
-+.wallet-payments-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
 +
 +/* ── Wallet redesign — landing-page visual language ── */
 +.wallet-title { font-family: "Michroma", var(--sans); font-size: 1.05rem; font-weight: 700; letter-spacing: 0.04em; line-height: 1.1; color: var(--ink); }
