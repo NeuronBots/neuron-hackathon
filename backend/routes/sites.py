@@ -86,7 +86,7 @@ def serve(slug: str, path: str):
     file = sites.resolve(slug, path)
     if file is None:
         return Response(status_code=404)
-    return FileResponse(file, headers=_PAGE)
+    return FileResponse(file, headers={**_PAGE, "Access-Control-Allow-Origin": "*"})  # the sandboxed page has no origin, so its own fetch("products.json") is cross-origin
 
 
 @router.options("/sites/{slug}/{name:path}", include_in_schema=False)
