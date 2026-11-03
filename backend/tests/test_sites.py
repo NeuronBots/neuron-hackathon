@@ -100,3 +100,10 @@ def test_an_order_card_shows_who_what_and_what_happens_next():
     assert card["details"] == ["phone: 99999", "note: Gift wrap"] and card["next"] == "2 order routines started"
     plain = _json.loads(sites.order_card("hello there", "", False, 0)[len("[[SOURCES:"):-2])
     assert plain["details"] == ["message: hello there"] and plain["next"] == "The Master is looking at it"
+
+
+def test_a_published_site_whose_files_are_gone_is_unpacked_again(tmp_path, monkeypatch):
+    monkeypatch.setattr(sites, "SITES", tmp_path)
+    monkeypatch.setattr(sites, "restore", lambda slug: (tmp_path / slug).mkdir() or (tmp_path / slug / "index.html").write_text("x") or True)
+    assert sites.resolve("shop-abc123", "") == tmp_path.resolve() / "shop-abc123" / "index.html"
+    assert sites.resolve("../x", "") is None

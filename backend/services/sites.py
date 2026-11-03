@@ -41,13 +41,34 @@ def slug_for(project: Project) -> str:
 
 def resolve(slug: str, rel: str) -> Path | None:
     """The file a visitor asked for inside one site, or None. A folder answers with its index.html; nothing outside the site is reachable."""
+    if not re.fullmatch(r"[a-z0-9-]{1,60}", slug or ""):
+        return None
     root = (SITES / slug).resolve()
-    if not re.fullmatch(r"[a-z0-9-]{1,60}", slug or "") or not root.is_dir():
+    if not root.is_dir() and not restore(slug):
         return None
     target = (root / (rel or "")).resolve()
     if target.is_dir():
         target = target / "index.html"
     return target if target.is_relative_to(root) and target.is_file() else None
+
+
+def restore(slug: str) -> bool:
+    """A published site whose files are gone (the host's disk is wiped on every deploy): unpack its build again. Edits made after publishing are lost with the disk."""
+    from core.database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        project = db.query(Project).filter(Project.site_slug == slug).first()
+        project_id = project.id if project else ""
+    finally:
+        db.close()
+    if not project_id or not (archive := latest_archive(project_id)):
+        return False
+    try:
+        publish(project_id, archive)
+    except ValueError:
+        return False
+    return (SITES / slug).is_dir()
 
 
 def _unpack(data: bytes, dest: Path) -> int:
