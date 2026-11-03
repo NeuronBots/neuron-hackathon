@@ -1,5 +1,5 @@
 diff --git a/src/styles.css b/src/styles.css
-index 764ceee..1f78302 100644
+index 764ceee..bc85850 100644
 --- a/src/styles.css
 +++ b/src/styles.css
 @@ -2,15 +2,26 @@
@@ -317,6 +317,9 @@ index 764ceee..1f78302 100644
 @@ -2529 +2628 @@ button:disabled {
 -    background: #121614;
 +    background: #09090b;
+@@ -2555 +2654 @@ button:disabled {
+-  color: white;
++  color: #04121a;
 @@ -2841 +2940 @@ button:disabled {
 -  background: rgba(18, 24, 21, 0.82);
 +  background: rgba(9, 9, 11, 0.82);
@@ -517,7 +520,7 @@ index 764ceee..1f78302 100644
 +.dm-share-actions button:active { transform: scale(0.97); }
 +.dm-share-actions button:focus-visible { outline: 2px solid var(--stamp); outline-offset: 2px; }
 +.dm-share-no { background: rgba(255, 255, 255, 0.12); color: var(--ink); }
-+.dm-share-yes { background: var(--stamp); color: #fff; }
++.dm-share-yes { background: var(--stamp); color: #04121a; }
 +.dm-share-yes:hover { filter: brightness(1.08); }
 +.dm-share-done { display: block; width: 0; min-width: 100%; font-size: 0.72rem; color: var(--soft); }
 @@ -5361 +5544 @@ button:disabled {
@@ -556,6 +559,9 @@ index 764ceee..1f78302 100644
 @@ -5828 +6011 @@ html:has(.landing) #root {
 -  background: #101412;
 +  background: #000000;
+@@ -5948 +6131 @@ html:has(.landing) #root {
+-  color: #fff;
++  color: #04121a;
 @@ -5998 +6181 @@ html:has(.landing) #root {
 -  background: rgba(16, 20, 18, 0.55);
 +  background: rgba(0, 0, 0, 0.55);
@@ -568,12 +574,18 @@ index 764ceee..1f78302 100644
 @@ -6154 +6337 @@ html:has(.landing) #root {
 -  background: #1c2320;
 +  background: #18181b;
+@@ -6228 +6411 @@ html:has(.landing) #root {
+-  color: #fff;
++  color: #04121a;
 @@ -6366 +6549 @@ html:has(.landing) #root {
 -  background: #101412;
 +  background: #000000;
 @@ -6500 +6683 @@ html:has(.landing) #root {
 -  background: #101412;
 +  background: #000000;
+@@ -6520 +6703 @@ html:has(.landing) #root {
+-  color: #fff;
++  color: #04121a;
 @@ -6573 +6756 @@ html {
 -  background: rgba(16, 20, 18, 0.62);
 +  background: rgba(0, 0, 0, 0.62);
@@ -1014,7 +1026,7 @@ index 764ceee..1f78302 100644
 +/* Project setup, repository step: find an existing repository, or create one */
 +.setup-tabs { display: inline-flex; gap: 4px; padding: 3px; border-radius: 999px; background: rgba(255, 255, 255, 0.06); border: 1px solid var(--line); width: fit-content; }
 +.setup-tabs button { min-height: 32px; padding: 0 14px; border: 0; border-radius: 999px; background: none; color: var(--soft); font: inherit; font-size: 0.86rem; font-weight: 600; cursor: pointer; }
-+.setup-tabs button[aria-pressed="true"] { background: var(--stamp); color: #fff; }
++.setup-tabs button[aria-pressed="true"] { background: var(--stamp); color: #04121a; }
 +.setup-tabs button:disabled { opacity: 0.6; cursor: default; }
 +.setup-newrepo { display: flex; flex-direction: column; gap: 12px; }
 +.setup-newrepo label, .setup-visibility { display: flex; flex-direction: column; gap: 6px; font-size: 0.86rem; color: var(--soft); }
