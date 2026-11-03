@@ -1,7 +1,10 @@
 diff --git a/backend/router.py b/backend/router.py
-index 7575742..68477a5 100644
+index 7575742..cbcb4e4 100644
 --- a/backend/router.py
 +++ b/backend/router.py
+@@ -8 +8 @@ from fastapi.middleware.cors import CORSMiddleware
+-from fastapi.responses import FileResponse
++from fastapi.responses import FileResponse, Response
 @@ -12 +12,2 @@ from core.database import Base, engine
 -from routes import agents, auth, billing, chat, events, misc, model_proxy, oauth, people, projects, routines, spec_proposals, tasks
 +from routes import agents, auth, billing, chat, events, misc, model_proxy, oauth, people, projects, flows, records, routines, sites, wallet, spec_proposals, tasks, webhooks
@@ -9,16 +12,26 @@ index 7575742..68477a5 100644
 @@ -15,0 +17,2 @@ load_dotenv()
 +from core.timeutil import set_request_timezone
 +
-@@ -33,0 +37,6 @@ app.add_middleware(
+@@ -33,0 +37,16 @@ app.add_middleware(
 +@app.middleware("http")
 +async def remember_timezone(request, call_next):
 +    set_request_timezone((request.headers.get("x-timezone") or "").strip())
 +    return await call_next(request)
 +
 +
-@@ -36 +45 @@ Base.metadata.create_all(bind=engine)
++@app.middleware("http")
++async def sandboxed_preflight(request, call_next):
++    """A hosted site or a live preview runs sandboxed, so its requests carry Origin: null, which the CORS list above refuses (the page then fails with "Load failed").
++    Their preflights are answered here, outside it; the routes still decide what each request may do."""
++    if request.method == "OPTIONS" and request.url.path.startswith(("/sites/", "/api/preview/")):
++        return Response(status_code=204, headers={"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
++                                                  "Access-Control-Allow-Headers": request.headers.get("access-control-request-headers", "content-type"), "Access-Control-Max-Age": "600"})
++    return await call_next(request)
++
++
+@@ -36 +55 @@ Base.metadata.create_all(bind=engine)
 -for module in (auth, billing, projects, agents, chat, tasks, events, misc, model_proxy, oauth, people, routines, spec_proposals):
 +for module in (auth, billing, projects, agents, chat, tasks, events, misc, model_proxy, oauth, people, routines, sites, spec_proposals, webhooks, records, wallet, flows):
-@@ -37,0 +47,2 @@ for module in (auth, billing, projects, agents, chat, tasks, events, misc, model
+@@ -37,0 +57,2 @@ for module in (auth, billing, projects, agents, chat, tasks, events, misc, model
 +
 +app.include_router(docs_router.router, tags=["/api/docs"])
