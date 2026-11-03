@@ -1,5 +1,5 @@
 diff --git a/backend/agents/naming.py b/backend/agents/naming.py
-index 0c17262..301d41c 100644
+index 0c17262..e420166 100644
 --- a/backend/agents/naming.py
 +++ b/backend/agents/naming.py
 @@ -22,0 +23,2 @@ _NAME_STOP = {
@@ -8,7 +8,7 @@ index 0c17262..301d41c 100644
 @@ -48,0 +51,31 @@ def name_from_job(text: str) -> str:
 +_NAME_SYSTEM = (
 +    "You name a new bot on a small software team from the request that created it. Reply with the name only: one or two words in Title Case, "
-+    "a short name that fits the job, like Mint, Catalyst, Reviewer or Scribe. No quotes, no punctuation, and never the words bot, agent or assistant."
++    "a short name that fits the job, like Mint, Catalyst, Reviewer or Scribe. Never a human first or last name of any country or culture (not Priya, Sarah, Ravi, John); use a role or an object word instead. No quotes, no punctuation, and never the words bot, agent or assistant."
 +)
 +
 +
